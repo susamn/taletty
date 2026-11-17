@@ -57,7 +57,9 @@ Provider auth storage remains engine-owned and private. Application local metada
 belongs to the app, with schema migrations and stable provider-neutral book keys
 (e.g. provider + provider ID, not title or downloaded path). Use SQLite for growing
 relational state: bookmarks, history, completion and persistent jobs. Confirm schema,
-paths, transaction boundaries and JSON import in an ADR before coding storage.
+transaction boundaries and Taletty-owned database upgrades in an ADR before coding
+storage. All user data lives under `~/.config/taletty/`, with audio in `downloads/`.
+Start fresh: never discover/import/reuse the prototype's auth, cache, history or media.
 Completed media is engine output; deleting it is an explicit app request, never
 implicit cleanup of user history. Do not force local imports to have Audible ASINs.
 
@@ -92,7 +94,7 @@ code exclusions merely to meet coverage.
 ## Decisions still needed
 
 1. Engine API/protocol and version compatibility policy.
-2. Storage schema, paths, migration, and media ownership.
+2. Storage schema, Taletty-owned database upgrades and ownership within `~/.config/taletty/`.
 3. Reviewed wide/compact layout, glyph vocabulary and exact key map.
 4. Installation of Python runtime/dependencies and module release automation.
 

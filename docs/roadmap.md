@@ -12,14 +12,14 @@ and [security](../SECURITY.md). The initial planning PR contains no runtime code
 |---|---|---|
 | [#1](https://github.com/susamn/taletty/issues/1) | Define provider-neutral engine API and versioned bridge contract | None |
 | [#2](https://github.com/susamn/taletty/issues/2) | Approve wide/compact layouts, glyph vocabulary and interaction map | None |
-| [#3](https://github.com/susamn/taletty/issues/3) | Define SQLite schema, data paths and non-destructive legacy migration | [#1](https://github.com/susamn/taletty/issues/1) |
+| [#3](https://github.com/susamn/taletty/issues/3) | Define SQLite schema and ownership within ~/.config/taletty/ | [#1](https://github.com/susamn/taletty/issues/1) |
 | [#4](https://github.com/susamn/taletty/issues/4) | Bootstrap module scaffolds and enforce coverage/journey CI gates | [#1](https://github.com/susamn/taletty/issues/1) |
 | [#5](https://github.com/susamn/taletty/issues/5) | Extract Audible login/sync adapter and headless commands without behavior changes | [#4](https://github.com/susamn/taletty/issues/4), [#1](https://github.com/susamn/taletty/issues/1) |
 | [#6](https://github.com/susamn/taletty/issues/6) | Extract existing licensed download/remux lifecycle unchanged | [#5](https://github.com/susamn/taletty/issues/5) |
 | [#7](https://github.com/susamn/taletty/issues/7) | Add structured transfer/preparation progress and cancellation events | [#6](https://github.com/susamn/taletty/issues/6) |
 | [#8](https://github.com/susamn/taletty/issues/8) | Package and tag first independently consumable engine release | [#7](https://github.com/susamn/taletty/issues/7) |
 | [#9](https://github.com/susamn/taletty/issues/9) | Implement application SQLite store and schema migration foundation | [#4](https://github.com/susamn/taletty/issues/4), [#3](https://github.com/susamn/taletty/issues/3) |
-| [#10](https://github.com/susamn/taletty/issues/10) | Import legacy Audible data through explicit preview and verified migration | [#9](https://github.com/susamn/taletty/issues/9), [#5](https://github.com/susamn/taletty/issues/5) |
+| [#10](https://github.com/susamn/taletty/issues/10) | Initialize fresh private ~/.config/taletty/ data root and persistence | [#9](https://github.com/susamn/taletty/issues/9), [#5](https://github.com/susamn/taletty/issues/5) |
 | [#11](https://github.com/susamn/taletty/issues/11) | Implement serialized mpv adapter and local playback lifecycle | [#4](https://github.com/susamn/taletty/issues/4), [#9](https://github.com/susamn/taletty/issues/9) |
 | [#12](https://github.com/susamn/taletty/issues/12) | Build responsive pane shell, focus routing and fixed miniplayer | [#2](https://github.com/susamn/taletty/issues/2), [#4](https://github.com/susamn/taletty/issues/4) |
 | [#13](https://github.com/susamn/taletty/issues/13) | Connect cached library, onboarding and offline session restoration | [#12](https://github.com/susamn/taletty/issues/12), [#9](https://github.com/susamn/taletty/issues/9), [#8](https://github.com/susamn/taletty/issues/8) |
@@ -33,19 +33,35 @@ and [security](../SECURITY.md). The initial planning PR contains no runtime code
 | [#21](https://github.com/susamn/taletty/issues/21) | Add sleep timer by duration and chapter end | [#20](https://github.com/susamn/taletty/issues/20) |
 | [#22](https://github.com/susamn/taletty/issues/22) | Add local audiobook import using provider-neutral identities | [#15](https://github.com/susamn/taletty/issues/15), [#10](https://github.com/susamn/taletty/issues/10) |
 | [#23](https://github.com/susamn/taletty/issues/23) | Add global bookmark search and safe Markdown export | [#19](https://github.com/susamn/taletty/issues/19), [#14](https://github.com/susamn/taletty/issues/14) |
-| [#24](https://github.com/susamn/taletty/issues/24) | Complete release journey evidence and install/migration audit | [#10](https://github.com/susamn/taletty/issues/10), [#17](https://github.com/susamn/taletty/issues/17), [#19](https://github.com/susamn/taletty/issues/19), [#21](https://github.com/susamn/taletty/issues/21), [#8](https://github.com/susamn/taletty/issues/8) |
+| [#24](https://github.com/susamn/taletty/issues/24) | Complete release journey evidence and install/upgrade audit | [#10](https://github.com/susamn/taletty/issues/10), [#17](https://github.com/susamn/taletty/issues/17), [#19](https://github.com/susamn/taletty/issues/19), [#21](https://github.com/susamn/taletty/issues/21), [#8](https://github.com/susamn/taletty/issues/8), [#27](https://github.com/susamn/taletty/issues/27), [#31](https://github.com/susamn/taletty/issues/31) |
 
 ## Delivery tracks
 
 - **Decisions:** API, design and storage ADRs; then real CI/coverage infrastructure.
 - **Engine:** preserve login/sync → preserve downloads → progress events → independent release.
-- **Application:** persistence/migration and playback can develop alongside the UI shell.
+- **Application:** fresh Taletty-root persistence and playback can develop alongside the UI shell. No legacy-app import or path reuse.
 - **Vertical slices:** cached library → browsing/listening → downloads and bookmarks → listening policies/sleep.
 - **Core release:** journey and install audit after the first-release slices pass.
 - **Additional slices:** local import and global notes/export have explicit blockers, but do not block the first core release.
 
+## Distribution and player capability follow-up
+
+| Issue | Work | Blocked by |
+|---|---|---|
+| [#26](https://github.com/susamn/taletty/issues/26) | OS/architecture matrix and Python/runtime packaging ADR | #1, #3, #4 |
+| [#27](https://github.com/susamn/taletty/issues/27) | Verified Linux amd64/arm64 archives and source installer | #26, #8, #17, #19, #21 |
+| [#28](https://github.com/susamn/taletty/issues/28) | Linux deb/rpm packages and lifecycle tests | #27 |
+| [#29](https://github.com/susamn/taletty/issues/29) | Later macOS amd64/arm64 distribution | #26, #24 |
+| [#30](https://github.com/susamn/taletty/issues/30) | Later Linux MPRIS and macOS media adapters | #11, #15, #26 |
+| [#31](https://github.com/susamn/taletty/issues/31) | Audible/player capability and release-claim audit | #1, #6, #15, #19, #21 |
+
+Core release #24 additionally requires #27 and #31. Native packages/macOS/media
+controls are explicit later deliveries, not first-release blockers. See
+[distribution](distribution.md) and [player features](player-features.md).
+
 ## Not yet scheduled
 
-macOS, desktop media controls, direct streaming, cloud sync, parallel/resumable
-downloads and automatic next-book playback require separate scoped issues when
-prioritized. Exact visual design remains open until the design issue is accepted.
+Direct streaming, cloud sync, parallel/resumable downloads, non-US marketplaces,
+multi-account support, multipart/series expansion and automatic next-book playback
+require separate scoped issues when prioritized. Exact visual design remains open
+until the design issue is accepted.
