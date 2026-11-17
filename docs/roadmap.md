@@ -35,6 +35,13 @@ and [security](../SECURITY.md). The initial planning PR contains no runtime code
 | [#23](https://github.com/susamn/taletty/issues/23) | Add global bookmark search and safe Markdown export | [#19](https://github.com/susamn/taletty/issues/19), [#14](https://github.com/susamn/taletty/issues/14) |
 | [#24](https://github.com/susamn/taletty/issues/24) | Complete release journey evidence and install/upgrade audit | [#10](https://github.com/susamn/taletty/issues/10), [#17](https://github.com/susamn/taletty/issues/17), [#19](https://github.com/susamn/taletty/issues/19), [#21](https://github.com/susamn/taletty/issues/21), [#8](https://github.com/susamn/taletty/issues/8), [#27](https://github.com/susamn/taletty/issues/27), [#31](https://github.com/susamn/taletty/issues/31) |
 
+## Additional app theming story
+
+[#34 — colors/Omarchy and alternative themes in Settings](https://github.com/susamn/taletty/issues/34)
+is blocked by #2, #4, #9 and #12. Palette direction is approved; layout still needs
+review. See [theme direction](design/theming.md). Taletty is MIT licensed; retain
+source/dependency attribution during extraction.
+
 ## Delivery tracks
 
 - **Decisions:** API, design and storage ADRs; then real CI/coverage infrastructure.

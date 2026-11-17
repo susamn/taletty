@@ -1,6 +1,7 @@
 # Architecture and module boundaries
 
-Status: accepted direction; concrete exported API requires a reviewed ADR.
+Status: accepted direction; [ADR 001](adr/001-engine-api-and-bridge-contract.md)
+proposes the concrete API/protocol and bootstrap release strategy for review.
 
 ## Repository layout (target, not implemented)
 
@@ -93,7 +94,7 @@ code exclusions merely to meet coverage.
 
 ## Decisions still needed
 
-1. Engine API/protocol and version compatibility policy.
+1. Review ADR 001: engine API/protocol and version compatibility policy.
 2. Storage schema, Taletty-owned database upgrades and ownership within `~/.config/taletty/`.
 3. Reviewed wide/compact layout, glyph vocabulary and exact key map.
 4. Installation of Python runtime/dependencies and module release automation.
