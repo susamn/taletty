@@ -1,0 +1,39 @@
+# Build/test output
+/bin/
+/dist/
+/coverage/
+*.coverprofile
+coverage.out
+*.test
+
+# Local workspaces and tools
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.coverage
+htmlcov/
+.env
+.env.*
+!.env.example
+go.work
+go.work.sum
+
+# Private runtime data: never commit accounts or audio
+/data/
+/downloads/
+auth.json
+auth.json.*
+progress.json
+library.json
+*.aax
+*.aaxc
+*.m4b
+*.part
+*.db
+*.db-shm
+*.db-wal
+
+# Editor/OS files
+.DS_Store
+*.swp
