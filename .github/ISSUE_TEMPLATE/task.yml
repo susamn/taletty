@@ -2,6 +2,17 @@ name: Dependency-based task
 description: A bounded, testable slice of Taletty work
 title: "[area] "
 body:
+  - type: markdown
+    attributes:
+      value: |
+        **Before starting work:** read [DEVELOPMENT.md](https://github.com/susamn/taletty/blob/main/DEVELOPMENT.md) in full, then CONTRIBUTING.md and relevant design/testing docs. Global policy: >=95% coverage per production module/adapter, reuse and clean readable architecture, and small focused commits (normally 1–4 per PR). These requirements apply even when a task does not repeat them below.
+  - type: checkboxes
+    id: guidelines
+    attributes:
+      label: Mandatory start-of-work prerequisite
+      options:
+        - label: Before implementation, the assignee must read the current global development guidelines and record the slice/test plan in this issue or PR.
+          required: true
   - type: textarea
     id: outcome
     attributes:
