@@ -1,5 +1,9 @@
 # Contributing
 
+**Before starting every issue, read [the global development guidelines](DEVELOPMENT.md)
+in full.** They define the mandatory coverage, reuse/clean architecture and small
+commit/PR policy for all contributors and coding agents.
+
 ## Work from dependencies
 
 Every implementation task has a GitHub issue with scope, acceptance criteria,

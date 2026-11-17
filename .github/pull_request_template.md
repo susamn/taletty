@@ -1,3 +1,11 @@
+## Mandatory global guidelines
+
+- [ ] Read the current [DEVELOPMENT.md](../DEVELOPMENT.md) and CONTRIBUTING.md before starting this issue.
+- [ ] Inspected existing code for reuse; preserved clean architecture and readable standard logic.
+- [ ] Kept commits small and focused (normally 1–4 meaningful commits per PR).
+
+Existing components reused / architecture decisions:
+
 ## Issue and dependencies
 
 Closes #

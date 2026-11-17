@@ -20,6 +20,12 @@ The working `audible-tui` prototype remains untouched outside this repository.
 - Local resume, chapter navigation, bookmarks, sleep timer, and download management.
 - Linux first. Exact visual design remains a separate decision.
 
+## Development policy
+
+**Before starting any issue, read [DEVELOPMENT.md](DEVELOPMENT.md).** Mandatory:
+95% independent module/adapter coverage, reuse and clean readable architecture,
+and small focused commits with a sensible count per PR.
+
 ## Planning documents
 
 - [Product and scope](docs/product.md)
