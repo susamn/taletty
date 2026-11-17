@@ -42,6 +42,17 @@ is blocked by #2, #4, #9 and #12. Palette direction is approved; layout still ne
 review. See [theme direction](design/theming.md). Taletty is MIT licensed; retain
 source/dependency attribution during extraction.
 
+## Bootstrap quality slices
+
+Parent #4 stays open until these sequential slices and its acceptance audit finish:
+
+- [#36](https://github.com/susamn/taletty/issues/36): fail-closed coverage validator and its real tooling CI; blocked by #1.
+- [#37](https://github.com/susamn/taletty/issues/37): independent production modules and per-target gates; blocked by #36.
+- [#38](https://github.com/susamn/taletty/issues/38): deterministic command harness and check policy; blocked by #37.
+
+Native parent dependencies include #36–#38. These tasks do not fabricate an empty
+adapter or UI to obtain a coverage number. UI/media journeys ship with those features.
+
 ## Delivery tracks
 
 - **Decisions:** API, design and storage ADRs; then real CI/coverage infrastructure.

@@ -1,0 +1,2 @@
+# Test-only dependency; never installed into system Python by application setup.
+coverage==7.6.1
