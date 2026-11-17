@@ -49,7 +49,7 @@ def go_counts(path):
     if not lines or lines[0] not in ("mode: set", "mode: count", "mode: atomic"):
         raise ValueError("missing or invalid Go coverage mode")
     covered = total = 0
-    seen = set()
+    seen = {}
     for line in lines[1:]:
         match = GO_BLOCK.fullmatch(line)
         if not match:
@@ -62,8 +62,14 @@ def go_counts(path):
             raise ValueError("Go source range is reversed")
         block = (filename, start_line, start_col, end_line, end_col)
         if block in seen:
-            raise ValueError("duplicate Go coverage block")
-        seen.add(block)
+            previous_statements, previous_hits = seen[block]
+            if statements != previous_statements:
+                raise ValueError("conflicting Go coverage block weights")
+            if hits and not previous_hits:
+                covered += statements
+            seen[block] = (statements, previous_hits or bool(hits))
+            continue
+        seen[block] = (statements, bool(hits))
         total += statements
         if hits:
             covered += statements
