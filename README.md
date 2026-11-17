@@ -4,8 +4,9 @@ A keyboard-first audiobook companion: an offline-first library, chapter browsing
 timestamped notes, and a persistent player. Audible is the first provider; the
 application model will also accommodate local audiobooks.
 
-**Status: planning.** No Taletty application or installable release exists yet.
-The working `audible-tui` prototype remains untouched outside this repository.
+**Status: foundations.** Independent Go modules and their coverage gates exist;
+there is no runnable Taletty application or installable release yet. The working
+`audible-tui` prototype remains untouched outside this repository.
 
 ## Direction
 
@@ -45,9 +46,8 @@ and small focused commits with a sensible count per PR.
 Every production Go module and the Python adapter must meet **95% statement
 coverage independently** once executable code lands. Branch coverage is reported
 as an additional signal. Automated user-journey tests are required alongside
-unit, integration, terminal-layout, and failure/recovery tests. Until executable
-code and the coverage gates exist, this repository must not claim this target
-has been achieved.
+unit, integration, terminal-layout, and failure/recovery tests. Current module/tooling results cover only the implemented foundations, not future
+player/UI/adapter features. See [local verification and CI](tools/README.md).
 
 Audible integration is unofficial. Credentials, signed URLs, licenses, and
 account-specific data must never enter the repository, CI artifacts, or logs.
