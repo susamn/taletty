@@ -37,8 +37,8 @@ Keep acquisition order when the provider exposes no timestamp.
 One active job. Explicit Queued, Downloading, Preparing, Ready, Failed, and Canceled
 states. Real bytes/total/speed when known; indeterminate display when totals are
 unknown. Conversion progress must not be mislabeled as network progress.
-Persist waiting jobs, allow cancellation, retry and reordering, and allow a separate
-media directory. Remove local audio only after confirmation; preserve notes/history.
+Persist waiting jobs and allow cancellation, retry and reordering. Store media in
+`~/.config/taletty/downloads/`. Remove local audio only after confirmation; preserve notes/history.
 Initial canceled transfers restart from scratch, matching the prototype.
 
 ### Listening
@@ -65,13 +65,15 @@ playback, desktop media integration, and macOS distribution. The engine boundary
 must not prevent these, but speculative implementations are not required.
 Local audiobook import follows the first Audible vertical slice.
 
-## Data continuity and security
+## Data directory and security
 
-Migration from `~/.config/audible-tui/` is explicit and non-destructive: preview,
-confirm, copy/import, verify, retain originals. Do not re-download or silently
-re-register a device. Credentials and audio are private runtime data, not fixtures.
-Configuration, application state, and media have distinct ownership even if their
-initial paths share a root. A migration ADR settles final paths before implementation.
+Taletty starts fresh in **`~/.config/taletty/`**. Configuration, credentials, cached
+library metadata, application database/progress and downloaded audio all live under
+this root; audio lives in `downloads/`. Do not discover, import, copy, reuse or modify
+`~/.config/audible-tui/` or any other app's files. No legacy-data migration is required.
+Users sign in through Taletty's own account flow. Credentials and audio are private
+runtime data, not fixtures. Engine/app ownership boundaries still apply within the
+shared Taletty root. Taletty's own future database upgrades must preserve its data.
 
 ## Prototype inventory and known limits
 

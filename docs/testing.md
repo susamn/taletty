@@ -69,7 +69,7 @@ own rows/tests rather than deferring all UI verification to a final testing issu
 | J11 | Natural end → Finished → mark unfinished/replay | Completion independent of deliberate stop/seek, correct replay position |
 | J12 | Delete downloaded audio → restart | Confirmation, file removal only, notes/history retained, playback safety |
 | J13 | Resize wide/compact/minimum → overlay → back → quit | Player visibility, no overflow, focus restored, errors readable, terminal restored |
-| J14 | Legacy-data migration preview → accept/cancel/failure/retry | Originals unchanged, permissions, verified import, idempotence and rollback |
+| J14 | Fresh Taletty root → initialize → sign in/save → restart/upgrade | Only `~/.config/taletty/` used, private permissions, idempotent setup, old app files untouched, Taletty-owned upgrades preserve data |
 | J15 | Local import → chapters/resume/bookmarks | Provider-neutral identity, duplicate policy, no Audible auth required |
 | J16 | Global bookmark search → jump/export | Correct book target, escaping, safe filename, no credential leakage |
 

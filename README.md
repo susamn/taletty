@@ -27,6 +27,8 @@ The working `audible-tui` prototype remains untouched outside this repository.
 - [Interaction contract](docs/interaction-contract.md)
 - [Quality and user journeys](docs/testing.md)
 - [Dependency-based delivery plan](docs/roadmap.md)
+- [OS/architecture and packaging plan](docs/distribution.md)
+- [Audible/player feature stories](docs/player-features.md)
 - [Contribution and PR policy](CONTRIBUTING.md)
 - [Security](SECURITY.md)
 

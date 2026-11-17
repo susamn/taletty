@@ -18,7 +18,8 @@ reproduction material. Do not open a public issue containing secrets.
 - Signed media requests must not inherit Amazon authorization headers.
 - Preserve sanitized provider-denial handling and auth-refresh persistence.
 - Bound subprocess lifetime, cancel download/conversion process groups, reap children.
-- Migration preserves originals; destructive actions confirm and preserve history.
+- User data belongs under `~/.config/taletty/`; never discover/import other apps' data.
+- Taletty-owned schema upgrades preserve data; destructive actions confirm and preserve history.
 - Unofficial provider integration may fail despite successful login. Respect refusal,
   entitlement and rate limiting; never promise to bypass DRM/account restrictions.
 
