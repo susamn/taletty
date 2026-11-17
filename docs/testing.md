@@ -1,0 +1,85 @@
+# Quality gates and user-journey testing
+
+## Coverage policy
+
+Required at the first executable-code PR, not as a post-release cleanup:
+
+- Each production Go module: >=95.00% statement coverage independently, using
+  race-enabled tests and `-coverpkg=./...` so unimported packages count.
+- Python adapter: >=95.00% statement coverage independently. Report branch coverage
+  too; add a branch threshold only as an explicit reviewed strengthening of policy.
+- Report changed-code coverage and every uncovered critical branch. A global
+  percentage does not excuse missing credential handling or destructive flows.
+- Do not exclude CLI wiring, errors, process lifecycle or migrations for convenience.
+  Any technically unavoidable exclusions need a reviewed rationale and compensating
+  tests; changing exclusions is a policy change, not a feature-PR shortcut.
+- Fail on missing/empty/malformed reports, missing expected modules, and threshold
+  violations. Compare unrounded ratios. Report exact command/tool versions.
+- Public CI uses deterministic fixtures and generated audio only; no Audible login,
+  external network access or protected audiobook downloads are required.
+
+The quality issue must add real workflows and tested gate scripts. This planning
+commit declares policy; it does not claim workflows or 95% coverage already exist.
+Required checks/branch protection are configured once real check names exist.
+
+## Test layers
+
+1. **Pure unit/property tests:** filtering, ordering, identity, time formatting,
+   progress math, completion, chapter mapping, sleep policy, bookmark pre-roll.
+2. **Service/contract tests:** Go↔Python process framing, engine API compatibility,
+   SQLite migrations, atomic files, permissions, token-write serialization,
+   process cancellation and sanitized error mapping with fake providers.
+3. **UI journeys:** run actual model Init/Update commands and returned messages
+   through the app coordinator with injected services, clock and persistence.
+   Assert actions, focus, selected identity, resulting view and durable state.
+   Helper-only tests are not journey coverage.
+4. **Layout/input tests:** table-driven terminal-cell assertions, reviewed golden
+   fixtures and realistic metadata in Unicode/Nerd/plain modes. Avoid brittle
+   full-screen snapshots as the only oracle.
+5. **Terminal integration:** PTY smoke journeys for startup, resize, actual key
+   decoding, modal typing, exit and terminal restoration. Keep bounded timeouts.
+6. **Real media integration:** generated chaptered `.m4b`, real mpv with null audio,
+   ffmpeg/ffprobe where needed; resume, paused seek, speed, EOF, shutdown, killed
+   child/parent and no orphan process. Run as a named CI job with dependencies
+   installed, not permanently skipped behind a local environment variable.
+7. **Manual live-provider validation:** opt-in, documented and redacted. Required
+   before claiming working Audible release downloads; never part of public CI.
+
+Use fake time, scripted providers, temp roots and deterministic event scheduling.
+No real sleep loops in policy/UI tests. Exercise out-of-order/stale updates and
+late completion after cancellation. Run `go vet`, formatting and Python checks.
+
+## Required journey matrix
+
+Each row must link to executable tests when implemented. Every feature PR adds its
+own rows/tests rather than deferring all UI verification to a final testing issue.
+
+| ID | Journey | Required assertions |
+|---|---|---|
+| J01 | First launch → onboarding/account setup → cached library | Empty state, cancel/login error/success, no password collected by UI, no autoplay |
+| J02 | Launch offline → cached browse → downloaded playback | No network requirement, restore view/selection and per-book position/speed |
+| J03 | Search/filter → sort → background refresh → clear/back | Case-insensitive contributor search, stable identity, modal ownership, correct bounds |
+| J04 | Queue downloads → transfer → preparation → ready | Deduplication, truthful progress/stages, glyph+text, completed file only |
+| J05 | Cancel/retry/reorder → quit/restart with waiting jobs | Process cleanup, terminal event delivery, persistent queue, no phantom Ready |
+| J06 | License denial/network/disk-full/conversion failure → recovery | Sanitized errors, no blind entitlement retries, original state preserved |
+| J07 | Play A → browse/inspect B → chapter switch → return A | No accidental audio switch, correct target, checkpoint and speed preserved |
+| J08 | Pause → chapter seek → seek/speed/volume → resume | Pause preserved, bounds, accurate adjusted remaining time, no fake clock advance |
+| J09 | Bookmark while playing/paused → type → save/edit/delete/jump | Captured timestamp, pre-roll clamp, typing safety, confirmation, correct book |
+| J10 | Sleep by time/chapter → pause/resume/switch/exit | Fake-clock policy, exactly-once stop/pause, persistence policy, no stale timer |
+| J11 | Natural end → Finished → mark unfinished/replay | Completion independent of deliberate stop/seek, correct replay position |
+| J12 | Delete downloaded audio → restart | Confirmation, file removal only, notes/history retained, playback safety |
+| J13 | Resize wide/compact/minimum → overlay → back → quit | Player visibility, no overflow, focus restored, errors readable, terminal restored |
+| J14 | Legacy-data migration preview → accept/cancel/failure/retry | Originals unchanged, permissions, verified import, idempotence and rollback |
+| J15 | Local import → chapters/resume/bookmarks | Provider-neutral identity, duplicate policy, no Audible auth required |
+| J16 | Global bookmark search → jump/export | Correct book target, escaping, safe filename, no credential leakage |
+
+For J13 include long CJK/combining text, embedded terminal escapes, missing titles,
+no chapters, unknown duration, unknown byte total, many list rows and help/errors
+at the minimum size. Golden updates require deliberate review.
+
+## Release evidence
+
+A release candidate needs an evidence matrix linking each supported journey to
+passing tests and relevant manual checks. Unsupported/deferred journeys remain
+explicitly marked; do not describe the matrix as mathematical proof of every
+possible UI path. 95% coverage and journey tests are complementary gates.
