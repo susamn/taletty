@@ -20,7 +20,9 @@ not their domain-specific targeting quirks.
 - Download-first playback. No direct Audible streaming in the initial release.
 - Local progress and notes; no promise of Audible/Whispersync synchronization.
 - Unicode default, optional Nerd Font mode, plain-text fallback.
-- Exact palette, geometry, typography, and glyph vocabulary require design approval.
+- MIT license. Podmutt-style file palettes: default `colors`, Omarchy integration,
+  and alternative themes in Settings; see [theme direction](design/theming.md).
+- Geometry, typography, and glyph vocabulary still require design approval.
 
 ## First release
 
