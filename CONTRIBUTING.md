@@ -52,6 +52,6 @@ coverage. Do not add dummy code merely to produce a green percentage.
 ## Repository hygiene
 
 Do not copy the prototype binary, user data, virtual environments or credentials.
-Keep source attribution and dependency/license notices when importing code. Select
-the repository license explicitly before distributing imported code; do not assume
-podmutt/mpdtui's licenses automatically apply to the prototype.
+Taletty is MIT licensed. Keep source attribution and dependency/license notices
+when importing code; the repository license does not automatically relicense
+third-party dependencies or prototype code. Verify provenance before extraction.

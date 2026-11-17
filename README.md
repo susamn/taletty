@@ -18,7 +18,8 @@ The working `audible-tui` prototype remains untouched outside this repository.
   glyphs with Nerd Font and plain-text alternatives.
 - A fixed podmutt-inspired miniplayer, including compact-terminal layouts.
 - Local resume, chapter navigation, bookmarks, sleep timer, and download management.
-- Linux first. Exact visual design remains a separate decision.
+- Linux first. Podmutt-style `colors` theme with Omarchy integration and alternative
+  palettes in Settings. Exact layout remains a separate design decision.
 
 ## Development policy
 
@@ -31,6 +32,7 @@ and small focused commits with a sensible count per PR.
 - [Product and scope](docs/product.md)
 - [Architecture](docs/architecture.md)
 - [Interaction contract](docs/interaction-contract.md)
+- [Theme direction](docs/design/theming.md)
 - [Quality and user journeys](docs/testing.md)
 - [Dependency-based delivery plan](docs/roadmap.md)
 - [OS/architecture and packaging plan](docs/distribution.md)
@@ -51,3 +53,8 @@ Audible integration is unofficial. Credentials, signed URLs, licenses, and
 account-specific data must never enter the repository, CI artifacts, or logs.
 Only download content you are entitled to; respect applicable law and provider
 terms.
+
+## License
+
+[MIT](LICENSE). Preserve third-party copyright/license notices when reusing code;
+the project license does not relicense dependencies or grant rights to Audible media.
