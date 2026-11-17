@@ -1,0 +1,39 @@
+name: Dependency-based task
+description: A bounded, testable slice of Taletty work
+title: "[area] "
+body:
+  - type: textarea
+    id: outcome
+    attributes:
+      label: Outcome and scope
+      description: One reviewable slice. Explain what is explicitly out of scope.
+    validations:
+      required: true
+  - type: textarea
+    id: dependencies
+    attributes:
+      label: Dependencies
+      description: Link blocking issues and add native blocked-by relationships. Write None if ready.
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: Observable completion criteria, including failures and recovery.
+    validations:
+      required: true
+  - type: textarea
+    id: tests
+    attributes:
+      label: Tests and journey coverage
+      description: Test layers, journey IDs and >=95% independent module/adapter coverage impact.
+    validations:
+      required: true
+  - type: textarea
+    id: delivery
+    attributes:
+      label: PR plan
+      description: Target 1–4 meaningful commits per PR. Split oversized work into dependent child tasks before coding.
+    validations:
+      required: true
