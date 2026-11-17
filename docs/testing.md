@@ -18,9 +18,11 @@ Required at the first executable-code PR, not as a post-release cleanup:
 - Public CI uses deterministic fixtures and generated audio only; no Audible login,
   external network access or protected audiobook downloads are required.
 
-The quality issue must add real workflows and tested gate scripts. This planning
-commit declares policy; it does not claim workflows or 95% coverage already exist.
-Required checks/branch protection are configured once real check names exist.
+Issue #4 is split into #36 (coverage validator/tooling CI), #37 (real module gates)
+and #38 (command harness/check policy). See [tooling instructions](../tools/README.md).
+The first job measures tooling only; no engine/app/adapter coverage is claimed before
+code exists. Required checks/branch protection follow actual verified check names.
+Feature/UI/media gates are added with their production code, never no-op green jobs.
 
 ## Test layers
 

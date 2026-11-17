@@ -1,0 +1,55 @@
+name: Quality
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: quality-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  coverage-tooling:
+    name: Coverage tooling
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: '3.12'
+      - name: Guard staged target inventory
+        shell: bash
+        run: |
+          # Until #37 registers real targets, app/engine code must not bypass CI.
+          if [ -e engine ] || [ -e app ] || find . -name go.mod -not -path './.git/*' -print -quit | grep -q .; then
+            echo 'Register production module/adapter coverage jobs before adding app/engine code (issue #37).'
+            exit 1
+          fi
+      - name: Install pinned test tooling
+        run: |
+          python -m pip install -r tools/requirements.txt
+          python --version
+          python -m coverage --version
+      - name: Compile and test validator with branch reporting
+        run: |
+          python -m compileall -q tools tests/tooling
+          python -m coverage run --branch --source=tools -m unittest discover -s tests/tooling -v
+          python -m coverage report -m
+          mkdir -p coverage
+          python -m coverage json -o coverage/tooling.json
+      - name: Enforce exact independent statement threshold
+        run: python tools/coverage_gate.py --require tooling --python tooling=coverage/tooling.json
+      - name: Upload coverage evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: coverage-tooling
+          path: coverage/tooling.json
+          if-no-files-found: warn
+          retention-days: 7

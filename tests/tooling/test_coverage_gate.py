@@ -5,6 +5,7 @@ import io
 import json
 from pathlib import Path
 import runpy
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -144,6 +145,16 @@ class CoverageGateTests(unittest.TestCase):
         code, _, error = self.run_gate("--require", "engine")
         self.assertEqual(code, 1)
         self.assertIn("exactly match", error)
+
+    def test_real_process_exit_status_cannot_hide_a_failure(self):
+        path = self.write("go.out", "mode: atomic\nx.go:1.1,2.1 1 0\n")
+        command = [sys.executable, str(Path(gate.__file__)), "--require", "engine",
+                   "--go", f"engine={path}"]
+        result = subprocess.run(command, capture_output=True, text=True, timeout=10)
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("below 95%", result.stderr)
+        with self.assertRaises(subprocess.CalledProcessError):
+            subprocess.run(command, capture_output=True, check=True, timeout=10)
 
     def test_cli_requires_inventory_and_propagates_failure(self):
         with redirect_stderr(io.StringIO()), self.assertRaises(SystemExit) as result:
