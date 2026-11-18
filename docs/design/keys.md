@@ -1,7 +1,7 @@
 # Final-review key map
 
-Status: proposed final sign-off for #2. These bindings supersede earlier unassigned
-shortcuts on acceptance, not a claim that handlers exist. Lower/uppercase are distinct.
+Status: accepted via merged PR #46; #2 is closed. These bindings supersede earlier
+unassigned shortcuts, not a claim that handlers exist. Lower/uppercase are distinct.
 
 ## Ownership first
 

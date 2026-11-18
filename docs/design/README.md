@@ -1,8 +1,8 @@
 # Taletty design reference — #2
 
-**Final sign-off requested:** [responsive/supporting-state contract](final-review.md)
-and [complete key map](keys.md). Accepting the final-review PR closes #2; until then
-production UI remains gated. No runtime feature is implemented by these documents.
+**Final sign-off accepted via merged PR #46:** [responsive/supporting-state contract](final-review.md)
+and [complete key map](keys.md). #2 is closed; UI implementation now follows those
+approved rules. No runtime feature is implemented by these documents.
 
 **Already accepted:** W1/C1/F1 in #43, Downloads in #44, Bookmarks in #45, full-width
 podmutt-style player, Details/Chapters following the highlighted book, Iosevka Slab
