@@ -86,7 +86,7 @@ jobs:
       - name: Race-test all production packages with fresh coverage
         run: |
           mkdir -p ../coverage
-          go test -count=1 -race -covermode=atomic -coverpkg=./... -coverprofile=../coverage/${{ matrix.module }}.out ./...
+          go test -count=1 -race -timeout=60s -covermode=atomic -coverpkg=./... -coverprofile=../coverage/${{ matrix.module }}.out ./...
           go tool cover -func=../coverage/${{ matrix.module }}.out
       - name: Enforce independent statement threshold
         run: python3 ../tools/coverage_gate.py --require ${{ matrix.module }} --go ${{ matrix.module }}=../coverage/${{ matrix.module }}.out
@@ -98,3 +98,18 @@ jobs:
           path: coverage/${{ matrix.module }}.out
           if-no-files-found: warn
           retention-days: 7
+
+  quality-gate:
+    name: Quality gate
+    if: always()
+    needs: [coverage-tooling, module-coverage]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    steps:
+      - name: Require every real quality job to succeed
+        env:
+          TOOLING_RESULT: ${{ needs.coverage-tooling.result }}
+          MODULE_RESULT: ${{ needs.module-coverage.result }}
+        run: |
+          test "$TOOLING_RESULT" = success
+          test "$MODULE_RESULT" = success
