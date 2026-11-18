@@ -1,9 +1,9 @@
 # Architecture and module boundaries
 
-Status: accepted direction; [ADR 001](adr/001-engine-api-and-bridge-contract.md)
-proposes the concrete API/protocol and bootstrap release strategy for review.
+Status: direction and [ADR 001](adr/001-engine-api-and-bridge-contract.md) accepted
+through PR #35. Independent module scaffolds exist; most features below remain planned.
 
-## Repository layout (target, not implemented)
+## Repository layout (target; only model/profile foundations implemented)
 
 ```text
 engine/                         independent Go module
@@ -94,7 +94,7 @@ code exclusions merely to meet coverage.
 
 ## Decisions still needed
 
-1. Review ADR 001: engine API/protocol and version compatibility policy.
+1. Implement ADR 001 incrementally with contract tests; review future API changes.
 2. Storage schema, Taletty-owned database upgrades and ownership within `~/.config/taletty/`.
 3. Reviewed wide/compact layout, glyph vocabulary and exact key map.
 4. Installation of Python runtime/dependencies and module release automation.

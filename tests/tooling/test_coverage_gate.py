@@ -61,6 +61,14 @@ class CoverageGateTests(unittest.TestCase):
         path = self.write("go.out", "mode: atomic\nx.go:1.1,2.1 9499 100\nx.go:3.1,4.1 501 0\n")
         self.assertEqual(self.run_gate("--require", "engine", "--go", f"engine={path}")[0], 1)
 
+    def test_go_merges_repeated_blocks_without_double_counting(self):
+        # Multi-package -coverpkg profiles repeat blocks with different hits.
+        path = self.write("go.out", "mode: atomic\nx.go:1.1,2.1 95 0\n"
+                          "x.go:1.1,2.1 95 1\nx.go:1.1,2.1 95 0\n"
+                          "x.go:1.1,2.1 95 5\nx.go:3.1,4.1 5 0\n"
+                          "x.go:3.1,4.1 5 0\n")
+        self.assertEqual(gate.go_counts(path), (95, 100))
+
     def test_independent_targets_cannot_pool_coverage(self):
         go = self.write("go.out", "mode: atomic\nx.go:1.1,2.1 10000 1\n")
         python = self.write("python.json", json.dumps(self.python_report(0, 1)))
@@ -126,7 +134,7 @@ class CoverageGateTests(unittest.TestCase):
                         "mode: atomic\nx.go:1.5,1.1 1 1\n",
                         "mode: atomic\nx.go:1.1,2.1 -1 1\n",
                         "mode: atomic\nx.go:1.1,2.1 1 -1\n",
-                        "mode: atomic\nx.go:1.1,2.1 1 1\nx.go:1.1,2.1 1 0\n"]:
+                        "mode: atomic\nx.go:1.1,2.1 1 1\nx.go:1.1,2.1 2 0\n"]:
             path = self.write("go.out", content)
             with self.subTest(content=content), self.assertRaises(ValueError):
                 gate.go_counts(path)

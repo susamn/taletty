@@ -1,60 +1,81 @@
-# Coverage gate tooling
+# Coverage and module-inventory tooling
 
-This is the first implementation slice of #4, tracked by #36. It measures **the
-validator tooling itself**, not nonexistent Taletty engine/app/adapter code.
+Bootstrap slices #36/#37 implement real tooling and per-module gates. Parent #4
+remains open for #38's command harness/check policy. There is no runnable Taletty
+CLI, Audible adapter or UI yet; do not mistake foundational coverage for features.
 
 ## Run locally
 
-From repository root, use an isolated test environment:
+From repository root, install test-only tooling in an isolated environment:
 
 ```sh
 python3 -m venv /tmp/taletty-quality
 /tmp/taletty-quality/bin/python -m pip install -r tools/requirements.txt
+python3 tools/check_inventory.py --root .
 /tmp/taletty-quality/bin/python -m coverage run --branch --source=tools -m unittest discover -s tests/tooling -v
 /tmp/taletty-quality/bin/python -m coverage report -m
 mkdir -p coverage
 /tmp/taletty-quality/bin/python -m coverage json -o coverage/tooling.json
-python3 tools/coverage_gate.py --require tooling --python tooling=coverage/tooling.json
 ```
 
-The validator itself needs only Python's standard library. It reads coverage.py
-statement counts (not its branch-combined or rounded percentage) and Go standard
-coverprofile statement weights. It validates file-summary totals, rejects excluded
-statements, and fails on zero executable statements, malformed/missing reports,
-reused report paths, duplicate targets/Go blocks, missing or unexpected targets,
-and any independent ratio below 95%. Every requested report must pass; pooling is
-not allowed. Exit 0 means pass, 1 invalid/failing coverage and 2 invalid CLI usage.
-
-Synthetic report fixtures verify policy; they are **not** application coverage.
-Reporting branch coverage remains useful but does not replace the statement gate.
-The validator checks supplied report structure/counts; it cannot prove a report
-came from the current source or discover omitted source files by itself. Trusted CI
-commands must generate fresh reports from all production packages/files.
-
-## Staged integration
-
-`Quality / Coverage tooling` is a real CI job. It runs on every PR, including docs,
-without live credentials, providers or audio. Actions are pinned by commit.
-Until #37 integrates real module/adapter target discovery, CI fails if app/engine
-roots or a `go.mod` appear without updating this guard and the coverage jobs.
-There are no no-op green Go, adapter, PTY or mpv jobs.
-
-Next slice #37 adds separate production-code-bearing Go modules and fresh race/vet/
-formatting/coverage jobs with `GOWORK=off` and `-coverpkg=./...`. Each production
-module/adapter must appear in the required target inventory. Add the Python adapter
-report when code lands, never an empty adapter placeholder. #38 adds the bounded
-command/message harness and final required-check policy. Parent #4 remains open.
-Actual layout/PTY journeys and generated-media integration accompany #12/#11.
-
-Future multi-target invocation (illustrative paths, **not runnable targets yet**):
+Then build and test **each module independently**:
 
 ```sh
+for module in app engine; do
+  (
+    set -eu
+    cd "$module"
+    export GOWORK=off GOTOOLCHAIN=local CGO_ENABLED=1
+    test -z "$(gofmt -l .)"
+    go mod tidy -diff
+    go vet ./...
+    go build ./...
+    go test -count=1 -race -covermode=atomic -coverpkg=./... -coverprofile="../coverage/$module.out" ./...
+  ) || exit 1
+done
 python3 tools/coverage_gate.py \
-  --require engine --require app --require bridge \
-  --go engine=coverage/engine.out --go app=coverage/app.out \
-  --python bridge=coverage/bridge.json
+  --require tooling --require engine --require app \
+  --python tooling=coverage/tooling.json \
+  --go engine=coverage/engine.out --go app=coverage/app.out
 ```
 
-Always invoke test commands with fail-fast shell semantics: a test/subprocess error
-must fail CI before the gate can accept stale coverage. Do not reuse a report from
-an earlier successful run. Keep generated reports under ignored `coverage/`.
+Go modules currently declare Go 1.26.0 and CI verifies the 1.26/1.27 toolchains.
+This is a bootstrap language requirement, not a completed distribution support
+matrix. No external Go dependencies means no fabricated go.sum or local replace.
+Python adapter dependencies/coverage will be registered when adapter code lands.
+
+## Validator semantics
+
+The validator needs only Python's standard library. It reads coverage.py statement
+counts (not its branch-combined or rounded percentage) and standard Go coverprofile
+statement weights. Valid repeated Go blocks from multi-package `-coverpkg` runs
+are merged once, covered if any record was executed; conflicting weights fail.
+It rejects exclusions, inconsistent Python file totals, zero executable statements,
+malformed/missing reports, reused paths, duplicate target names and missing/extra
+targets. Each independent ratio must be >=95%; no pooling. Exit codes: 0 pass,
+1 failing/invalid report, 2 invalid CLI usage. Synthetic fixtures test policy, not
+application behavior. Fresh report generation remains the trusted CI responsibility.
+
+## Inventory and real CI checks
+
+`check_inventory.py` discovers all go.mod files and validates them against the
+registered module roots/identities. Adding/removing a module without registration
+fails; the validated list feeds the workflow matrix, so new registered modules
+cannot silently miss the race/vet/coverage jobs. Go source outside module roots
+fails. Tooling/tests own existing Python files; new adapter/other production Python
+fails until its real all-source coverage job is registered in the same PR.
+Generated `.git`, `.venv`, `__pycache__`, `coverage`, and vendored dependencies are
+not production target discovery; `tests/` holds test-only Python/Go fixtures.
+
+Actual checks are `Coverage tooling` and `Go app/engine (1.26.x/1.27.x)` (four Go
+matrix checks). All run on every PR with pinned actions, without live credentials,
+providers or protected audio. Each matrix run fails on test/vet/build/format/tidy
+errors before accepting its fresh report; no stale report may substitute for a
+failed command. Coverage artifacts are uploaded as evidence, not as a replacement
+for test status. #38 verifies required-check policy after actual check names exist.
+
+No no-op green Python-adapter, UI, PTY or mpv jobs exist. App currently has only
+read-only default-root resolution, engine only validated provider-neutral BookID.
+No filesystem initialization, SQLite schema, auth or playback is implied. J14's
+path-resolution portion is tested, but the full journey remains pending. Layout/PTY
+journeys and generated-media integration accompany #12/#11.

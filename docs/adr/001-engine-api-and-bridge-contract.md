@@ -1,6 +1,7 @@
 # ADR 001: Independent engine API and versioned Audible bridge
 
-Status: **proposed for maintainer review**. Addresses #1; not an implementation.
+Status: **accepted via merged PR #35**. Addresses #1; the contract is implemented
+incrementally. Model identity and independent-module foundations land under #37.
 
 ## Context and reuse
 

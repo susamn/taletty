@@ -18,19 +18,16 @@ jobs:
     name: Coverage tooling
     runs-on: ubuntu-24.04
     timeout-minutes: 10
+    outputs:
+      modules: ${{ steps.inventory.outputs.modules }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: '3.12'
-      - name: Guard staged target inventory
-        shell: bash
-        run: |
-          # Until #37 registers real targets, app/engine code must not bypass CI.
-          if [ -e engine ] || [ -e app ] || find . -name go.mod -not -path './.git/*' -print -quit | grep -q .; then
-            echo 'Register production module/adapter coverage jobs before adding app/engine code (issue #37).'
-            exit 1
-          fi
+      - name: Validate and discover coverage target inventory
+        id: inventory
+        run: python tools/check_inventory.py --root . >> "$GITHUB_OUTPUT"
       - name: Install pinned test tooling
         run: |
           python -m pip install -r tools/requirements.txt
@@ -51,5 +48,53 @@ jobs:
         with:
           name: coverage-tooling
           path: coverage/tooling.json
+          if-no-files-found: warn
+          retention-days: 7
+
+  module-coverage:
+    name: Go ${{ matrix.module }} (${{ matrix.go }})
+    needs: coverage-tooling
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        module: ${{ fromJSON(needs.coverage-tooling.outputs.modules) }}
+        go: ['1.26.x', '1.27.x']
+    env:
+      GOWORK: 'off'
+      GOTOOLCHAIN: local
+      CGO_ENABLED: '1'
+    defaults:
+      run:
+        working-directory: ${{ matrix.module }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
+        with:
+          go-version: ${{ matrix.go }}
+          cache: false
+      - name: Check formatting and module consistency
+        run: |
+          go version
+          test -z "$(gofmt -l .)"
+          go mod tidy -diff
+      - name: Vet and build independently
+        run: |
+          go vet ./...
+          go build ./...
+      - name: Race-test all production packages with fresh coverage
+        run: |
+          mkdir -p ../coverage
+          go test -count=1 -race -covermode=atomic -coverpkg=./... -coverprofile=../coverage/${{ matrix.module }}.out ./...
+          go tool cover -func=../coverage/${{ matrix.module }}.out
+      - name: Enforce independent statement threshold
+        run: python3 ../tools/coverage_gate.py --require ${{ matrix.module }} --go ${{ matrix.module }}=../coverage/${{ matrix.module }}.out
+      - name: Upload module coverage evidence
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: coverage-${{ matrix.module }}-${{ matrix.go }}
+          path: coverage/${{ matrix.module }}.out
           if-no-files-found: warn
           retention-days: 7
