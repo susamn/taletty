@@ -24,13 +24,28 @@ from podmutt without validating audiobook content.
 
 The player always represents current audio, not the highlighted library book.
 Show title, chapter, progress, speed, remaining time and transport as space permits.
+Use the panel's full inner width, like podmutt: identity/chapter row, elapsed time
+and a width-filling book progress slider with duration/remaining time, then transport
+and settings. Distribute controls and secondary status across the bottom row rather
+than clustering every item at the left. Chapter ticks may mark the book slider;
+label chapter timing separately so book and chapter progress cannot be confused.
+Compact mode keeps the width-filling slider and sacrifices secondary timing first.
 No synthetic spectrum should imply a real audio visualization.
+
+Typography recommendation: [Iosevka Slab](design/typography.md), controlled by an
+optional terminal profile, never silently installed or switched by the application.
 
 ## Identity and targeting
 
 - Selected: the cursor in a list.
-- Inspected: book pinned for details/chapter inspection.
+- Details/Chapters target: follows the highlighted library book; no separate Inspect
+  action or pinned inspection mode. Keep that book stable while focus moves into
+  its chapters/details. These panes show its title, not an "Inspected" state label.
 - Playing: authoritative loaded playback session, including paused audio.
+
+The UI uses a cursor/highlight for selection and a Playing/Paused state for current
+audio; do not display technical "Selected / Inspected" badges. Late chapter/detail
+replies must match the current highlighted BookID, never overwrite a newer choice.
 
 Browsing never changes audio. Space targets current audio. Enter on a book
 plays/resumes that book; avoid using Enter as a second implicit pause toggle.

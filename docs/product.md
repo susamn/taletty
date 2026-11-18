@@ -59,8 +59,9 @@ never applied to deliberate chapter/bookmark seeks.
 ### Chapters and notes
 
 Keep chapter browsing and jumping. Permit inspecting another downloaded book's
-chapters without replacing current audio. Clearly distinguish selected, inspected,
-and playing books. A seek into a different book is an explicit playback switch.
+chapters without replacing current audio. Details and Chapters follow the
+highlighted book; Now Playing remains tied to the loaded audio. No separate Inspect
+action or technical selected/inspected badges. A seek into a different book is an explicit playback switch.
 Bookmarks save position, book identity, chapter context, and a note. Support
 paused creation, configurable pre-roll, edit/delete/jump, global search, and
 Markdown export as separate delivery slices.
