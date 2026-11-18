@@ -80,6 +80,13 @@ own rows/tests rather than deferring all UI verification to a final testing issu
 | J16 | Global bookmark search → jump/export | Correct book target, escaping, safe filename, no credential leakage |
 | J17 | Favorite → Favorites view → restart offline → unfavorite (#42) | Stable target distinct from playing book; persistent local state; save failure recovery; safe final-row removal; audio/history retained |
 
+Partial executable J13 evidence now exists in the [shell model journeys](../app/internal/ui/shell_test.go)
+and [geometry/text assertions](../app/internal/ui/README.md): real Init/Update/Cmd,
+focus/resize recovery, cell-bounded views, Unicode/plain modes, sticky errors and
+injected snapshots. The same suite covers J07's browse-target separation only.
+These do **not** complete J13/J07: modal/supporting-view ownership and PTY restoration
+are #49; real playback, persistence and cross-book confirmation remain feature work.
+
 For J13 include long CJK/combining text, embedded terminal escapes, missing titles,
 no chapters, unknown duration, unknown byte total, many list rows and help/errors
 at the minimum size. Golden updates require deliberate review.

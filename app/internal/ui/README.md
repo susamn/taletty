@@ -1,31 +1,80 @@
-# Terminal presentation foundations
+# Terminal presentation
 
-First slice of #12: #47 implements shared geometry and safe raw-text helpers.
-The approved [R1 contract](../../../docs/design/final-review.md) is authoritative;
-SVG pixels do not determine cell budgets.
+#47 supplies shared terminal-cell geometry/text; #48 adds a real Bubble Tea v2
+shell Model, not a standalone player or provider coordinator. The approved
+[R1 contract](../../../docs/design/final-review.md) is authoritative.
+
+## Geometry and text
 
 - Wide requires both 144 columns and 42 rows: 24-column Library, 42-column Chapters,
   remaining middle width; Books uses floor(2/3 content height), Details the remainder.
 - Wide player owns six full-width rows, compact five. Activity and hints own one
-  row each; all borders/padding must fit inside these allocations.
-- Compact starts at 80×20 with one active content pane; below minimum only Screen
-  is allocated for the future resize owner. A pure layout result does not change
-  focus, discard drafts or start/stop audio.
+  row each; all borders/padding fit inside their allocations.
+- Compact starts at 80×20 with one active content pane. Player focus keeps the last
+  content pane visible instead of duplicating the player. Below minimum, the resize
+  owner hides content while retaining focus, highlighted identity and current audio.
 - Dialog geometry centers inside content with two-column side/one-row vertical
-  margins; at 80×20 the maximum dialog is 76×11. Renderers must scroll/reflow inside
-  that budget, not grow into the player.
+  margins; at 80×20 its maximum is 76×11. Modal behavior is still #49.
 - ClipLine/PadLine strip untrusted ANSI and flatten controls before measuring with
-  the existing ANSI/grapheme library. They accept raw metadata, not styled output.
-  Callers choose Unicode/plain tails. Borders/colors are renderer-owned and are
-  added separately inside the allocated region.
+  the existing ANSI/grapheme library. Pass raw metadata, not styled renderer output.
+  Borders/styles are added only after fitting raw text to its allocated cells.
 
-Tests enforce exact W1/C1/R1 budgets, boundary grids including 144×20/80×42, empty/
-negative/extreme dimensions, region separation, dialog bounds and Unicode/CJK/
-combining/emoji/control-safe text. These are **J13 geometry/text assertions only**.
-They do not constitute a complete UI journey, terminal screenshot or PTY test.
+## Coordinator contract
 
-Next #48 adds the real shell model/rendering/miniplayer using these primitives and
-[the existing command runner](../testkit/README.md). #49 adds actual modal ownership,
-minimum-size draft recovery and PTY key/resize/exit evidence before parent #12 closes.
-There are no provider/storage/mpv calls here, no executable preview and no fake
-artwork/theme loader. Palette injection/file integration remains #34.
+`NewModel(SnapshotMsg, dispatch)` accepts injected display data. Book.Key is a unique,
+nonempty opaque identity supplied by the coordinator; this projection does not
+validate provider IDs, discover files or duplicate engine models. The app remains
+independent of the unpublished engine module. Snapshots clone book/chapter slices;
+callers may reuse them after Update returns, not mutate concurrently during delivery.
+
+The coordinator serializes authoritative snapshots and rejects stale service replies
+**before** sending them to this shell; SnapshotMsg is not an unordered provider reply.
+Selection survives snapshot reordering by key; removal falls back to the first row.
+Details/Chapters follow that highlighted book, not the independent current player.
+
+Dispatch creates a nonblocking `tea.Cmd` for a typed Action. Book Enter requests its
+explicit highlighted target; transport requests carry the current key **and source
+session**, including across same-book reloads. The coordinator must validate the
+session/capability, offer missing-audio download or required switch confirmation,
+and manage cancellation/processes/checkpoints. UI request emission is not successful
+playback: no optimistic state, synthetic clock advance or provider calls in View.
+Quit also requests coordinator shutdown, never bypasses cleanup with a direct Quit.
+
+Only playing/paused snapshots with a key/session enable transport; nil dispatch is
+explicitly disabled. Playback state/duration/speed/volume are displayed truthfully;
+unknown duration has no determinate marker. AppearanceMsg injects semantic palette
+colors and Unicode/plain mode without changing focus/audio. Nil colors inherit the
+terminal. File loading, glyph Settings/Nerd opt-in and SIGUSR1 integration remain #34.
+
+Errors from snapshots/NoticeMsg remain sticky through unrelated success. Only an
+explicit DismissFailureMsg acknowledges them. The coordinator supplies redacted
+errors; terminal-control stripping cannot redact secrets from arbitrary text.
+
+Implemented keys: root Tab/Shift+Tab, 1–5, Books j/k/arrows, Enter in Books/Details/
+Player, Player Left/Right, current-audio Space/comma/period/volume/speed and shutdown
+requests. Library destinations, filtering/sorting/panning, detailed chapter navigation
+and domain actions ship with their owning features; hints do not advertise them as
+working. There is no executable demo, mpv, filesystem/config initialization or artwork.
+Modal/supporting-view ownership, help, draft recovery and PTY integration remain #49.
+
+## Evidence
+
+[`shell_test.go`](shell_test.go) drives real Init/Update/Cmd through the existing
+[runner](../testkit/README.md): browse B while A plays; explicit action targets and
+source sessions; completion-driven repaint; refresh identity/isolation; sticky error
+and dismissal; focus/resize/recovery; safe long metadata; named states and glyphs.
+Pure geometry tests include the boundary grid and extreme integer dimensions;
+actual rendered views are checked at supported/minimum/tiny sizes in terminal cells.
+This is partial J13 (and the browse-target portion of J07), not complete app journeys.
+There is no persistence, live media, actual terminal key decoding/restoration or PTY
+coverage claimed until those implementations land.
+
+The reviewed [80×20 plain fixture](testdata/shell-minimum-plain.golden) supplements,
+not replaces, cell/semantic assertions. From app/ deliberately regenerate with:
+
+```sh
+GOWORK=off go test ./internal/ui -run TestShellMinimumPlainGolden -update-shell-golden
+```
+
+Review the text fixture diff; trailing padding is normalized only for the golden.
+Separate per-line cell-width assertions still enforce the full 80-column budget.
