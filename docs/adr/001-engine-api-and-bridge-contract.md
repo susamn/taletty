@@ -13,8 +13,10 @@ licensing, copy runtime data or carry the UI's mutable model into the engine.
 
 ## Module and dependency direction
 
-- `github.com/susamn/taletty/engine`: public `model` and `audible` packages; internal
-  bridge/process/auth helpers; `cmd/taletty-engine`. No terminal, mpv or SQLite imports.
+- `github.com/susamn/taletty/engine`: public `model` and `connectors/audible`
+  packages; Audible-specific bridge/process/auth helpers private to the connector;
+  `cmd/taletty-engine`. No terminal, mpv or SQLite imports. Connectors are separate
+  packages within the independently versioned engine module, not generic core logic.
 - `github.com/susamn/taletty/app`: `cmd/taletty` plus internal app/UI/store/playback
   packages. Import engine types/API, never its internal helpers or Python modules.
 - App services depend on narrow consumer-owned interfaces; concrete engine satisfies

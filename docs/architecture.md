@@ -8,8 +8,8 @@ through PR #35. Independent module scaffolds exist; most features below remain p
 ```text
 engine/                         independent Go module
   provider-neutral contracts    identity, books, chapters, operations, events
-  Audible adapter               Python process + typed versioned protocol
-  bridge/                       pinned Python dependencies and adapter tests
+  connectors/audible/           provider connector, separate from neutral model
+    internal/bridge/            private Python process/protocol and pinned adapter
   cmd/taletty-engine/            headless login/sync/download/doctor
 app/                            independent Go module
   cmd/taletty/                   user CLI and terminal application
@@ -34,6 +34,11 @@ Own provider authentication, token refresh, provider calls, entitlement/license
 handling, media download/preparation and provider metadata conversion. Provide
 headless operation through both a typed Go API and CLI. No Bubble Tea, Lip Gloss,
 terminal widgets, user-history database, or mpv dependencies.
+
+Provider implementations belong in separate connector packages, initially
+`engine/connectors/audible`, not in neutral models or the app. Its Python bridge
+and auth/process helpers are private to the Audible connector. No plugin registry
+or extra connector module is required for one provider.
 
 The Go engine owns a pinned Python bridge runtime contract. Keep the existing
 unofficial `audible` integration; a Go rewrite is not a prerequisite. The adapter

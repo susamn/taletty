@@ -67,12 +67,14 @@ fails until its real all-source coverage job is registered in the same PR.
 Generated `.git`, `.venv`, `__pycache__`, `coverage`, and vendored dependencies are
 not production target discovery; `tests/` holds test-only Python/Go fixtures.
 
-Actual checks are `Coverage tooling` and `Go app/engine (1.26.x/1.27.x)` (four Go
-matrix checks). All run on every PR with pinned actions, without live credentials,
+Actual checks are `Coverage tooling`, `Go app/engine (1.26.x/1.27.x)` (four Go
+matrix checks), and the stable `Quality gate` that rejects failed/canceled/skipped
+tooling or matrix jobs. All run on every PR with pinned actions, without live credentials,
 providers or protected audio. Each matrix run fails on test/vet/build/format/tidy
 errors before accepting its fresh report; no stale report may substitute for a
 failed command. Coverage artifacts are uploaded as evidence, not as a replacement
-for test status. #38 verifies required-check policy after actual check names exist.
+for test status. See [required-check policy](../docs/quality-checks.md) for branch
+protection and explicit owners of later adapter/UI/PTY/media checks.
 
 No no-op green Python-adapter, UI, PTY or mpv jobs exist. App currently has only
 read-only default-root resolution, engine only validated provider-neutral BookID.

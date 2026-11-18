@@ -23,8 +23,10 @@ and #38 (command harness/check policy). See [tooling instructions](../tools/READ
 Tooling and real Go foundations are measured independently. Inventory validation feeds
 the module CI matrix and rejects unregistered module/adapter source. No adapter or full
 UI journey coverage is claimed before code exists. Required checks/branch protection
-follow actual verified check names.
-Feature/UI/media gates are added with their production code, never no-op green jobs.
+follow actual verified check names; see [check policy and acceptance audit](quality-checks.md).
+The [model command runner](../app/internal/testkit/README.md) is a tested seam, not
+full UI-journey coverage. Feature/UI/media gates arrive with production features,
+never no-op green jobs.
 
 ## Test layers
 
