@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1320" height="824" viewBox="0 0 1320 824" xml:space="preserve" role="img" aria-labelledby="title desc">
+<title id="title">B3 — Bookmark confirmation and unavailable-audio alternatives</title>
+<desc id="desc">Separate proposed dialog excerpts for deleting a bookmark, switching books at a bookmark and missing local audio. Initial confirmation choice is non-destructive; cancel never changes current audio.</desc>
+<style>
+rect { fill: #161a20; stroke: #75808e; stroke-width: 1.5; }
+text { fill: #e7e9ee; font-family: 'Iosevka Slab', monospace; font-size: 16px; }
+.heading { font-size: 20px; font-weight: bold; }
+.muted { fill: #b0b9c7; }
+.focus { stroke: #8bd5ca; stroke-width: 3; }
+.selected { fill: #303d4b; stroke: none; }
+.accent { fill: #8bd5ca; }
+.flow { fill: none; stroke: #b0b9c7; stroke-width: 2; marker-end: url(#arrow); }
+</style>
+<rect width="1320" height="824" style="fill:#101318;stroke:none"/>
+<text x="24" y="34" class="heading">B3  CONFIRMATIONS / UNAVAILABLE AUDIO</text>
+<text x="24" y="60" class="muted">Alternative centered-dialog excerpts, not a multi-pane terminal layout</text>
+<rect x="24" y="90" width="620" height="244" rx="4" class="focus"/>
+<text x="40" y="118" class="accent">Delete bookmark — Rivers?</text>
+<text x="40" y="156" class="">00:20:10 · Ferrykeeper&#x27;s warning</text>
+<text x="40" y="184" class="">Deletes only this note, not audio or progress.</text>
+<text x="40" y="212" class="">Failure keeps the note and shows a retryable error.</text>
+<text x="40" y="292" class="accent">&gt; [Keep bookmark]   [Delete bookmark]</text>
+<rect x="676" y="90" width="620" height="244" rx="4" class="focus"/>
+<text x="692" y="118" class="accent">Switch to Rivers at 00:20:10?</text>
+<text x="692" y="156" class="">Current audio: Orchard · this will change books.</text>
+<text x="692" y="184" class="">Save Orchard checkpoint before switching.</text>
+<text x="692" y="212" class="">Cancellation leaves current audio untouched.</text>
+<text x="692" y="292" class="accent">&gt; [Stay with Orchard]   [Switch and play]</text>
+<rect x="24" y="366" width="620" height="220" rx="4" class=""/>
+<text x="40" y="394" class="">Local audio unavailable — Rivers</text>
+<text x="40" y="432" class="">The bookmark remains saved at 00:20:10.</text>
+<text x="40" y="460" class="">Queue a download; do not seek Orchard.</text>
+<text x="40" y="488" class="">No autoplay or auto-jump when download finishes.</text>
+<text x="40" y="546" class="accent">&gt; [Back to bookmarks]   [Queue download]</text>
+<rect x="676" y="366" width="620" height="220" rx="4" class=""/>
+<text x="692" y="394" class="">Same-book jump / explicit seeks</text>
+<text x="692" y="432" class="">Seek the stored absolute jump position once.</text>
+<text x="692" y="460" class="">Preserve playing/paused state for current book.</text>
+<text x="692" y="488" class="">No second smart rewind or repeated pre-roll.</text>
+<text x="692" y="546" class="muted">Cross-book switch uses saved speed for target.</text>
+<rect x="24" y="618" width="1272" height="166" rx="4" class=""/>
+<text x="40" y="646" class="">Modal / failure recovery</text>
+<text x="40" y="684" class="">Dialogs own keys; Tab selects buttons, Enter activates the focused choice, Esc cancels and restores parent focus.</text>
+<text x="40" y="712" class="">Save/delete/jump failures retain draft or bookmark and a truthful error; do not claim success or guaranteed rollback.</text>
+<text x="40" y="740" class="">If playback changes behind a manager/editor, its book and pending action remain fixed. Never act on a different row.</text>
+</svg>
