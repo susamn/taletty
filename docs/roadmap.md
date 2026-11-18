@@ -60,6 +60,10 @@ Parent #12 stays open through these sequential, native dependency-linked tasks:
 - [#47](https://github.com/susamn/taletty/issues/47): approved shared geometry and safe cell text; blocked by #2/#4.
 - [#48](https://github.com/susamn/taletty/issues/48): real shell model/panes/miniplayer and model journeys; blocked by #47.
 - [#49](https://github.com/susamn/taletty/issues/49): modal recovery, PTY key/resize/exit evidence and shell acceptance audit; blocked by #48.
+  Split before implementation into [#52](https://github.com/susamn/taletty/issues/52)
+  (real Help owner/whitelist) → [#53](https://github.com/susamn/taletty/issues/53)
+  (bounded modal/draft ownership) → [#54](https://github.com/susamn/taletty/issues/54)
+  (actual PTY and acceptance audit). #49/#12 remain open until all slices pass.
 
 [Geometry/text evidence](../app/internal/ui/README.md) is only part of J13, not a
 claim that the full UI flow exists. No extra planning-only design review is needed;

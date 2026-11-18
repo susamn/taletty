@@ -115,6 +115,8 @@ type Model struct {
 	selected   string
 	control    int
 	failure    string
+	help       bool
+	helpOffset int
 	dispatch   func(Action) tea.Cmd
 }
 
@@ -174,6 +176,11 @@ func (m Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 		m.failure = ""
 	case tea.KeyPressMsg:
 		key := msg.String()
+		// The resize owner supersedes hidden views. At supported sizes Help owns
+		// every key first, including q/Ctrl+C; consumed keys never reach root.
+		if m.help && m.layout.Mode != ResizeOnly {
+			return m.helpKey(key)
+		}
 		if key == "q" || key == "ctrl+c" {
 			return m.request(Action{Kind: RequestQuit})
 		}
@@ -181,6 +188,8 @@ func (m Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		switch key {
+		case "?":
+			m.help, m.helpOffset = true, 0
 		case "tab":
 			m.focus = (m.focus + 1) % 5
 		case "shift+tab":
@@ -212,7 +221,7 @@ func (m Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 				return m.transport([]ActionKind{TogglePlayback, SeekBackward, SeekForward}[m.control])
 			}
 		default:
-			if action, ok := map[string]ActionKind{"space": TogglePlayback, ",": SeekBackward, ".": SeekForward, "-": VolumeDown, "=": VolumeUp, "[": SpeedDown, "]": SpeedUp}[key]; ok {
+			if action, ok := transportKeys[key]; ok {
 				return m.transport(action)
 			}
 		}

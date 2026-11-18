@@ -17,4 +17,4 @@
 | [Pause]  -15s  +15s                               1.5x | Vol 75% | Sleep Off |
 +------------------------------------------------------------------------------+
 Error: Offline: retry explicitly
-q quit | Tab/1-5 panes | j/k browse | Enter request play | Space current audio
+? Help | q quit | Tab/1-5 panes | j/k browse | Enter play | Space current audio

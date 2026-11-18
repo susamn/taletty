@@ -52,10 +52,31 @@ errors; terminal-control stripping cannot redact secrets from arbitrary text.
 
 Implemented keys: root Tab/Shift+Tab, 1–5, Books j/k/arrows, Enter in Books/Details/
 Player, Player Left/Right, current-audio Space/comma/period/volume/speed and shutdown
-requests. Library destinations, filtering/sorting/panning, detailed chapter navigation
+requests, plus `?` for scrollable Help. Library destinations, filtering/sorting/panning, detailed chapter navigation
 and domain actions ship with their owning features; hints do not advertise them as
 working. There is no executable demo, mpv, filesystem/config initialization or artwork.
-Modal/supporting-view ownership, help, draft recovery and PTY integration remain #49.
+Modal/other supporting-view ownership, draft recovery and PTY integration remain #49.
+
+## Help ownership (#52)
+
+Help replaces only the content region; the player/activity/error/hints rows remain.
+It is the sole visible focus owner, even when opened from Player, and preserves the
+underlying root pane, highlighted book and player-control selection. Esc restores
+that origin. j/k/arrows, g/G/Home/End, paging and Ctrl+u/d scroll Help locally.
+Tab, numbers, q/Ctrl+C, b/B and context actions are consumed, not redispatched to
+root. Only the same seven explicit current-audio transport keys pass through once;
+completion updates the authoritative player snapshot without closing Help.
+
+Context rows distinguish origin bindings (usable only after Esc), disabled requests
+and unimplemented features. Sticky error details wrap after control stripping and
+remain fully scrollable without acknowledging the error. Reflow clamps the visible
+page but preserves the stored reading offset. Below minimum the resize/quit owner
+supersedes hidden Help: no hidden navigation/transport, q/Ctrl+C requests orderly
+shutdown; recovery, including shutdown failure, restores Help and its root origin.
+Help itself owns no unsaved draft. Modal draft warnings belong to #53.
+
+This is the first #49 slice: #52 → #53 (modal/draft ownership) → #54 (real PTY and
+shell acceptance audit). No domain editor/download/bookmark workflow is implied.
 
 ## Evidence
 
@@ -63,6 +84,9 @@ Modal/supporting-view ownership, help, draft recovery and PTY integration remain
 [runner](../testkit/README.md): browse B while A plays; explicit action targets and
 source sessions; completion-driven repaint; refresh identity/isolation; sticky error
 and dismissal; focus/resize/recovery; safe long metadata; named states and glyphs.
+[`help_test.go`](help_test.go) adds real model/command journeys for exclusive Help
+ownership from every pane, transport/session whitelisting, blocked quit/focus keys,
+scroll bounds, long safe errors, resize/repaint and failed-shutdown recovery.
 Pure geometry tests include the boundary grid and extreme integer dimensions;
 actual rendered views are checked at supported/minimum/tiny sizes in terminal cells.
 This is partial J13 (and the browse-target portion of J07), not complete app journeys.

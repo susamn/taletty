@@ -51,12 +51,16 @@ func send(t *testing.T, r *testkit.Runner, messages ...tea.Msg) {
 }
 
 func key(name string) tea.KeyPressMsg {
-	codes := map[string]rune{"tab": tea.KeyTab, "left": tea.KeyLeft, "right": tea.KeyRight, "up": tea.KeyUp, "down": tea.KeyDown, "enter": tea.KeyEnter}
+	codes := map[string]rune{
+		"tab": tea.KeyTab, "left": tea.KeyLeft, "right": tea.KeyRight, "up": tea.KeyUp, "down": tea.KeyDown,
+		"enter": tea.KeyEnter, "esc": tea.KeyEscape, "home": tea.KeyHome, "end": tea.KeyEnd,
+		"pgup": tea.KeyPgUp, "pgdown": tea.KeyPgDown,
+	}
 	if name == "shift+tab" {
 		return tea.KeyPressMsg{Code: tea.KeyTab, Mod: tea.ModShift}
 	}
-	if name == "ctrl+c" {
-		return tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl}
+	if strings.HasPrefix(name, "ctrl+") {
+		return tea.KeyPressMsg{Code: rune(name[len("ctrl+")]), Mod: tea.ModCtrl}
 	}
 	if code, ok := codes[name]; ok {
 		return tea.KeyPressMsg{Code: code}
