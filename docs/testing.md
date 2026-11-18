@@ -103,7 +103,12 @@ The [private bridge stream tests](../engine/connectors/audible/internal/bridge/s
 add #61's bounded envelope/framing evidence: fragmented readers, exact line limits,
 malformed headers/JSON/UTF-8/order, duplicate terminals/keys, failed reads after
 terminal, owned buffers and fuzz seeds. A terminal is provisional until action
-validation and process exit checks; #62 owns real subprocess cleanup tests.
+validation and process exit checks. The [Linux process tests](../engine/connectors/audible/internal/bridge/process_linux_test.go)
+add #62's real request/EOF/exit and cleanup journeys: nonzero exit after result,
+malformed/missing output, stderr flood, queued-frame cancellation, blocked pipes,
+TERM-ignore escalation, inherited stdout, group-member kill before leader reaping,
+and failed exit inspection. Barriers/FD acknowledgments avoid timing guesses;
+fixture group members are separately test-owned and reaped, never orphaned.
 No Python adapter/source coverage is claimed until #63 (under #57) registers real
 adapter code, independent coverage and the Go↔Python contract job.
 
