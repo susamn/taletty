@@ -99,7 +99,13 @@ The [Audible auth-session boundary tests](../engine/connectors/audible/internal/
 exercise real private-directory/flock ownership across Go processes, cancellation-aware
 serialization, failed inspection cleanup, panic-safe release and close races. These
 are #56's service foundations only, not complete J01/J02 login/library evidence.
-No Python adapter/source coverage is claimed until #57 registers real adapter code.
+The [private bridge stream tests](../engine/connectors/audible/internal/bridge/stream_test.go)
+add #61's bounded envelope/framing evidence: fragmented readers, exact line limits,
+malformed headers/JSON/UTF-8/order, duplicate terminals/keys, failed reads after
+terminal, owned buffers and fuzz seeds. A terminal is provisional until action
+validation and process exit checks; #62 owns real subprocess cleanup tests.
+No Python adapter/source coverage is claimed until #63 (under #57) registers real
+adapter code, independent coverage and the Go↔Python contract job.
 
 ## Release evidence
 
