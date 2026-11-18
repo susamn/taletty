@@ -1,0 +1,66 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1320" height="1050" viewBox="0 0 1320 1050" xml:space="preserve" role="img" aria-labelledby="title desc">
+<title id="title">S2 — Supporting state alternatives</title>
+<desc id="desc">Eight alternative state excerpts cover fresh onboarding, offline cache, no filter matches, missing chapters, empty player, playback failure, favorites failure/final-row removal, and sleep. They are not simultaneous terminal panes.</desc>
+<style>
+rect { fill: #161a20; stroke: #75808e; stroke-width: 1.5; }
+text { fill: #e7e9ee; font-family: 'Iosevka Slab', monospace; font-size: 16px; }
+.heading { font-size: 20px; font-weight: bold; }
+.muted { fill: #b0b9c7; }
+.focus { stroke: #8bd5ca; stroke-width: 3; }
+.selected { fill: #303d4b; stroke: none; }
+.accent { fill: #8bd5ca; }
+.flow { fill: none; stroke: #b0b9c7; stroke-width: 2; marker-end: url(#arrow); }
+</style>
+<rect width="1320" height="1050" style="fill:#101318;stroke:none"/>
+<text x="24" y="34" class="heading">S2  SUPPORTING STATES / RECOVERY</text>
+<text x="24" y="62" class="muted">Alternative excerpts, not a dashboard · details and J01–J13 handoff in final-review.md</text>
+<rect x="24" y="94" width="620" height="196" rx="4" class=""/>
+<text x="40" y="122" class="">Fresh Taletty root / login</text>
+<text x="40" y="158" class="">No library cached yet. Never autoplay.</text>
+<text x="40" y="186" class="">[Login in browser] [Continue offline]</text>
+<text x="40" y="214" class="">No old-app discovery or password field.</text>
+<text x="40" y="242" class="">Cancel/error returns to the prior view.</text>
+<rect x="676" y="94" width="620" height="196" rx="4" class=""/>
+<text x="692" y="122" class="">Offline cached library</text>
+<text x="692" y="158" class="">Offline · 18 cached books</text>
+<text x="692" y="186" class="">Local playback, favorites and notes work.</text>
+<text x="692" y="214" class="">[Browse downloaded] [Account details]</text>
+<text x="692" y="242" class="">New network work explains why it waits.</text>
+<rect x="24" y="318" width="620" height="196" rx="4" class=""/>
+<text x="40" y="346" class="">Filter: no matches</text>
+<text x="40" y="382" class="">No matches for “quiet harbor”.</text>
+<text x="40" y="410" class="">[Clear filter] [Back]</text>
+<text x="40" y="438" class="">Not an empty account or login failure.</text>
+<text x="40" y="466" class="">Keep prior BookID if it returns.</text>
+<rect x="676" y="318" width="620" height="196" rx="4" class=""/>
+<text x="692" y="346" class="">Missing chapters / unknown duration</text>
+<text x="692" y="382" class="">No chapter metadata available.</text>
+<text x="692" y="410" class="">Position 01:32 · duration unknown</text>
+<text x="692" y="438" class="">Show absolute time, no invented ratio.</text>
+<text x="692" y="466" class="">Long/CJK titles use safe cell clipping.</text>
+<rect x="24" y="542" width="620" height="196" rx="4" class=""/>
+<text x="40" y="570" class="">No current audio / stopped</text>
+<text x="40" y="606" class="">Last book: Orchard · no loaded audio</text>
+<text x="40" y="634" class="">[Resume Orchard] requires explicit action.</text>
+<text x="40" y="662" class="">Seek/capture disabled with explanation.</text>
+<text x="40" y="690" class="">No autoplay or highlighted-book fallback.</text>
+<rect x="676" y="542" width="620" height="196" rx="4" class=""/>
+<text x="692" y="570" class="">Playback failure / ended alternative</text>
+<text x="692" y="606" class="">Could not load Orchard; checkpoint kept.</text>
+<text x="692" y="634" class="">[Retry] [Error details] [Back]</text>
+<text x="692" y="662" class="">EOF instead: Finished · [Replay from start?]</text>
+<text x="692" y="690" class="">No fake seek success or next-book autoplay.</text>
+<rect x="24" y="766" width="620" height="196" rx="4" class=""/>
+<text x="40" y="794" class="">Favorites failure / final-row removal</text>
+<text x="40" y="830" class="">Save failed: old favorite flag retained.</text>
+<text x="40" y="858" class="">[Retry] [Back] · current audio unchanged</text>
+<text x="40" y="886" class="">Last unfavorite succeeds: Favorites empty.</text>
+<text x="40" y="914" class="">[All books] · keep history and bookmarks.</text>
+<rect x="676" y="766" width="620" height="196" rx="4" class=""/>
+<text x="692" y="794" class="">Sleep timer / pause / switch</text>
+<text x="692" y="830" class="">Sleep 12m remaining · pause freezes it.</text>
+<text x="692" y="858" class="">Chapter end: names the armed chapter.</text>
+<text x="692" y="886" class="">Expiry pauses once; switch/quit cancels.</text>
+<text x="692" y="914" class="">No timer restored at next launch.</text>
+<text x="24" y="1022" class="muted">Help, auth handoff, quit and modal ownership follow the final state/key contract.</text>
+</svg>

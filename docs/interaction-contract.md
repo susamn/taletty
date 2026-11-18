@@ -1,8 +1,9 @@
 # Interaction contract
 
-Status: product rules and wide/compact arrangement direction accepted;
-[first-review wireframes](design/README.md) record the proposal. Exact geometry,
-remaining detailed flows and key map await final approval in design issue #2.
+Status: W1/C1/F1, Downloads and Bookmarks direction accepted via #43–#45. The
+[final #2 sign-off](design/final-review.md) consolidates responsive geometry,
+remaining states and the [complete key map](design/keys.md). Until that review is
+approved/merged, #2 gates UI implementation; these docs do not claim runtime features.
 
 ## Shared language
 
@@ -51,8 +52,8 @@ Browsing never changes audio. Space targets current audio. Enter on a book
 plays/resumes that book; avoid using Enter as a second implicit pause toggle.
 Enter on a current-book chapter seeks without changing pause state. A chapter or
 bookmark in another book explicitly loads that book at the requested position;
-label the action as a switch before execution, with the final confirmation policy
-settled in the design issue. Missing local audio offers download, never a fake seek
+use the named Stay / Switch and play confirmation from B3 before cross-book
+chapter/bookmark activation. Missing local audio offers download, never a fake seek
 of the unrelated current book. Preserve the prior book's checkpoint on switches.
 
 ## Navigation conventions
@@ -66,10 +67,11 @@ Supporting panes have explicit back behavior and a remembered origin.
 outside editing, Esc clears an applied filter before navigating back. Keep selection
 by identity through asynchronous updates; decorative headings are not selectable.
 
-Proposed transport: Space pause/resume, comma/period seek, minus/equals volume.
-Speed, chapter, sort, account and download keys must be assigned without collision
-in the design issue. The prototype's h/l focus, o downloaded-only and minus/equals
-speed bindings are intentionally not frozen compatibility requirements.
+The [scoped key map](design/keys.md) assigns all root/view/editor bindings: Space
+pause/resume, comma/period seek, minus/equals volume, brackets speed, f favorites,
+s sort, d enqueue, D Downloads, x context actions, t timer, a account and S Settings.
+No prototype h/l focus, o downloaded-only or minus/equals speed compatibility aliases.
+Editors/menus own keys first; unavailable context actions never fall back silently.
 
 ## Modal precedence
 
@@ -87,11 +89,10 @@ parent restores prior focus. Playback changes cannot steal focus from an editor.
 
 Lowercase b captures the loaded current book's position immediately, including
 paused playback; uppercase B opens a clearly labeled manager for its explicit
-context. Resolve the manager target in the design issue rather than copying
-mpdtui's surprising paused-target fallback. The [B1–B3 design proposal](design/bookmarks.md)
-provides explicit b/B context targeting, frozen capture, editor/error recovery and
-default-safe cross-book chapter/bookmark confirmation; those new details remain
-subject to maintainer review under #2.
+context: highlighted book from Library/Details/Chapters, loaded current book from
+the focused Player, including paused audio. Manager target stays fixed until closed;
+no paused-versus-playing fallback. [B1–B3](design/bookmarks.md) records frozen capture,
+editor/error recovery and default-safe chapter/bookmark switch confirmation.
 
 Store absolute position, book identity, note, chapter context and timestamps.
 Optional two-second pre-roll is clamped at zero. Do not apply a second smart rewind

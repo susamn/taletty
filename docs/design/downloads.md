@@ -1,7 +1,8 @@
 # Downloads design — D1 / D2
 
 Status: **design direction accepted via merged PR #44** under #2. Not an implemented
-download manager or final key map; compact/minimum dialog geometry remains to review.
+download manager. Compact/minimum dialog geometry and bindings are consolidated
+in the [final review](final-review.md) and [key map](keys.md).
 This slice does not close #2 or unblock UI code. Implementation owners: job coordinator #16 and download UI #17,
 following the engine download/protocol work. Fictional data only.
 
@@ -47,8 +48,8 @@ not a fabricated zero. Visible text states are required even with glyphs disable
 These are **alternative snapshots/dialog excerpts**, not concurrent jobs, a new
 four-pane terminal composition or four dialogs shown together. Actual dialogs are
 centered over their parent view; Now Playing stays visible where geometry permits,
-and no modal pauses audio just by opening. Dimensions/compact overlays still need
-review in the minimum-size slice. Use the same [typography](typography.md) and
+and no modal pauses audio just by opening. Dimensions/compact overlays use the
+bounded R1 container in the final review. Use the same [typography](typography.md) and
 [theme semantics](theming.md) as W1/C1.
 
 ### Truthful stage progress
@@ -117,8 +118,8 @@ favorite or pane shortcuts. Tab selects buttons; Enter activates the focused but
 Esc cancels without mutation. Initially focus the non-destructive choice. Keep action
 menus' target job fixed even when progress or selection changes behind them; if it
 finishes, invalidate stale actions rather than cancel/delete a different job.
-Final download/reorder/retry/delete shortcuts remain unassigned until full key-map
-review. Error details retain selection/focus on return and expose sanitized text,
+The final-review key map assigns D for Downloads, d for enqueue and x for row
+actions; reorder/retry/delete are named menu items, not destructive letter aliases. Error details retain selection/focus on return and expose sanitized text,
 never credentials, signed URLs or raw provider tracebacks.
 
 ## Implementation test handoff — no executable journeys claimed

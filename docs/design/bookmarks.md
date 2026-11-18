@@ -1,6 +1,7 @@
 # Bookmarks design — B1 / B2 / B3
 
-Status: **proposal for maintainer review** under #2. Service #18 and UI #19 remain
+Status: **direction accepted via merged PR #45** under #2; remaining geometry and
+bindings are consolidated in the [final review](final-review.md). Service #18 and UI #19 remain
 blocked by their implementation dependencies; this is not executable bookmark
 coverage. Reuse the approved full-width player, [Iosevka Slab](typography.md) and
 modal precedence. Fictional books/notes only. Favorites are a separate library flag.
@@ -47,7 +48,7 @@ chapter accurately; absolute jump position is authoritative, not a chapter label
 
 [Editable B2 SVG](b2-bookmark-manager.svg)
 
-**Proposed `B` targeting rule:** choose once from the visible originating context,
+**`B` targeting rule:** choose once from the visible originating context,
 show the book in the manager header, and keep it fixed until that manager closes.
 
 | Origin | Manager target |
@@ -84,7 +85,8 @@ On the read-only list, Space/comma/period retain current-audio transport; the fo
 note scroller owns its navigation. Menus, editors and confirmations own all keys.
 Esc unwinds child → manager → original pane, with selection/focus restored; local
 filter edit/clear follows the shared interaction contract before navigating back.
-Final Edit/Delete/additional shortcut assignments remain part of full key-map review.
+The [final-review key map](keys.md) assigns x for row actions; Edit/Delete have no
+hidden destructive letter aliases.
 
 ## B3 — Delete, jump and missing local audio
 
@@ -94,7 +96,7 @@ Final Edit/Delete/additional shortcut assignments remain part of full key-map re
 
 These are alternative **centered-dialog excerpts**, not a four-pane terminal layout.
 Actual dialogs retain the player where geometry permits; compact/minimum-size
-geometry is a remaining design slice. Candidate B1/B2 terminal size stays 144 × 42.
+geometry follows the bounded [R1 final review](final-review.md). B1/B2 use 144 × 42.
 
 - **Delete:** name book/time/note and default to Keep bookmark. Confirm deletes only
   that bookmark. Cancel changes nothing; failure retains recoverable context and
@@ -103,7 +105,7 @@ geometry is a remaining design slice. Candidate B1/B2 terminal size stays 144 ×
 - **Same loaded book:** jump to the stored absolute position, preserving playing or
   paused state; no second pre-roll or smart rewind. Stale/out-of-range media context
   must yield a truthful seek result/error rather than a success applied elsewhere.
-- **Different book:** propose a confirmation for **both bookmarks and chapters**:
+- **Different book:** use a confirmation for **both bookmarks and chapters**:
   name target book/time and current audio, initially focus Stay. Explicit **Switch
   and play** checkpoints the old book, loads local target audio at the chosen position
   with its saved/default speed and starts playing. This explicit button also explains

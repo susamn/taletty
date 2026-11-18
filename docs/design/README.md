@@ -1,10 +1,13 @@
-# First-review wireframes — #2
+# Taletty design reference — #2
 
-**Approved:** wide/compact arrangement direction, podmutt-style width-filling player,
-Details/Chapters following the highlighted book, Iosevka Slab recommendation, MIT and
-the `colors`/Omarchy palette direction. **Not yet approved:** exact dimensions/breakpoints, minimum-size
-layout, full key map, dialogs and detailed feature states. This PR does not close
-#2 or unblock production UI implementation.
+**Final sign-off requested:** [responsive/supporting-state contract](final-review.md)
+and [complete key map](keys.md). Accepting the final-review PR closes #2; until then
+production UI remains gated. No runtime feature is implemented by these documents.
+
+**Already accepted:** W1/C1/F1 in #43, Downloads in #44, Bookmarks in #45, full-width
+podmutt-style player, Details/Chapters following the highlighted book, Iosevka Slab
+recommendation, MIT and `colors`/Omarchy direction. Final review consolidates exact
+geometry, minimum dialogs, Settings, recovery, glyphs and all remaining bindings.
 
 These are editable, self-contained **SVG wireframes** with exported PNG previews,
 not screenshots of a working application. Open them directly in a browser or SVG editor; their text and shapes
@@ -15,13 +18,13 @@ implementation uses [semantic themes](theming.md), not these literal colors.
 ## Follow-up design reviews
 
 - [Downloads — D1 view, D2 stage/confirmation alternatives](downloads.md): direction
-  accepted via merged PR #44; queue/progress/recovery/safe audio deletion. Exact
-  compact/minimum dialog geometry and final shortcuts remain open.
-- [Bookmarks — B1 editor, B2 manager, B3 action alternatives](bookmarks.md): new
-  proposal for b/B targeting, frozen capture, edit/delete and explicit cross-book
-  chapter/bookmark confirmation. These new decisions need review.
-- Remaining: supporting player/account/Settings/favorite failure states, minimum-size
-  layouts, glyph vocabulary and final key map.
+  accepted via merged PR #44; queue/progress/recovery/safe audio deletion. Final
+  compact/minimum dialog bounds and shortcuts are consolidated in R1/keys below.
+- [Bookmarks — B1 editor, B2 manager, B3 action alternatives](bookmarks.md): accepted
+  via merged PR #45; frozen capture, stable b/B targets and safe switches.
+- [Final review — R1 minimum, S1 Settings, S2 supporting states](final-review.md):
+  consolidates remaining decisions; [key map](keys.md) defines scoped input ownership.
+  These supersede earlier candidate geometry/unassigned bindings on acceptance.
 
 ## W1 — Wide library/listening
 
@@ -77,9 +80,8 @@ implementation uses [semantic themes](theming.md), not these literal colors.
 - The SVG intentionally shows a cached offline Favorites view. Toggling a local
   favorite needs no provider call. An empty Favorites view offers a way back to
   All rather than looking like login or download failure.
-- **80 × 20** is a minimum-size candidate for the next review, not an approved
-  promise. Below the eventual minimum, show a readable resize/quit message; keep
-  audio state intact and preserve modal input. Do not clip silently.
+- **80 × 20** and bounded dialogs are specified in the [R1 final review](final-review.md).
+  Below minimum show a safe resize/quit view; preserve audio and modal input.
 
 ## F1 — Continue, browse, explicitly switch
 
@@ -92,7 +94,7 @@ implementation uses [semantic themes](theming.md), not these literal colors.
 | F1.1 | Launch, including offline | Restore view/selection, never autoplay; no old-app discovery |
 | F1.2 | Play/resume Orchard explicitly | Current audio becomes Orchard at saved position/speed |
 | F1.3 | Highlight Rivers; favorite it | Details/chapters follow Rivers; Orchard audio remains unchanged |
-| F1.4 | Activate Rivers chapter | Explicitly label cross-book switch; confirmation policy still open |
+| F1.4 | Activate Rivers chapter | B3 Stay / Switch and play confirmation; no switch until confirmed |
 | F1.4a | No completed local audio | Offer download; never seek Orchard or falsely report success |
 | F1.5 | Commit switch | Preserve Orchard checkpoint; load Rivers at chapter, no smart rewind |
 | F1.6 | Return to Orchard and explicitly play | Resume its checkpoint; merely highlighting it does not switch |
@@ -101,26 +103,14 @@ A failed load must be truthful, preserve the prior checkpoint and expose recover
 Do not promise the old process/audio can always be transactionally restored after
 a real player failure. Cancel before committing a switch leaves current audio alone.
 
-## Review questions / next design slice
+## Final review, then implementation
 
-1. Accept or adjust 144 × 42 wide and 80 × 28 compact examples? Validate a separate
-   minimum-size frame before freezing breakpoints.
-2. Follow-selection is now approved: Details/Chapters follow the highlighted book
-   without changing audio. Validate rapid selection/late replies and focus transitions.
-3. Review the [B3 confirmation proposal](bookmarks.md) for cross-book chapter/bookmark
-   activation. Do not silently apply a seek to unrelated current audio.
-4. Assign favorite, speed, download, sort, account and Settings actions without
-   colliding with existing navigation, bookmark or editor keys. No favorite key is
-   approved here. `b` captures the current loaded session, including paused audio;
-   `B` targeting now has an explicit [context-table proposal](bookmarks.md), not a
-   fallback inferred from paused playback or favorites.
-5. Review [bookmark capture/editor/list/jump](bookmarks.md); next frames:
-   paused/empty/error player; favorite save failure and final-row removal; onboarding,
-   Settings/theme source, help, small terminal and modal focus restoration.
-
-Full key ownership follows the [interaction contract](../interaction-contract.md).
-Do not allow letters, Space or numeric pane shortcuts to escape an active editor.
-Final approval requires the remaining #2 acceptance items, not just these sketches.
+Review [R1/S1/S2 and the acceptance handoff](final-review.md) together with the
+[full scoped key map](keys.md). They settle all remaining #2 design decisions in
+one PR; diagrams marked candidate retain historical context, not competing rules.
+The [interaction contract](../interaction-contract.md) remains the shared behavior
+boundary. On final approval/merge, implementation proceeds through existing blocked-by
+relationships with real tests. No additional planning-only design PR is scheduled.
 
 ## Typography / preview export
 
@@ -145,7 +135,7 @@ used instead. Native terminal-cell tests still belong to implementation.
 | J04–J06 | [D1/D2 proposal](downloads.md): distinguish transfer/preparation/errors; no fake Ready |
 | J07/J08 | Highlighting updates details/chapters, never audio; stale replies ignored; explicit switch checkpoints; pause-aware seeks |
 | J09 | [B1–B3 proposal](bookmarks.md): frozen capture/manager target, input ownership, recovery, confirmed switches |
-| J10 | Follow-up sleep frames must show current timer and target policy |
+| J10 | [S2 timer policy](final-review.md): fake-clock expiry, pause/seek/switch/quit behavior |
 | J11/J12 | Completion/deleting audio does not remove favorites, bookmarks or history |
 | J13 | Every pane fits terminal-cell bounds; player visible; resize/back restores focus |
 | J17 (#42) | Favorite Rivers while Orchard plays; restart offline; unfavorite final visible row safely |
