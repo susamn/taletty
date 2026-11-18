@@ -1,0 +1,82 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1320" height="820" viewBox="0 0 1320 820" xml:space="preserve" role="img" aria-labelledby="title desc">
+<title id="title">B1 — Capture a paused book and retain a failed-save draft</title>
+<desc id="desc">Library highlights Rivers, but lowercase b captures paused Orchard at 00:18:40. Editor freezes book, chapter and timestamp; optional two-second pre-roll gives jump position 00:18:38. Failed save keeps the draft and focus.</desc>
+<style>
+rect { fill: #161a20; stroke: #75808e; stroke-width: 1.5; }
+text { fill: #e7e9ee; font-family: 'Iosevka Slab', monospace; font-size: 16px; }
+.heading { font-size: 20px; font-weight: bold; }
+.muted { fill: #b0b9c7; }
+.focus { stroke: #8bd5ca; stroke-width: 3; }
+.selected { fill: #303d4b; stroke: none; }
+.accent { fill: #8bd5ca; }
+.flow { fill: none; stroke: #b0b9c7; stroke-width: 2; marker-end: url(#arrow); }
+</style>
+<rect width="1320" height="820" style="fill:#101318;stroke:none"/>
+<text x="24" y="34" class="heading">B1  CAPTURE / NOTE EDITOR</text>
+<text x="24" y="60" class="muted">144 × 42 candidate · b captures current audio, not the highlighted library book</text>
+<g opacity="0.25"><rect x="24" y="86" width="212" height="478" rx="4" class=""/>
+<text x="38" y="111" class="">1 Library</text>
+<text x="40" y="154" class="">&gt; All books</text>
+<text x="40" y="182" class="">  Continue</text>
+<text x="40" y="210" class="">  Downloaded</text>
+<text x="40" y="238" class="">  Favorites</text>
+<text x="40" y="266" class="">  Finished</text>
+<text x="40" y="364" class="">Views / overlays</text>
+<text x="40" y="392" class="">Downloads (1)</text>
+<text x="40" y="420" class="">Bookmarks</text>
+<text x="40" y="448" class="">Settings / Help</text>
+<rect x="236" y="86" width="690" height="294" rx="4" class="focus"/>
+<text x="250" y="111" class="accent">2 Books [FOCUS] — All books</text>
+<text x="252" y="148" class="muted">TITLE / AUTHOR                       PROGRESS   LOCAL STATE</text>
+<text x="252" y="188" class="">  The Glass Orchard  [PAUSED]          5%       Ready</text>
+<text x="272" y="214" class="muted">Mara Vale</text>
+<rect x="244" y="231" width="674" height="64" class="selected"/>
+<text x="252" y="254" class="">&gt; ★ A Map of Quiet Rivers              0%       Ready</text>
+<text x="272" y="280" class="accent">Ilan Reed</text>
+<text x="252" y="326" class="">  The Lantern Atlas                    —        Not downloaded</text>
+<rect x="236" y="380" width="690" height="184" rx="4" class=""/>
+<text x="250" y="405" class="">3 Details — A Map of Quiet Rivers</text>
+<text x="252" y="438" class="">★ Favorite  ·  Ilan Reed  ·  Narrated by Noor Bell</text>
+<text x="252" y="466" class="">8h 00m  ·  Ready locally  ·  Not started</text>
+<text x="252" y="494" class="">Actions: Play this book / Unfavorite / Manage bookmarks</text>
+<rect x="926" y="86" width="370" height="478" rx="4" class=""/>
+<text x="940" y="111" class="">4 Chapters — Rivers</text>
+<text x="942" y="154" class="">  01  A folded map          20m</text>
+<text x="942" y="182" class="">  02  The ferry            32m</text>
+<text x="942" y="210" class="">  03  Quiet water          25m</text>
+<text x="942" y="238" class="">  04  Beyond the bend      28m</text>
+<text x="942" y="364" class="">Audio is still Orchard.</text>
+<text x="942" y="392" class="">Chapter activation here</text>
+<text x="942" y="420" class="">switches books explicitly.</text>
+<text x="942" y="448" class="">Not a seek in Orchard.</text>
+</g>
+<rect x="284" y="118" width="752" height="414" rx="4" class="focus"/>
+<text x="300" y="146" class="accent">Add bookmark — The Glass Orchard [EDITOR]</text>
+<text x="300" y="186" class="">Captured while paused: 00:18:40 · Ch 02 Across the gate</text>
+<text x="300" y="214" class="">Jump position: 00:18:38 · pre-roll 2s (clamped at zero)</text>
+<text x="300" y="242" class="">Book, chapter and time stay fixed while you type.</text>
+<rect x="300" y="264" width="720" height="116" rx="4" class=""/>
+<text x="316" y="292" class="">Note</text>
+<text x="316" y="326" class="">The gate opens, but the promise remains unanswered.</text>
+<text x="316" y="354" class="">Return to this passage when the narrator reveals why.|</text>
+<text x="300" y="420" class="accent">Save failed: storage unavailable. Your draft is still here.</text>
+<text x="300" y="458" class="">[Retry save]  [Cancel]</text>
+<text x="300" y="498" class="muted">Enter / Ctrl+S save · Alt+Enter newline · Esc cancel</text>
+<rect x="24" y="564" width="1272" height="140" rx="4" class=""/>
+<text x="38" y="589" class="">5 Now playing · Paused</text>
+<text x="40" y="618" class="">The Glass Orchard · Mara Vale · Ch 02 Across the gate</text>
+<text x="1280" y="618" text-anchor="end" class="muted">Chapter 08:40 / 24:00</text>
+<text x="40" y="646">00:18:40</text>
+<path d="M 128 641 H 1024" stroke="#75808e" stroke-width="2"/>
+<path d="M 128 641 H 173" stroke="#8bd5ca" stroke-width="3"/>
+<path d="M 152 637 V 645 M 210 637 V 645 M 300 637 V 645 M 490 637 V 645 M 670 637 V 645 M 850 637 V 645 M 990 637 V 645" stroke="#b0b9c7"/>
+<circle cx="173" cy="641" r="5" fill="#8bd5ca"/>
+<text x="1280" y="646" text-anchor="end">06:12:00 · left ≈ 4h 43m</text>
+<text x="40" y="674">[−15s]  [Resume]  [+15s]</text>
+<text x="660" y="674" text-anchor="middle">Speed 1.25× · Volume 70%</text>
+<text x="1280" y="674" text-anchor="end">Sleep: Off</text>
+
+<text x="24" y="738" class="muted">ACTIVITY  Bookmark not saved · no success message until storage confirms</text>
+<text x="24" y="770" class="">EDITOR OWNS INPUT  Space, b/B, q and pane numbers are text, never global shortcuts</text>
+<text x="24" y="800" class="muted">Playing may continue during other captures; paused audio remains paused. No automatic retargeting.</text>
+</svg>

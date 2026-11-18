@@ -88,7 +88,10 @@ parent restores prior focus. Playback changes cannot steal focus from an editor.
 Lowercase b captures the loaded current book's position immediately, including
 paused playback; uppercase B opens a clearly labeled manager for its explicit
 context. Resolve the manager target in the design issue rather than copying
-mpdtui's surprising paused-target fallback.
+mpdtui's surprising paused-target fallback. The [B1–B3 design proposal](design/bookmarks.md)
+provides explicit b/B context targeting, frozen capture, editor/error recovery and
+default-safe cross-book chapter/bookmark confirmation; those new details remain
+subject to maintainer review under #2.
 
 Store absolute position, book identity, note, chapter context and timestamps.
 Optional two-second pre-roll is clamped at zero. Do not apply a second smart rewind

@@ -1,0 +1,52 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1320" height="820" viewBox="0 0 1320 820" xml:space="preserve" role="img" aria-labelledby="title desc">
+<title id="title">B2 — Bookmarks for the explicitly named book</title>
+<desc id="desc">Uppercase B from highlighted Rivers opens its bookmark manager. Target stays Rivers even if playback changes. Orchard remains the current audio in the full-width player; list selection never seeks or switches.</desc>
+<style>
+rect { fill: #161a20; stroke: #75808e; stroke-width: 1.5; }
+text { fill: #e7e9ee; font-family: 'Iosevka Slab', monospace; font-size: 16px; }
+.heading { font-size: 20px; font-weight: bold; }
+.muted { fill: #b0b9c7; }
+.focus { stroke: #8bd5ca; stroke-width: 3; }
+.selected { fill: #303d4b; stroke: none; }
+.accent { fill: #8bd5ca; }
+.flow { fill: none; stroke: #b0b9c7; stroke-width: 2; marker-end: url(#arrow); }
+</style>
+<rect width="1320" height="820" style="fill:#101318;stroke:none"/>
+<text x="24" y="34" class="heading">B2  BOOKMARKS / FIXED BOOK CONTEXT</text>
+<text x="24" y="60" class="muted">B from Books / Details / Chapters: highlighted book · B from Player: current audio (even paused)</text>
+<rect x="24" y="86" width="1272" height="478" rx="4" class="focus"/>
+<text x="40" y="114" class="accent">Bookmarks — A Map of Quiet Rivers [FOCUS]</text>
+<text x="40" y="148" class="muted">TIME       CHAPTER             NOTE</text>
+<text x="40" y="190" class="">  00:00:01  01 A folded map     The opening image</text>
+<rect x="32" y="216" width="808" height="48" class="selected"/>
+<text x="40" y="246" class="accent">&gt; 00:20:10  02 The ferry        Ferrykeeper&#x27;s warning</text>
+<text x="40" y="302" class="">  00:52:20  03 Quiet water      A second promise</text>
+<path d="M 856 132 V 448" stroke="#75808e"/>
+<text x="880" y="148" class="accent">Ferrykeeper’s warning</text>
+<text x="880" y="200" class="">“Some maps remember the traveler.”</text>
+<text x="880" y="228" class="">Jump: 00:20:10 · Ch 02 The ferry</text>
+<text x="880" y="256" class="">Rivers is not the current audio.</text>
+<text x="880" y="284" class="">[Jump / switch…] [Edit] [Delete]</text>
+<text x="880" y="356" class="">Target stays Rivers until closed.</text>
+<text x="880" y="384" class="">Browsing notes never changes audio.</text>
+<text x="880" y="412" class="">No paused-session fallback.</text>
+<text x="40" y="488" class="muted">Current audio: Orchard · any cross-book jump requires an explicit switch confirmation</text>
+<text x="40" y="528" class="muted">Closing returns to the original pane/cursor. This view is not the Favorites library.</text>
+<rect x="24" y="564" width="1272" height="140" rx="4" class=""/>
+<text x="38" y="589" class="">5 Now playing · Playing</text>
+<text x="40" y="618" class="">The Glass Orchard · Mara Vale · Ch 02 Across the gate</text>
+<text x="1280" y="618" text-anchor="end" class="muted">Chapter 08:40 / 24:00</text>
+<text x="40" y="646">00:18:40</text>
+<path d="M 128 641 H 1024" stroke="#75808e" stroke-width="2"/>
+<path d="M 128 641 H 173" stroke="#8bd5ca" stroke-width="3"/>
+<path d="M 152 637 V 645 M 210 637 V 645 M 300 637 V 645 M 490 637 V 645 M 670 637 V 645 M 850 637 V 645 M 990 637 V 645" stroke="#b0b9c7"/>
+<circle cx="173" cy="641" r="5" fill="#8bd5ca"/>
+<text x="1280" y="646" text-anchor="end">06:12:00 · left ≈ 4h 43m</text>
+<text x="40" y="674">[−15s]  [Pause]  [+15s]</text>
+<text x="660" y="674" text-anchor="middle">Speed 1.25× · Volume 70%</text>
+<text x="1280" y="674" text-anchor="end">Sleep: Off</text>
+
+<text x="24" y="738" class="muted">ACTIVITY  Local notes available offline · no provider connection required</text>
+<text x="24" y="770" class="">HINTS  j/k move · Enter jump / switch · b capture current audio · Edit / Delete actions · Esc back</text>
+<text x="24" y="800" class="muted">Shortcuts for Edit / Delete remain proposals; no destructive action on list selection.</text>
+</svg>

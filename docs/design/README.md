@@ -14,11 +14,14 @@ implementation uses [semantic themes](theming.md), not these literal colors.
 
 ## Follow-up design reviews
 
-- [Downloads — D1 view, D2 stage/confirmation alternatives](downloads.md): proposal
-  for queue management, truthful progress, recovery and safe audio deletion. These
-  new states need review; merging W1/C1/F1 did not approve every follow-up dialog.
-- Remaining: Bookmarks/editor/jump, supporting player/account/Settings/favorite
-  failure states, minimum-size layouts, glyph vocabulary and final key map.
+- [Downloads — D1 view, D2 stage/confirmation alternatives](downloads.md): direction
+  accepted via merged PR #44; queue/progress/recovery/safe audio deletion. Exact
+  compact/minimum dialog geometry and final shortcuts remain open.
+- [Bookmarks — B1 editor, B2 manager, B3 action alternatives](bookmarks.md): new
+  proposal for b/B targeting, frozen capture, edit/delete and explicit cross-book
+  chapter/bookmark confirmation. These new decisions need review.
+- Remaining: supporting player/account/Settings/favorite failure states, minimum-size
+  layouts, glyph vocabulary and final key map.
 
 ## W1 — Wide library/listening
 
@@ -104,13 +107,14 @@ a real player failure. Cancel before committing a switch leaves current audio al
    minimum-size frame before freezing breakpoints.
 2. Follow-selection is now approved: Details/Chapters follow the highlighted book
    without changing audio. Validate rapid selection/late replies and focus transitions.
-3. Cross-book chapter/bookmark activation: confirm, or use a clearly labeled explicit
-   switch action? Do not silently apply a seek to unrelated current audio.
+3. Review the [B3 confirmation proposal](bookmarks.md) for cross-book chapter/bookmark
+   activation. Do not silently apply a seek to unrelated current audio.
 4. Assign favorite, speed, download, sort, account and Settings actions without
    colliding with existing navigation, bookmark or editor keys. No favorite key is
    approved here. `b` captures the current loaded session, including paused audio;
-   `B` manager targeting remains to settle, not inferred from a favorite action.
-5. Review [download stages/error/recovery](downloads.md); next frames: bookmark capture/editor/list/jump;
+   `B` targeting now has an explicit [context-table proposal](bookmarks.md), not a
+   fallback inferred from paused playback or favorites.
+5. Review [bookmark capture/editor/list/jump](bookmarks.md); next frames:
    paused/empty/error player; favorite save failure and final-row removal; onboarding,
    Settings/theme source, help, small terminal and modal focus restoration.
 
@@ -140,7 +144,8 @@ used instead. Native terminal-cell tests still belong to implementation.
 | J03 | Keep selected BookID through filter/sort/refresh, including Favorites |
 | J04–J06 | [D1/D2 proposal](downloads.md): distinguish transfer/preparation/errors; no fake Ready |
 | J07/J08 | Highlighting updates details/chapters, never audio; stale replies ignored; explicit switch checkpoints; pause-aware seeks |
-| J09/J10 | Follow-up editor and sleep frames must retain input/target and show current timer |
+| J09 | [B1–B3 proposal](bookmarks.md): frozen capture/manager target, input ownership, recovery, confirmed switches |
+| J10 | Follow-up sleep frames must show current timer and target policy |
 | J11/J12 | Completion/deleting audio does not remove favorites, bookmarks or history |
 | J13 | Every pane fits terminal-cell bounds; player visible; resize/back restores focus |
 | J17 (#42) | Favorite Rivers while Orchard plays; restart offline; unfavorite final visible row safely |

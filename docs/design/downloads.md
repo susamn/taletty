@@ -1,8 +1,8 @@
 # Downloads design — D1 / D2
 
-Status: **proposal for maintainer review** under #2, after merged PR #43. Not an
-implemented download manager or final key map. This slice does not close #2 or
-unblock UI code. Implementation owners: job coordinator #16 and download UI #17,
+Status: **design direction accepted via merged PR #44** under #2. Not an implemented
+download manager or final key map; compact/minimum dialog geometry remains to review.
+This slice does not close #2 or unblock UI code. Implementation owners: job coordinator #16 and download UI #17,
 following the engine download/protocol work. Fictional data only.
 
 ## D1 — Dedicated Downloads view while listening
