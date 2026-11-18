@@ -3,12 +3,13 @@
 Status: direction and [ADR 001](adr/001-engine-api-and-bridge-contract.md) accepted
 through PR #35. Independent module scaffolds exist; most features below remain planned.
 
-## Repository layout (target; only model/profile foundations implemented)
+## Repository layout (target; features below remain incrementally implemented)
 
 ```text
 engine/                         independent Go module
   provider-neutral contracts    identity, books, chapters, operations, events
   connectors/audible/           provider connector, separate from neutral model
+    internal/auth/              Linux root ownership + cancelable operation gate
     internal/bridge/            private Python process/protocol and pinned adapter
   cmd/taletty-engine/            headless login/sync/download/doctor
 app/                            independent Go module
