@@ -1,0 +1,59 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1320" height="820" viewBox="0 0 1320 820" xml:space="preserve" role="img" aria-labelledby="title desc">
+<title id="title">D1 — Downloads while listening</title>
+<desc id="desc">Dedicated Downloads view, proposed 144 by 42 cells. One active transfer, two waiting jobs, and failed, ready and canceled records. Rivers is highlighted for failure recovery; Orchard keeps playing in the full-width player.</desc>
+<style>
+rect { fill: #161a20; stroke: #75808e; stroke-width: 1.5; }
+text { fill: #e7e9ee; font-family: 'Iosevka Slab', monospace; font-size: 16px; }
+.heading { font-size: 20px; font-weight: bold; }
+.muted { fill: #b0b9c7; }
+.focus { stroke: #8bd5ca; stroke-width: 3; }
+.selected { fill: #303d4b; stroke: none; }
+.accent { fill: #8bd5ca; }
+.flow { fill: none; stroke: #b0b9c7; stroke-width: 2; marker-end: url(#arrow); }
+</style>
+<rect width="1320" height="820" style="fill:#101318;stroke:none"/>
+<text x="24" y="34" class="heading">D1  DOWNLOADS / KEEP LISTENING</text>
+<text x="24" y="60" class="muted">144 × 42 candidate · dedicated view · one active job · illustrative fictional snapshot</text>
+<rect x="24" y="86" width="1272" height="478" rx="4" class="focus"/>
+<text x="40" y="114" class="accent">Downloads [FOCUS] — 1 active · 2 waiting · Esc returns to Library</text>
+<text x="40" y="148" class="muted">BOOK                         STATE          TRANSFER / QUEUE</text>
+<text x="40" y="190" class="">  The Lantern Atlas          Downloading    40% · 40 / 100 MiB</text>
+<text x="56" y="218" class="muted">2 MiB/s · about 30s transfer left · preparation still follows</text>
+<path d="M 56 238 H 824" stroke="#75808e" stroke-width="2"/>
+<path d="M 56 238 H 363" stroke="#8bd5ca" stroke-width="3"/>
+<text x="40" y="262" class="">  A House of Stars           Queued         Next (#1)</text>
+<text x="40" y="306" class="">  The Salt Road              Queued         Waiting (#2)</text>
+<rect x="32" y="326" width="824" height="42" class="selected"/>
+<text x="40" y="354" class="accent">&gt; A Map of Quiet Rivers      Failed         No space left</text>
+<text x="40" y="398" class="">  The Glass Orchard          Ready          Playing locally</text>
+<text x="40" y="442" class="">  Letters from the Cove      Canceled       Retry from scratch</text>
+<path d="M 872 130 V 476" stroke="#75808e"/>
+<text x="894" y="148" class="accent">A Map of Quiet Rivers</text>
+<text x="894" y="194" class="">Failed · disk_full</text>
+<text x="894" y="222" class="">No completed audio published.</text>
+<text x="894" y="250" class="">Free space, then Retry.</text>
+<text x="894" y="278" class="">No automatic retry.</text>
+<text x="894" y="334" class="">[Retry]  [Error details]</text>
+<text x="894" y="362" class="">Not the currently playing book.</text>
+<text x="894" y="390" class="">Errors contain no credentials</text>
+<text x="894" y="418" class="">or signed download URLs.</text>
+<text x="40" y="504" class="muted">Actions depend on row state: cancel active · reorder/remove waiting · retry failed/canceled</text>
+<text x="40" y="538" class="muted">Queue changes never switch playback. Ready means complete local audio, not 100% transferred.</text>
+<rect x="24" y="564" width="1272" height="140" rx="4" class=""/>
+<text x="38" y="589" class="">5 Now playing · Playing</text>
+<text x="40" y="618" class="">The Glass Orchard · Mara Vale · Ch 02 Across the gate</text>
+<text x="1280" y="618" text-anchor="end" class="muted">Chapter 08:40 / 24:00</text>
+<text x="40" y="646">00:18:40</text>
+<path d="M 128 641 H 1024" stroke="#75808e" stroke-width="2"/>
+<path d="M 128 641 H 173" stroke="#8bd5ca" stroke-width="3"/>
+<path d="M 152 637 V 645 M 210 637 V 645 M 300 637 V 645 M 490 637 V 645 M 670 637 V 645 M 850 637 V 645 M 990 637 V 645" stroke="#b0b9c7"/>
+<circle cx="173" cy="641" r="5" fill="#8bd5ca"/>
+<text x="1280" y="646" text-anchor="end">06:12:00 · left ≈ 4h 43m</text>
+<text x="40" y="674">[−15s]  [Pause]  [+15s]</text>
+<text x="660" y="674" text-anchor="middle">Speed 1.25× · Volume 70%</text>
+<text x="1280" y="674" text-anchor="end">Sleep: Off</text>
+
+<text x="24" y="738" class="muted">ACTIVITY  Rivers: no space left · error stays inspectable while Atlas downloads</text>
+<text x="24" y="770" class="">HINTS  j/k move · Enter row actions · Space current audio · Esc back · ? help</text>
+<text x="24" y="800" class="muted">Action labels proposed; final key map pending. This is a download queue, not a listening queue.</text>
+</svg>
