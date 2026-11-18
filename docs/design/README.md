@@ -12,6 +12,14 @@ are the source, so no hosted drawing account, build step or generated-image serv
 is required. All metadata is fictional. The dark palette is illustrative only;
 implementation uses [semantic themes](theming.md), not these literal colors.
 
+## Follow-up design reviews
+
+- [Downloads — D1 view, D2 stage/confirmation alternatives](downloads.md): proposal
+  for queue management, truthful progress, recovery and safe audio deletion. These
+  new states need review; merging W1/C1/F1 did not approve every follow-up dialog.
+- Remaining: Bookmarks/editor/jump, supporting player/account/Settings/favorite
+  failure states, minimum-size layouts, glyph vocabulary and final key map.
+
 ## W1 — Wide library/listening
 
 ![W1: wide library, selected Rivers and playing Orchard](w1-wide.png)
@@ -102,7 +110,7 @@ a real player failure. Cancel before committing a switch leaves current audio al
    colliding with existing navigation, bookmark or editor keys. No favorite key is
    approved here. `b` captures the current loaded session, including paused audio;
    `B` manager targeting remains to settle, not inferred from a favorite action.
-5. Next frames: download stages/error/recovery; bookmark capture/editor/list/jump;
+5. Review [download stages/error/recovery](downloads.md); next frames: bookmark capture/editor/list/jump;
    paused/empty/error player; favorite save failure and final-row removal; onboarding,
    Settings/theme source, help, small terminal and modal focus restoration.
 
@@ -130,7 +138,7 @@ used instead. Native terminal-cell tests still belong to implementation.
 |---|---|
 | J01/J02 | No startup autoplay; cached views and local audio work offline |
 | J03 | Keep selected BookID through filter/sort/refresh, including Favorites |
-| J04–J06 | Follow-up frames must distinguish transfer/preparation/errors; no fake Ready |
+| J04–J06 | [D1/D2 proposal](downloads.md): distinguish transfer/preparation/errors; no fake Ready |
 | J07/J08 | Highlighting updates details/chapters, never audio; stale replies ignored; explicit switch checkpoints; pause-aware seeks |
 | J09/J10 | Follow-up editor and sleep frames must retain input/target and show current timer |
 | J11/J12 | Completion/deleting audio does not remove favorites, bookmarks or history |
