@@ -95,6 +95,12 @@ For J13 include long CJK/combining text, embedded terminal escapes, missing titl
 no chapters, unknown duration, unknown byte total, many list rows and help/errors
 at the minimum size. Golden updates require deliberate review.
 
+The [Audible auth-session boundary tests](../engine/connectors/audible/internal/auth/session_linux_test.go)
+exercise real private-directory/flock ownership across Go processes, cancellation-aware
+serialization, failed inspection cleanup, panic-safe release and close races. These
+are #56's service foundations only, not complete J01/J02 login/library evidence.
+No Python adapter/source coverage is claimed until #57 registers real adapter code.
+
 ## Release evidence
 
 A release candidate needs an evidence matrix linking each supported journey to

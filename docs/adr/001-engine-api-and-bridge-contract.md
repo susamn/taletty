@@ -83,6 +83,12 @@ owns the root lock. Standalone CLI commands acquire it; UI session and its engin
 operations share ownership rather than recursively acquiring the lock. Busy external
 clients fail with a safe busy error instead of modifying auth concurrently.
 
+The Linux [auth-session primitive](../../engine/connectors/audible/internal/auth/README.md)
+implements root ownership and context-aware in-process serialization under #56.
+A canceled Close wait retains the root lock; cancel/join the active operation and
+retry. This primitive does not itself create/reap bridge processes or persist tokens;
+those integrations remain the subsequent #5 extraction slices.
+
 No engine lock guards app playback: downloaded audio keeps playing during provider
 work. Cancellation while waiting starts no process. Cancellation during work closes
 pipes, terminates the owned process group (including ffmpeg), waits/reaps with a
