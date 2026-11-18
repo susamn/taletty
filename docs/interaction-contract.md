@@ -1,6 +1,8 @@
 # Interaction contract
 
-Status: product rules accepted; exact visual design/key map awaits the design issue.
+Status: product rules and wide/compact arrangement direction accepted;
+[first-review wireframes](design/README.md) record the proposal. Exact geometry,
+remaining detailed flows and key map await final approval in design issue #2.
 
 ## Shared language
 

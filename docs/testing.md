@@ -78,6 +78,7 @@ own rows/tests rather than deferring all UI verification to a final testing issu
 | J14 | Fresh Taletty root → initialize → sign in/save → restart/upgrade | Only `~/.config/taletty/` used, private permissions, idempotent setup, old app files untouched, Taletty-owned upgrades preserve data |
 | J15 | Local import → chapters/resume/bookmarks | Provider-neutral identity, duplicate policy, no Audible auth required |
 | J16 | Global bookmark search → jump/export | Correct book target, escaping, safe filename, no credential leakage |
+| J17 | Favorite → Favorites view → restart offline → unfavorite (#42) | Stable target distinct from playing book; persistent local state; save failure recovery; safe final-row removal; audio/history retained |
 
 For J13 include long CJK/combining text, embedded terminal escapes, missing titles,
 no chapters, unknown duration, unknown byte total, many list rows and help/errors

@@ -1,0 +1,60 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1320" height="820" viewBox="0 0 1320 820" xml:space="preserve" role="img" aria-labelledby="title desc">
+<title id="title">W1 — Wide library and listening</title>
+<desc id="desc">Proposed 144 by 42 terminal cells. Books pane focused; Rivers selected and inspected, Orchard playing. Favorites is a separate library view. Color-independent textual states.</desc>
+<style>
+rect { fill: #161a20; stroke: #75808e; stroke-width: 1.5; }
+text { fill: #e7e9ee; font-family: monospace; font-size: 14px; }
+.heading { font-size: 20px; font-weight: bold; }
+.muted { fill: #b0b9c7; }
+.focus { stroke: #8bd5ca; stroke-width: 3; }
+.selected { fill: #303d4b; stroke: none; }
+.accent { fill: #8bd5ca; }
+.flow { fill: none; stroke: #b0b9c7; stroke-width: 2; marker-end: url(#arrow); }
+</style>
+<rect width="1320" height="820" style="fill:#101318;stroke:none"/>
+<text x="24" y="34" class="heading">W1  WIDE LIBRARY / LISTENING</text>
+<text x="24" y="60" class="muted">144 × 42 cells proposed · arrangement approved · dimensions and actions still under review</text>
+<rect x="24" y="86" width="212" height="478" rx="4" class=""/>
+<text x="38" y="111" class="">1 Library</text>
+<text x="40" y="154" class="">&gt; All books</text>
+<text x="40" y="182" class="">  Continue</text>
+<text x="40" y="210" class="">  Downloaded</text>
+<text x="40" y="238" class="">  Favorites</text>
+<text x="40" y="266" class="">  Finished</text>
+<text x="40" y="364" class="">Views / overlays</text>
+<text x="40" y="392" class="">Downloads (1)</text>
+<text x="40" y="420" class="">Bookmarks</text>
+<text x="40" y="448" class="">Settings / Help</text>
+<rect x="236" y="86" width="690" height="294" rx="4" class="focus"/>
+<text x="250" y="111" class="accent">2 Books [FOCUS] — All books</text>
+<text x="252" y="148" class="muted">TITLE / AUTHOR                       PROGRESS   LOCAL STATE</text>
+<text x="252" y="188" class="">  The Glass Orchard  [PLAYING]          5%       Ready</text>
+<text x="272" y="214" class="muted">Mara Vale</text>
+<rect x="244" y="231" width="674" height="64" class="selected"/>
+<text x="252" y="254" class="">&gt; ★ A Map of Quiet Rivers              0%       Ready</text>
+<text x="272" y="280" class="accent">Ilan Reed  [SELECTED / INSPECTED]</text>
+<text x="252" y="326" class="">  The Lantern Atlas                    —        Not downloaded</text>
+<rect x="236" y="380" width="690" height="184" rx="4" class=""/>
+<text x="250" y="405" class="">3 Details — INSPECTED: A Map of Quiet Rivers</text>
+<text x="252" y="438" class="">★ Favorite  ·  Ilan Reed  ·  Narrated by Noor Bell</text>
+<text x="252" y="466" class="">8h 00m  ·  Ready locally  ·  Not started</text>
+<text x="252" y="494" class="">Actions: Play this book / Unfavorite / Manage bookmarks</text>
+<rect x="926" y="86" width="370" height="478" rx="4" class=""/>
+<text x="940" y="111" class="">4 Chapters — INSPECTED: Rivers</text>
+<text x="942" y="154" class="">  01  A folded map          20m</text>
+<text x="942" y="182" class="">  02  The ferry            32m</text>
+<text x="942" y="210" class="">  03  Quiet water          25m</text>
+<text x="942" y="238" class="">  04  Beyond the bend      28m</text>
+<text x="942" y="364" class="">Audio is still Orchard.</text>
+<text x="942" y="392" class="">Chapter activation here</text>
+<text x="942" y="420" class="">switches books explicitly.</text>
+<text x="942" y="448" class="">Not a seek in Orchard.</text>
+<rect x="24" y="564" width="1272" height="140" rx="4" class=""/>
+<text x="38" y="589" class="">5 NOW PLAYING — The Glass Orchard [PLAYING]</text>
+<text x="40" y="618" class="">Ch 02  Across the gate     08:40 / 24:00 chapter     00:18:40 / 06:12:00 book</text>
+<text x="40" y="646" class="">[Pause]  [Seek −15s]  [Seek +15s]     1.25×  ·  Vol 70%  ·  Book left ≈ 4h 43m</text>
+<text x="40" y="674" class="">[==========--------------------]  Chapter progress     Sleep: Off</text>
+<text x="24" y="738" class="muted">ACTIVITY  Downloads: 1 queued · no active transfer</text>
+<text x="24" y="770" class="">HINTS  Tab focus · Enter play selected book · Space current audio · / filter · ? help</text>
+<text x="24" y="800" class="muted">★ = Favorite / [Fav] in plain mode · selected ≠ inspected ≠ playing · fictional metadata</text>
+</svg>
