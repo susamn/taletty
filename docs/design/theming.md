@@ -1,6 +1,7 @@
 # Theme direction
 
-Status: maintainer-approved direction; implementation and Settings layout pending.
+Status: maintainer-approved direction; implementation pending. The Settings layout
+and recovery behavior are consolidated in the [final #2 review](final-review.md).
 
 ## Podmutt-compatible palettes
 

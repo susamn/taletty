@@ -10,6 +10,7 @@ claim that Taletty implements it. #31 audits this map before core release #24.
 | US browser sign-in/MFA handoff, private tokens and refresh | #5, #13 | J01; fake-provider tests, private live validation |
 | Cached library, safe pagination, offline browsing | #5, #13 | J01/J02 |
 | Contributor filtering, views, stable sorting and selection | #14 | J03 |
+| Persistent local favorites and Favorites library view | #42 | J17 |
 | Entitled download, license refusals, chapter-preserving remux | #6 | J04/J06; generated-media remux + private live validation |
 | Honest byte progress, preparing stage and terminal outcomes | #7, #17 | J04–J06 |
 | Persistent sequential jobs, cancel/retry/reorder | #16, #17 | J05/J06 |
@@ -27,7 +28,8 @@ Persist local state by stable book identity, not display title/path. Inspecting 
 book must not replace current audio. UI actions and future integrations use one
 playback authority. Bookmark timestamp is captured when invoked, not after typing.
 Keep the pause state for seeks within the loaded book. Exact keys, target labels
-and cross-book confirmation remain a design decision in #2.
+and cross-book confirmation are recorded in the [final #2 design review](design/final-review.md)
+and [key map](design/keys.md), not inferred from prototype bindings.
 
 ## Additional explicitly tracked features
 
