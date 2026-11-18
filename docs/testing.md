@@ -84,8 +84,12 @@ Partial executable J13 evidence now exists in the [shell model journeys](../app/
 and [geometry/text assertions](../app/internal/ui/README.md): real Init/Update/Cmd,
 focus/resize recovery, cell-bounded views, Unicode/plain modes, sticky errors and
 injected snapshots. The same suite covers J07's browse-target separation only.
-These do **not** complete J13/J07: modal/supporting-view ownership and PTY restoration
-are #49; real playback, persistence and cross-book confirmation remain feature work.
+[Help owner journeys](../app/internal/ui/help_test.go) additionally exercise real
+read-only key ownership, origin restoration, transport/session whitelisting, scrollable
+errors and resize/failed-shutdown recovery. These do **not** complete J13/J07:
+#49 continues via #53 (modal/draft ownership) and #54 (actual PTY/restoration and
+acceptance audit); real playback, persistence and cross-book confirmation remain
+feature work.
 
 For J13 include long CJK/combining text, embedded terminal escapes, missing titles,
 no chapters, unknown duration, unknown byte total, many list rows and help/errors

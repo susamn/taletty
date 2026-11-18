@@ -96,12 +96,19 @@ func (m Model) paneRows(pane Pane, width int) (string, []string, int) {
 // frame owns borders, a cursor gutter and one-cell inner padding. It never clips
 // renderer styles as untrusted metadata: raw text is fitted before paint is added.
 func (m Model) frame(pane Pane, size Rect, name string, rows []string, selected int) []string {
-	tint := m.appearance.Palette.Border
-	if pane == m.focus {
+	focused := pane == m.focus && !m.help
+	if focused {
 		name = "[Focus] " + name
+	}
+	return m.box(size, fmt.Sprintf(" %d %s ", pane+1, name), rows, selected, focused, pane == Books)
+}
+
+// box is shared by root panes and the dedicated Help view. Fitting precedes style.
+func (m Model) box(size Rect, name string, rows []string, selected int, focused, list bool) []string {
+	tint := m.appearance.Palette.Border
+	if focused {
 		tint = m.appearance.Palette.Focus
 	}
-	name = fmt.Sprintf(" %d %s ", pane+1, name)
 	topLeft, topRight, bottomLeft, bottomRight, vertical, horizontal := "+", "+", "+", "+", "|", "-"
 	if m.appearance.Glyphs != Plain {
 		topLeft, topRight, bottomLeft, bottomRight, vertical, horizontal = "┌", "┐", "└", "┘", "│", "─"
@@ -113,7 +120,7 @@ func (m Model) frame(pane Pane, size Rect, name string, rows []string, selected 
 	first := max(0, selected-(size.Height-2)+1)
 	for y := 1; y < size.Height-1; y++ {
 		index, text, gutter := first+y-1, "", ""
-		if pane == Books {
+		if list {
 			gutter = " "
 		}
 		textTint := m.appearance.Palette.Text
@@ -144,7 +151,9 @@ func (m Model) View() tea.View {
 		return tea.NewView(PadLine(message, g.Screen.Width, m.tail()))
 	}
 	var lines []string
-	if g.Mode == Wide {
+	if m.help {
+		lines = m.helpLines()
+	} else if g.Mode == Wide {
 		left, right := m.pane(Library, g.Library), m.pane(Chapters, g.Chapters)
 		middle := append(m.pane(Books, g.Books), m.pane(Details, g.Details)...)
 		for y := range g.Content.Height {
@@ -159,10 +168,10 @@ func (m Model) View() tea.View {
 		activity, tint = "Error: "+m.failure, m.appearance.Palette.Error
 	}
 	lines = append(lines, m.paint(PadLine(activity, g.Activity.Width, m.tail()), tint))
-	hints := "q quit | Tab/1-5 panes | "
+	hints := "? Help | q quit | Tab/1-5 panes | "
 	switch m.focus {
 	case Books:
-		hints += "j/k browse | Enter request play"
+		hints += "j/k browse | Enter play"
 	case Details:
 		hints += "Enter request play highlighted book"
 	case PlayerPane:
@@ -176,7 +185,10 @@ func (m Model) View() tea.View {
 		hints += " | Transport disabled: no loaded audio"
 	}
 	if m.dispatch == nil {
-		hints = "Tab/1-5 panes | Actions disabled: no coordinator"
+		hints = "? Help | Tab/1-5 panes | Requests disabled: no coordinator"
+	}
+	if m.help {
+		hints = "Esc Back | j/k scroll | PgUp/PgDown | g/G bounds | " + m.helpTransport()
 	}
 	lines = append(lines, m.paint(PadLine(hints, g.Hints.Width, m.tail()), m.appearance.Palette.Muted))
 	return tea.NewView(strings.Join(lines, "\n"))
