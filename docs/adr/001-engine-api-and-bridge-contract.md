@@ -123,6 +123,15 @@ for truncation, oversized frame, invalid JSON, mismatched ID, invalid order, chi
 failure or absent terminal result. Nonzero exit after a result is not trusted as success;
 reconcile an already-published file before retry. Never blindly redownload a ready file.
 
+The private [Go envelope reader](../../engine/connectors/audible/internal/bridge/README.md)
+lands under #61 (parent #57). Required header names are case-sensitive; duplicate
+top-level keys are rejected, including escaped aliases. The 4 MiB bound applies to
+ScanLines content after LF/trailing-CR normalization; an EOF-terminated final line
+is accepted. Its terminal is only a candidate: action-payload validation and a clean
+process exit are still required before any public success. #62 owns process lifetime;
+#63 registers real independently covered Python/runtime diagnostics. This reader
+alone does not complete the transport or any provider operation.
+
 Max frame: 4 MiB. Library pagination uses bounded `library_page` stage payloads (books)
 followed by a terminal result containing count, not a single unbounded library array.
 Accumulate/validate privately; do not publish a partial snapshot on failure. A single
