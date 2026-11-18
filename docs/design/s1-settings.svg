@@ -1,0 +1,57 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1320" height="820" viewBox="0 0 1320 820" xml:space="preserve" role="img" aria-labelledby="title desc">
+<title id="title">S1 — Settings and failed theme apply</title>
+<desc id="desc">Dedicated Settings view with colors active, Catppuccin candidate highlighted, active palette source and recoverable config-write failure. Playback preferences and font guidance are distinct from theme selection. Full-width player remains visible.</desc>
+<style>
+rect { fill: #161a20; stroke: #75808e; stroke-width: 1.5; }
+text { fill: #e7e9ee; font-family: 'Iosevka Slab', monospace; font-size: 16px; }
+.heading { font-size: 20px; font-weight: bold; }
+.muted { fill: #b0b9c7; }
+.focus { stroke: #8bd5ca; stroke-width: 3; }
+.selected { fill: #303d4b; stroke: none; }
+.accent { fill: #8bd5ca; }
+.flow { fill: none; stroke: #b0b9c7; stroke-width: 2; marker-end: url(#arrow); }
+</style>
+<rect width="1320" height="820" style="fill:#101318;stroke:none"/>
+<text x="24" y="34" class="heading">S1  SETTINGS / TRUTHFUL APPLY</text>
+<text x="24" y="60" class="muted">144 × 42 wide · compact stacks sections in one scroller · no font picker in the app</text>
+<rect x="24" y="86" width="1272" height="478" rx="4" class="focus"/>
+<text x="40" y="114" class="accent">Settings [FOCUS] — Theme</text>
+<text x="40" y="148" class="muted">Palette candidates</text>
+<text x="40" y="190" class="">  colors             Active</text>
+<text x="40" y="218" class="">  solarized-dark</text>
+<rect x="32" y="228" width="744" height="36" class="selected"/>
+<text x="40" y="254" class="accent">&gt; catppuccin         Candidate, not applied</text>
+<text x="40" y="294" class="">  midnight           Custom example</text>
+<text x="40" y="350" class="">Active: colors</text>
+<text x="40" y="378" class="">Source: ~/.config/taletty/colors.toml</text>
+<text x="40" y="406" class="">[Apply selected]  [Reload active]</text>
+<text x="40" y="466" class="accent">Apply failed: cannot write config. colors remains active.</text>
+<text x="40" y="510" class="muted">Omarchy hook: explicit setup, never automatic.</text>
+<path d="M 800 132 V 524" stroke="#75808e"/>
+<text x="824" y="148" class="muted">Playback / display preferences</text>
+<text x="824" y="200" class="">Default speed:       1.00x</text>
+<text x="824" y="228" class="">Current book speed:  1.25x</text>
+<text x="824" y="256" class="">Smart rewind:        Configurable</text>
+<text x="824" y="284" class="">Bookmark pre-roll:   2s / Off</text>
+<text x="824" y="312" class="">Glyph mode:          Unicode / Plain</text>
+<text x="824" y="340" class="">Font: use a terminal profile</text>
+<text x="824" y="426" class="muted">Invalid palette: last usable retained.</text>
+<text x="824" y="466" class="muted">Escape returns to original focus.</text>
+<rect x="24" y="564" width="1272" height="140" rx="4" class=""/>
+<text x="38" y="589" class="">5 Now playing · Playing</text>
+<text x="40" y="618" class="">The Glass Orchard · Mara Vale · Ch 02 Across the gate</text>
+<text x="1280" y="618" text-anchor="end" class="muted">Chapter 08:40 / 24:00</text>
+<text x="40" y="646">00:18:40</text>
+<path d="M 128 641 H 1024" stroke="#75808e" stroke-width="2"/>
+<path d="M 128 641 H 173" stroke="#8bd5ca" stroke-width="3"/>
+<path d="M 152 637 V 645 M 210 637 V 645 M 300 637 V 645 M 490 637 V 645 M 670 637 V 645 M 850 637 V 645 M 990 637 V 645" stroke="#b0b9c7"/>
+<circle cx="173" cy="641" r="5" fill="#8bd5ca"/>
+<text x="1280" y="646" text-anchor="end">06:12:00 · left ≈ 4h 43m</text>
+<text x="40" y="674">[−15s]  [Pause]  [+15s]</text>
+<text x="660" y="674" text-anchor="middle">Speed 1.25× · Volume 70%</text>
+<text x="1280" y="674" text-anchor="end">Sleep: Off</text>
+
+<text x="24" y="738" class="muted">ACTIVITY  Config write failed · previous saved settings retained</text>
+<text x="24" y="770" class="">HINTS  j/k select · Enter apply/edit · Esc back · Settings owns keys; audio continues</text>
+<text x="24" y="800" class="muted">Candidate selection never falsely claims successful persistence.</text>
+</svg>
