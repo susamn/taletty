@@ -22,17 +22,23 @@ not their domain-specific targeting quirks.
 - Unicode default, optional Nerd Font mode, plain-text fallback.
 - MIT license. Podmutt-style file palettes: default `colors`, Omarchy integration,
   and alternative themes in Settings; see [theme direction](design/theming.md).
-- Geometry, typography, and glyph vocabulary still require design approval.
+- Wide/compact arrangement direction approved; [first-review wireframes](design/README.md)
+  record it. Exact geometry, typography, detailed flows and key map still need approval.
 
 ## First release
 
 ### Library
 
 Cached browsing without login/network; search title, subtitle, author, narrator;
-explicit All / Continue Listening / Downloaded / Finished views; stable selection
+explicit All / Continue Listening / Downloaded / Favorites / Finished views; stable selection
 through filtering and refresh; sorting by title, author, duration, recent listening,
 and acquisition date when actually available. Never invent unavailable metadata.
 Keep acquisition order when the provider exposes no timestamp.
+
+Mark/unmark favorite books locally, with a visible star/plain-text indicator and a
+Favorites view. Favorite state survives restart, refresh, completion and downloaded
+audio deletion; it is independent of timestamped bookmarks and never changes current
+playback. No Audible-cloud favorite synchronization is promised (implementation #42).
 
 ### Downloads
 
@@ -53,8 +59,9 @@ never applied to deliberate chapter/bookmark seeks.
 ### Chapters and notes
 
 Keep chapter browsing and jumping. Permit inspecting another downloaded book's
-chapters without replacing current audio. Clearly distinguish selected, inspected,
-and playing books. A seek into a different book is an explicit playback switch.
+chapters without replacing current audio. Details and Chapters follow the
+highlighted book; Now Playing remains tied to the loaded audio. No separate Inspect
+action or technical selected/inspected badges. A seek into a different book is an explicit playback switch.
 Bookmarks save position, book identity, chapter context, and a note. Support
 paused creation, configurable pre-roll, edit/delete/jump, global search, and
 Markdown export as separate delivery slices.
