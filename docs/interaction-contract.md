@@ -1,9 +1,9 @@
 # Interaction contract
 
-Status: W1/C1/F1, Downloads and Bookmarks direction accepted via #43–#45. The
-[final #2 sign-off](design/final-review.md) consolidates responsive geometry,
-remaining states and the [complete key map](design/keys.md). Until that review is
-approved/merged, #2 gates UI implementation; these docs do not claim runtime features.
+Status: W1/C1/F1, Downloads and Bookmarks accepted via #43–#45; final #2 design
+accepted via merged PR #46. The [approved R1 contract](design/final-review.md) and
+[complete key map](design/keys.md) govern implementation. No runtime feature is
+implemented by these documents.
 
 ## Shared language
 

@@ -1,8 +1,8 @@
 # Final design sign-off — #2
 
-**Review status: awaiting maintainer approval.** This consolidates the last decisions;
-accepting/merging this PR is the requested final design sign-off and closes #2. No
-runtime UI is implemented here. Subsequent PRs deliver code/tests and accompanying
+**Review status: accepted via merged PR #46; #2 is closed.** These are the approved
+layout/interaction rules, not an additional planning gate. No runtime UI is
+implemented by this document. Subsequent PRs deliver code/tests and accompanying
 doc updates, not additional planning-only design PRs. Corrections found in real
 terminal tests remain reviewable implementation changes, not permission to ignore
 this contract. Illustrations use fictional data and semantic-theme stand-ins.
@@ -12,7 +12,7 @@ this contract. Illustrations use fictional data and semantic-theme stand-ins.
 ![R1: 80×20 minimum editor and below-minimum resize alternative](r1-responsive.png)
 
 [Editable R1](r1-responsive.svg). Earlier [W1/C1](README.md) remain the wide/compact
-reference. **Proposed fixed layout rules for sign-off:**
+reference. **Approved fixed layout rules:**
 
 | Mode | Terminal cells | Budget including borders/padding |
 |---|---|---|
