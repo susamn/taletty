@@ -73,25 +73,35 @@ def reject_constant(value):
     raise ValueError("non-finite JSON constant")
 
 
+def read_request():
+    raw = sys.stdin.buffer.read(MAX_REQUEST_BYTES + 2)
+    content = raw[:-1] if raw.endswith(b"\n") else raw
+    if len(content) > MAX_REQUEST_BYTES:
+        raise ValueError("request too large")
+    request = json.loads(content.decode("utf-8"), object_pairs_hook=unique_object, parse_constant=reject_constant)
+    if not isinstance(request, dict):
+        raise ValueError("request must be an object")
+    candidate = request.get("operation_id")
+    if not isinstance(candidate, str) or not re.fullmatch(r"[A-Za-z0-9_-]{1,64}", candidate):
+        raise ValueError("invalid operation ID")
+    return request
+
+
+def require_action(request, action):
+    if type(request.get("protocol")) is not int or request["protocol"] != PROTOCOL or request.get("action") != action:
+        raise ValueError("unsupported request")
+
+
 def main():
     operation_id = "invalid"
     frame = dict(protocol=PROTOCOL, operation_id=operation_id, seq=1, type="error",
                  failure={"code": "invalid_input", "message": "Invalid doctor request.",
                           "retry": "none"})
     try:
-        raw = sys.stdin.buffer.read(MAX_REQUEST_BYTES + 2)
-        content = raw[:-1] if raw.endswith(b"\n") else raw
-        if len(content) > MAX_REQUEST_BYTES:
-            raise ValueError("request too large")
-        request = json.loads(content.decode("utf-8"), object_pairs_hook=unique_object, parse_constant=reject_constant)
-        if not isinstance(request, dict):
-            raise ValueError("request must be an object")
-        candidate = request.get("operation_id")
-        if not isinstance(candidate, str) or not re.fullmatch(r"[A-Za-z0-9_-]{1,64}", candidate):
-            raise ValueError("invalid operation ID")
+        request = read_request()
+        candidate = request["operation_id"]
         frame["operation_id"] = candidate
-        if type(request.get("protocol")) is not int or request["protocol"] != PROTOCOL or request.get("action") != "doctor":
-            raise ValueError("unsupported request")
+        require_action(request, "doctor")
         frame = dict(protocol=PROTOCOL, operation_id=candidate, seq=1, type="result", **diagnose())
     except (ValueError, UnicodeError):
         pass

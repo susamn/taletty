@@ -121,8 +121,23 @@ real bounded filesystem boundary: descriptor anchoring/borrowed ownership, priva
 root/leaf/unique-temp permissions, symlink/hardlink/FIFO/socket rejection, short I/O,
 pre-publication rollback versus published-but-not-durable errors, cleanup failure,
 retry and real SIGKILL before replace. A synthetic pinned-SDK dict round-trip
-forbids provider I/O. Credential validation, Go→child FD/TTY handoff, finally token
-refresh and complete J01/J14 remain #68/#69 and later app integration.
+forbids provider I/O. The store alone provides neither credential validation nor
+Go→child FD/TTY handoff; #73 adds those below. Finally refresh remains #69 and
+complete J01/J14 awaits CLI/app integration.
+
+#73 adds [owned terminal journeys](../engine/connectors/audible/internal/bridge/terminal_linux_test.go),
+[fileless launcher tests](../tests/adapter/test_interactive.py) and the
+[public Go login boundary](../engine/connectors/audible/login_linux_test.go).
+Real controlling PTYs cover foreground ownership, success, failed exec, nonzero
+exit, background rejection, TERM-ignore→KILL cancellation and explicit lost-FD
+restoration failure/recovery. Public Go→embedded Python→fake external provider→real
+SDK restore covers hidden input, Ctrl+C/context cancel, anchored-root publication,
+old-file preservation on provider failure, stale/malformed completion rejection,
+unsafe publication and missing runtime. A real SDK-spawned exec checks root/TTY/
+control descriptors are not inherited; OS-level SDK chatter cannot corrupt control
+output. Tests use only synthetic never-issued placeholders and forbid provider HTTP.
+These are engine/terminal boundary journeys, not completed J01/J14 or live sign-in.
+CLI/root initialization, library and app integration remain #59 and later work.
 
 ## Release evidence
 

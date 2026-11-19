@@ -18,6 +18,11 @@ var (
 	ErrProcess = errors.New("bridge process did not complete cleanly")
 )
 
+const (
+	termGrace = 250 * time.Millisecond
+	pipeDrain = 2 * time.Second
+)
+
 type processTiming struct{ grace, drain time.Duration }
 type decodedStream struct {
 	frame Frame
@@ -35,10 +40,14 @@ type decodedStream struct {
 // A returned terminal still needs action-payload validation (including error kind).
 // Run never deletes files; publication reconciliation belongs to Download.
 func Run(ctx context.Context, program string, args []string, request []byte, operationID string, frames chan<- Frame) (Frame, error) {
-	return runProcess(ctx, program, args, request, operationID, frames, processTiming{250 * time.Millisecond, 2 * time.Second}, observeExit)
+	return runProcess(ctx, program, args, request, operationID, frames, processTiming{termGrace, pipeDrain}, observeExit)
 }
 
-func runProcess(ctx context.Context, program string, args []string, request []byte, operationID string, frames chan<- Frame, timing processTiming, observe func(int) error) (terminal Frame, err error) {
+func runProcess(ctx context.Context, program string, args []string, request []byte, operationID string, frames chan<- Frame, timing processTiming, observe func(int) error) (Frame, error) {
+	return runConfigured(ctx, program, args, request, operationID, frames, timing, observe, nil)
+}
+
+func runConfigured(ctx context.Context, program string, args []string, request []byte, operationID string, frames chan<- Frame, timing processTiming, observe func(int) error, files *ttyFiles) (terminal Frame, err error) {
 	if err := ctx.Err(); err != nil {
 		return Frame{}, err
 	}
@@ -61,6 +70,11 @@ func runProcess(ctx context.Context, program string, args []string, request []by
 	defer stdout.Close()
 	cmd := exec.Command(program, args...)
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	if files != nil {
+		cmd.ExtraFiles = []*os.File{files.root, files.terminal}
+		cmd.SysProcAttr.Foreground = true
+		cmd.SysProcAttr.Ctty = int(files.terminal.Fd()) // Parent FD, before exec's FD remapping.
+	}
 	cmd.Stdin = bytes.NewReader(append(append([]byte(nil), request...), '\n'))
 	cmd.Stdout = writer
 	cmd.WaitDelay = timing.drain // Bound exec's stdin-copy join after child exit.
