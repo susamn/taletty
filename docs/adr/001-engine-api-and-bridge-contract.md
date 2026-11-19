@@ -15,7 +15,7 @@ licensing, copy runtime data or carry the UI's mutable model into the engine.
 
 - `github.com/susamn/taletty/engine`: public `model` and `connectors/audible`
   packages; Audible-specific bridge/process/auth helpers private to the connector;
-  `cmd/taletty-engine`. No terminal, mpv or SQLite imports. Connectors are separate
+  `cmd/taletty-engine`. No terminal widgets, mpv or SQLite imports. Connectors are separate
   packages within the independently versioned engine module, not generic core logic.
 - `github.com/susamn/taletty/app`: `cmd/taletty` plus internal app/UI/store/playback
   packages. Import engine types/API, never its internal helpers or Python modules.
@@ -100,8 +100,8 @@ finally block runs after SIGKILL. Atomic writes preserve the prior usable file
 before publication. #67's private Python snapshot primitive uses a caller-owned
 verified root directory FD and serialized session, no-follow single-link 0600
 `auth.json`, random exclusive 0600 staging, file fsync, atomic replace and directory
-fsync. It handles opaque bounded bytes only: SDK validation/TTY FD handoff/finally
-refresh integration remain #68/#69. Post-replace directory-fsync error explicitly
+fsync. It handles opaque bounded bytes only: SDK validation and anchored FD/TTY
+handoff are #68/#73; finally-refresh integration remains #69. Post-replace directory-fsync error explicitly
 marks `published=True`; do not claim the old snapshot survived or undo publication.
 Only a successfully created owned temp is cleaned, best effort; kill/I/O failure
 may leave private temps, and retries never sweep another operation's files.
@@ -185,6 +185,29 @@ The final redirect URL is hidden input owned by the login adapter, never an even
 App suspends/restores its terminal around handoff; Go constructs login outcome from
 validated process exit and auth-file state, not parsing printed prose. UI journey
 fixtures use fake login. Automatic localhost callback is not promised.
+
+#73's Linux `audible.Open(ctx, root, python)` owns the session through `Close(ctx)`;
+`Client.Login(ctx, *os.File)` supports only US, no implicit marketplace fallback or
+runtime/root discovery. The caller suspends terminal users and converts its own
+shutdown signals to context cancellation; engine installs no global handlers.
+`RunTTY` reuses the noninteractive process owner, but hands off foreground TTY
+ownership explicitly and restores foreground/termios after all owned users join,
+including failed exec/forced kill. Only restoration's calling thread blocks SIGTTOU.
+A process-local lease prevents overlapping handoffs even across different roots.
+The child gets root FD3 and TTY FD4, never the lock; further exec inheritance is
+disabled. A private control FD, duplicated before nulling SDK stdio, carries one
+bounded bridge-v1 terminal, separate from prompts/input. The launcher consumes a
+rootless login request, reuses embedded relative-import sources with `-I -B`, and
+reloads/validates published auth. Result is `status="signed_in"`; error contains only
+fixed `failure.code`. Go ignores unknown optional fields, validates required exact
+keys/codes and clean EOF/exit, then checks a new same-UID single-link 0600 regular
+auth inode. No credential bytes/redirect cross that boundary. `*LoginError` exposes
+fixed code/message (including `storage_failed`/`storage_uncertain`), never raw text.
+Retry is explicit. Context cancellation may race auth publication, never undo it;
+this is not the separately specified completed-media publication policy. A terminal
+restoration error stays visible alongside cancellation; callers must not blindly
+resume UI. Hard parent death cannot guarantee restoration. CLI wiring remains #59;
+no live-account or full onboarding/library journey evidence is claimed.
 
 ## Progress and failures
 

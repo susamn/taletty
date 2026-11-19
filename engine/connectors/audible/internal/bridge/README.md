@@ -22,7 +22,7 @@ bounded standard-library JSON-lines scanning, not the prototype's all-output buf
 - #63 registers [actual independently covered Python/runtime diagnostics](adapter/README.md)
   and the public Go Doctor with validated fixed-status payloads. Provider action
   validators still land with #58/#59/#7 before public provider API results.
-  No live-provider/login/library/CLI claim.
+  No live-provider/library/CLI claim; #73 adds the owned login boundary below.
 
 Tests cover fragmented reads, retained-buffer ownership, exact limits, malformed
 header/order/termination cases, escaped/optional values, failed reads after terminal
@@ -52,3 +52,24 @@ waitable; a descendant's parent/init owns its eventual reaping. Escaped process
 groups, privilege changes and kernel-uninterruptible waits are not containment or
 absolute deadline guarantees. No runtime/auth/media files are removed by Run;
 Download must reconcile an already-published file before retrying a failed transport.
+
+## Interactive ownership (#73)
+
+`RunTTY` shares the exact same decoder, stdin copier, WNOWAIT observer, group
+escalation and reaper. It lends root as FD3 and the explicit TTY as FD4, never the
+lock. A cancellation-aware process-local lease prevents competing handoffs; the
+caller must already own the controlling foreground TTY and suspend other users.
+Go exec places the child group in foreground. After all owned users are joined,
+restore the saved foreground group and termios (flushing residual input), even on
+failed exec, malformed output, nonzero exit or forced kill. Restoration blocks
+SIGTTOU only on a locked calling thread and restores its prior signal mask; no
+process-wide disposition changes. Lost-FD restoration errors remain visible even
+alongside context cancellation. Caller retains both files through return.
+
+TTY prompts/paste never enter the separate bounded control stream. The embedded
+launcher duplicates stdout to a noninheritable private control descriptor before
+nulling SDK stdio, consumes/validates the request, marks FD3/4 noninheritable, and
+reloads/validates published SDK auth before its one fixed terminal. Public Login
+also requires a fresh private auth inode. Tests exercise real controlling PTYs,
+foreground rejection/restoration, TERM-ignore→KILL, failed exec and lost-FD recovery;
+these are engine/service boundaries, not live-account or complete UI journeys.

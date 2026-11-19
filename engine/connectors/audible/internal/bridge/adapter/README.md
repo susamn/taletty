@@ -42,15 +42,15 @@ or playback/download readiness.
 
 `auth_store.load(root_fd)` / `save(root_fd, payload)` operate on bounded (1 byte
 through 4 MiB) **opaque immutable bytes**, not public events or a signed-in claim.
-SDK serialization, parsing/credential validation and finally-refresh persistence
-belong to #68/#69; the store itself imports no SDK and calls no provider. Doctor
+SDK serialization/credential validation and FD/TTY ownership are implemented by
+#68/#73; finally-refresh persistence remains #69. The store imports no SDK and calls no provider. Doctor
 does not import/call the store. No login command is shipped by this primitive.
 
 Caller supplies a borrowed effective-UID-owned **0700 directory descriptor** and
 holds #56's authenticated-operation gate throughout. Keep that FD open/unreused
 until return; store does not close it or acquire another lock. Directory-relative
 operations remain anchored after rename and never discover/create roots. Actual
-Go→child directory-FD handoff is #68, not implemented here. Cooperative same-UID
+Go→child directory-FD handoff is owned by #73, not this store. Cooperative same-UID
 ownership matches the session threat model; hostile same-UID inode replacement
 is not contained.
 
@@ -92,12 +92,17 @@ fallback; 2048-byte limit stays below Linux canonical-line truncation. Empty/EOF
 interrupt cancels. Exact termios settings are restored on Python exception paths.
 The redirect stays in memory, never stdout/stderr/events/argv/auth snapshot.
 
-SDK Python chatter is redirected to the null device. **Host must run a dedicated
-child with stdin/stdout/stderr discarded** (including OS-level library/browser
-output), retain the borrowed root/TTY, hold the auth gate, own foreground handoff,
-terminate/join processes and independently restore terminal state on kill/TERM.
-Those Go/session/process/bootstrap/public-outcome integrations remain **#73**;
-this callable neither acquires locks nor claims finally runs after SIGKILL.
+SDK Python chatter is redirected to the null device. #73's dedicated-child
+`interactive.py` launcher also nulls OS-level SDK stdin/stdout/stderr: its private
+control descriptor is duplicated before isolation, never mixed with SDK output or
+TTY prompts. It loads only embedded sources into a relative-import package, marks
+root/TTY noninheritable for further execs, validates the bounded login request with
+shared Doctor helpers, and reloads/validates published auth before a seq=1 result
+with `status="signed_in"`. Error terminals carry only `failure.code`; unknown
+optional fields are ignored by the Go validator, never exposed. Go retains both
+FDs inside the session gate, owns foreground handoff/group cleanup, independently
+restores terminal state and validates fresh private publication. This callable
+neither acquires locks nor claims finally runs after SIGKILL.
 
 Before publication, require US locale and SDK signing/bearer capability on both
 returned auth and actual SDK-restored serialized snapshot. Cookie-only/empty auth

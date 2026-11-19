@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"os/signal"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"syscall"
 	"testing"
@@ -255,7 +256,25 @@ func TestTTYRejectedAndLeaseCancellation(t *testing.T) {
 	if _, err := RunTTY(checked, "unused", nil, nil, "", file, file, nil); !errors.Is(err, context.Canceled) {
 		t.Fatal(err)
 	}
+	// Even a failed restoration must preserve the calling thread's prior mask,
+	// including SIGTTOU already blocked. No process-wide ignore is installed.
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
+	var block, original, after unix.Sigset_t
+	block.Val[0] = 1 << (unix.SIGTTOU - 1)
+	if err := unix.PthreadSigmask(unix.SIG_BLOCK, &block, &original); err != nil {
+		t.Fatal(err)
+	}
+	defer unix.PthreadSigmask(unix.SIG_SETMASK, &original, nil)
 	if err := restoreTTY(-1, unix.Getpgrp(), new(unix.Termios)); !errors.Is(err, ErrTerminal) {
 		t.Fatal(err)
+	}
+	if err := unix.PthreadSigmask(unix.SIG_BLOCK, nil, &after); err != nil {
+		t.Fatal(err)
+	}
+	expected := original
+	expected.Val[0] |= block.Val[0]
+	if after != expected {
+		t.Fatal("calling thread signal mask changed")
 	}
 }
