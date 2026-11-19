@@ -111,6 +111,10 @@ or command lines. The private root may be passed; the bridge reads engine-owned 
 The inherited ffmpeg-key argument limitation is separately documented and retained
 until a safer tested interface exists; never log its invocation.
 
+Go bounds request JSON to 4 MiB before appending its newline and closing stdin.
+The process boundary validates the transport header; the typed connector/adapter
+must validate action/root/book schema before provider access.
+
 Request envelope: `protocol`, `operation_id`, `action`, `root` and optional `book_id`.
 Actions initially `library` and `download`. Protocol integer is exactly `1`. Go checks
 runtime/protocol compatibility before accepting a result; no implicit downgrade.
@@ -128,9 +132,18 @@ lands under #61 (parent #57). Required header names are case-sensitive; duplicat
 top-level keys are rejected, including escaped aliases. The 4 MiB bound applies to
 ScanLines content after LF/trailing-CR normalization; an EOF-terminated final line
 is accepted. Its terminal is only a candidate: action-payload validation and a clean
-process exit are still required before any public success. #62 owns process lifetime;
-#63 registers real independently covered Python/runtime diagnostics. This reader
-alone does not complete the transport or any provider operation.
+process exit are still required before any public success. Linux `Run` (#62) owns
+process lifetime and joins its reader/stdin/exit workers. It uses a private cancellable
+frame channel, discards stderr, bounds post-exit drain and TERM grace, then SIGKILLs
+residual group members before Cmd.Wait reaps the leader. Linux waitid(WNOWAIT)
+keeps the PID reserved until group cleanup, avoiding PGID reuse. An external SIGCHLD
+reaper must not reap its owned child. Only the direct child is waitable by Go;
+non-child descendants are killed, with adoption/reaping handled by their parent/init.
+This is cooperative process-group ownership, not containment of escaped/privileged
+children or a bound on kernel-uninterruptible tasks. No files are deleted by Run;
+Download must reconcile committed publication before offering a retry.
+#63 registers real independently covered Python/runtime diagnostics; action-payload
+validation still precedes public operation results.
 
 Max frame: 4 MiB. Library pagination uses bounded `library_page` stage payloads (books)
 followed by a terminal result containing count, not a single unbounded library array.
