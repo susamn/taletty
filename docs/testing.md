@@ -122,7 +122,7 @@ root/leaf/unique-temp permissions, symlink/hardlink/FIFO/socket rejection, short
 pre-publication rollback versus published-but-not-durable errors, cleanup failure,
 retry and real SIGKILL before replace. A synthetic pinned-SDK dict round-trip
 forbids provider I/O. The store alone provides neither credential validation nor
-Go→child FD/TTY handoff; #73 adds those below. Finally refresh remains #69 and
+Go→child FD/TTY handoff; #73 adds those below. #69 adds finally persistence below;
 complete J01/J14 awaits CLI/app integration.
 
 #73 adds [owned terminal journeys](../engine/connectors/audible/internal/bridge/terminal_linux_test.go),
@@ -138,6 +138,18 @@ control descriptors are not inherited; OS-level SDK chatter cannot corrupt contr
 output. Tests use only synthetic never-issued placeholders and forbid provider HTTP.
 These are engine/terminal boundary journeys, not completed J01/J14 or live sign-in.
 CLI/root initialization, library and app integration remain #59 and later work.
+
+#69's [SDK lifecycle tests](../tests/adapter/test_sdk_session.py) exercise actual
+pinned-SDK bearer refresh with fake refresh/HTTP responses: success, 401/403/429,
+network/unknown failure, primary-error/close-error precedence, constructor failure,
+malformed/missing/unsafe auth, serialization/replace/directory-fsync faults and
+recovery. Refreshed snapshots survive ordinary failure without raw provider text.
+[Owned Go→Python contracts](../engine/connectors/audible/sdk_session_linux_test.go)
+run that embedded lifecycle under WithRoot with a real blocked-provider socket
+barrier: queued cancellation never enters/starts a child, throttled completion
+persists refreshed auth for the next operation, and active pre-persistence kill
+retains old bytes at the controlled barrier (not a general kill-durability promise).
+These are private SDK/process boundaries, not library pagination or full UI journeys.
 
 ## Release evidence
 

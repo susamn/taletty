@@ -89,9 +89,10 @@ class InteractiveTests(unittest.TestCase):
     def test_actual_fileless_relative_imports(self):
         try:
             package = interactive.load_sources({name: (ADAPTER / (name + ".py")).read_text()
-                                                for name in ("doctor", "auth_store", "login")})
+                                                for name in ("doctor", "auth_store", "login", "sdk_session")})
             self.assertIs(package.login.doctor, package.doctor)
             self.assertIs(package.login.auth_store, package.auth_store)
+            self.assertIs(package.sdk_session.login, package.login)
             self.assertEqual(package.doctor.AUDIBLE_VERSION, "0.13.1")
         finally:
             for name in list(sys.modules):

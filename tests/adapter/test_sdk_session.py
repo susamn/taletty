@@ -4,6 +4,7 @@ import io
 import json
 import os
 from pathlib import Path
+import sys
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -57,7 +58,7 @@ class SDKSessionTests(unittest.TestCase):
             try:
                 with session.authenticated(self.fd) as client:
                     print("fixture-private-sdk-stdout")
-                    print("fixture-private-sdk-stderr", file=__import__("sys").stderr)
+                    print("fixture-private-sdk-stderr", file=sys.stderr)
                     result = client.get("library")
                 return result
             finally:

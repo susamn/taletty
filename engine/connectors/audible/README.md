@@ -41,5 +41,6 @@ may still follow remote device registration; no automatic remote revocation occu
 
 The real PTY/Go→Python tests use a fake external provider and real SDK restore,
 with synthetic never-issued placeholders and provider HTTP forbidden. No live
-account sign-in or full J01/J14 is evidenced. CLI/library sync is #59; finally token
-refresh on provider failure is #69. No executable login command is shipped here.
+account sign-in or full J01/J14 is evidenced. CLI/library sync is #59; #69 adds private SDK lifecycle/finally persistence to the
+embedded adapter, not a public provider operation. No executable login command is
+shipped here.

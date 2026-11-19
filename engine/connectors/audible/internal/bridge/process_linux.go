@@ -24,6 +24,19 @@ const (
 )
 
 type processTiming struct{ grace, drain time.Duration }
+type processFiles struct{ root, terminal *os.File }
+
+// RunRoot lends only the anchored root as child FD3, without a terminal lease.
+// Caller holds the auth gate, retains root until return and isolates SDK stdio
+// from control output. Child must disable further root-FD exec inheritance.
+func RunRoot(ctx context.Context, program string, args []string, request []byte, operationID string, root *os.File, frames chan<- Frame) (Frame, error) {
+	if root == nil {
+		return Frame{}, ErrProtocol
+	}
+	return runConfigured(ctx, program, args, request, operationID, frames,
+		processTiming{termGrace, pipeDrain}, observeExit, &processFiles{root: root})
+}
+
 type decodedStream struct {
 	frame Frame
 	err   error
@@ -47,7 +60,7 @@ func runProcess(ctx context.Context, program string, args []string, request []by
 	return runConfigured(ctx, program, args, request, operationID, frames, timing, observe, nil)
 }
 
-func runConfigured(ctx context.Context, program string, args []string, request []byte, operationID string, frames chan<- Frame, timing processTiming, observe func(int) error, files *ttyFiles) (terminal Frame, err error) {
+func runConfigured(ctx context.Context, program string, args []string, request []byte, operationID string, frames chan<- Frame, timing processTiming, observe func(int) error, files *processFiles) (terminal Frame, err error) {
 	if err := ctx.Err(); err != nil {
 		return Frame{}, err
 	}
@@ -71,9 +84,12 @@ func runConfigured(ctx context.Context, program string, args []string, request [
 	cmd := exec.Command(program, args...)
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	if files != nil {
-		cmd.ExtraFiles = []*os.File{files.root, files.terminal}
-		cmd.SysProcAttr.Foreground = true
-		cmd.SysProcAttr.Ctty = int(files.terminal.Fd()) // Parent FD, before exec's FD remapping.
+		cmd.ExtraFiles = []*os.File{files.root}
+		if files.terminal != nil {
+			cmd.ExtraFiles = append(cmd.ExtraFiles, files.terminal)
+			cmd.SysProcAttr.Foreground = true
+			cmd.SysProcAttr.Ctty = int(files.terminal.Fd()) // Parent FD, before exec's FD remapping.
+		}
 	}
 	cmd.Stdin = bytes.NewReader(append(append([]byte(nil), request...), '\n'))
 	cmd.Stdout = writer

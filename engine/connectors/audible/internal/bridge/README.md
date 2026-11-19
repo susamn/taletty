@@ -37,6 +37,12 @@ action/root schema. Request input is bounded to 4 MiB before the appended newlin
 No shell or old-runtime discovery. Authenticated callers must hold the #56 Session;
 read-only Doctor must not initialize/acquire it.
 
+`RunRoot` (#69) lends the retained root as FD3 through this same owner, without a
+TTY/foreground lease. Caller holds WithRoot until return; child disables further
+root-FD exec inheritance and isolates SDK stdio from its private control stream.
+It adds no provider probe/action; #59 consumes the embedded SDK lifecycle for
+actual library/CLI work. Nil root fails before starting a child.
+
 The caller owns the optional private frame channel: keep it open until Run returns,
 consume/discard provisional frames, and use context for cancellation. Backpressure
 selects on cancellation; there is no arbitrary consumer callback to interrupt.

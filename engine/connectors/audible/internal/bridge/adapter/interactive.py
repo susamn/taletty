@@ -12,7 +12,7 @@ def load_sources(sources):
     package = types.ModuleType("_taletty_login")
     package.__path__ = []
     sys.modules[package.__name__] = package
-    for name in ("doctor", "auth_store", "login"):
+    for name in ("doctor", "auth_store", "login", "sdk_session"):
         module = types.ModuleType(package.__name__ + "." + name)
         module.__package__ = package.__name__
         sys.modules[module.__name__] = module

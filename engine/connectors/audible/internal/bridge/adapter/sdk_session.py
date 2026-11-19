@@ -45,9 +45,7 @@ def _failure(error, sdk):
 
 def _persist(root_fd, auth, sdk):
     try:
-        login._validate(auth)
-        payload = json.dumps(auth.to_dict(), allow_nan=False).encode("utf-8")
-        login._validate(sdk.Authenticator.from_dict(json.loads(payload)))
+        payload = login.snapshot(auth, sdk)
     except Exception:
         raise auth_store.StoreError() from None
     auth_store.save(root_fd, payload)

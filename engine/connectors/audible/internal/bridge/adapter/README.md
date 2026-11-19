@@ -43,7 +43,7 @@ or playback/download readiness.
 `auth_store.load(root_fd)` / `save(root_fd, payload)` operate on bounded (1 byte
 through 4 MiB) **opaque immutable bytes**, not public events or a signed-in claim.
 SDK serialization/credential validation and FD/TTY ownership are implemented by
-#68/#73; finally-refresh persistence remains #69. The store imports no SDK and calls no provider. Doctor
+#68/#73; #69 adds the ordinary-operation SDK lifecycle below. The store imports no SDK and calls no provider. Doctor
 does not import/call the store. No login command is shipped by this primitive.
 
 Caller supplies a borrowed effective-UID-owned **0700 directory descriptor** and
@@ -109,10 +109,40 @@ returned auth and actual SDK-restored serialized snapshot. Cookie-only/empty aut
 is not success; capability is not entitlement/live account proof. Accepted bytes
 use #67's private atomic store. Returns no auth data; `LoginError.code` and message
 are fixed, including cancellation, missing/incompatible runtime, storage failure
-versus published-but-not-durable uncertainty. Refresh-on-failure remains #69.
+versus published-but-not-durable uncertainty. #69 implements ordinary-operation
+refresh-on-failure below; login itself does not use the authenticated-operation context.
 
 Tests use fake external provider/browser callbacks and real pinned SDK restore
 with unmistakably synthetic, never-issued placeholders (no account/network).
 Real controlling PTY children verify no echo and exact settings after success,
 EOF, SIGINT and oversize rejection. These are adapter/TTY boundaries, not complete
 app onboarding or live-provider sign-in evidence. CLI wiring remains #59.
+
+## Authenticated SDK lifecycle (#69)
+
+`with sdk_session.authenticated(root_fd) as client:` borrows a verified private
+snapshot and yields the pinned synchronous SDK Client. Host holds the existing
+Go session gate and root FD throughout, runs a dedicated child with isolated OS
+stdio and emits protocol via a separate control FD. No terminal lease is needed;
+`RunRoot` lends only FD3 through the same full process owner. The child disables
+further root-FD exec inheritance. This module is included in the embedded package;
+there is **no public provider action, library pagination or CLI yet** (#59).
+
+Check runtime and US signing/bearer capability before constructing the client.
+The SDK still owns request authentication/automatic bearer refresh. Close the
+client, then validate/serialize with shared `login.snapshot` and atomically persist
+on ordinary success, SDK/provider failure, constructor/close failure and handled
+keyboard interrupt. An existing safe `ProviderError` retains identity/code/retry;
+SDK exceptions map to fixed not-authenticated/network/throttled/internal messages.
+Unknown response text/URLs never become errors. No automatic operation retries.
+A close failure cannot mask the primary safe provider failure.
+
+Persistence errors override provider errors: `StoreError.published=False` preserves
+the previous snapshot; `True` means new credentials were installed but directory
+durability is unconfirmed. Invalid serialization never replaces old bytes. Missing,
+unsafe or malformed input starts no client and is never overwritten. Borrowers do
+not discover/create roots or retain/close the directory FD. Abrupt process death
+may interrupt finally or publication: **no refreshed-token durability guarantee**.
+Tests use real SDK bearer flow with a fake refresh response and MockTransport,
+actual filesystem faults/recovery, and Go→Python blocked-provider/queued-cancel/
+active-kill barriers. No real account or public UI-journey claim.
