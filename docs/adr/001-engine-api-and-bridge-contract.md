@@ -252,6 +252,16 @@ which the app may persist. Login is not JSON mode. Exit codes: 0 success, 1 oper
 failure, 2 invalid CLI usage, 130 user interrupt. Typed JSON failure code is authoritative
 for machine recovery, not a growing taxonomy of OS exit codes.
 
+#78 implements only doctor/login in `engine/cmd/taletty-engine`. Required explicit
+`--python`, US-only `--marketplace`, doctor-only `--json`; invalid flags/arguments
+never echo their values. Doctor creates no root. Login opens the owned controlling
+TTY and uses only `$HOME/.config/taletty/`, requesting 0700 for new directories and
+rejecting unsafe existing roots/locks without repair; XDG/legacy overrides are not
+used. Entry owns Interrupt/TERM cancellation and broken-stdout handling, waits for
+connector cleanup and closes the session/TTY before exit. JSON failures have fixed
+code/message/retry; readiness results contain Ready plus typed Diagnostics. No
+runnable TUI, sync/download placeholder, released artifact or live-account evidence.
+
 Tag modules `engine/v0.x.y` and `app/v0.x.y`. Bridge protocol version is independent
 of Go semantic version; changing required framing requires a protocol bump and
 compatibility plan. Pin Python dependencies with the engine release. App updates its
