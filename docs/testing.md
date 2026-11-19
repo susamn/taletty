@@ -116,6 +116,13 @@ and private-root sentinels prove no client construction/user-state writes; CI in
 and requires actual ffmpeg/ffprobe probes. Named Python coverage measures every
 production adapter source independently; inventory rejects omitted reports/files.
 These are read-only diagnostics, not complete J01/J02 login/library evidence.
+The [private auth snapshot tests](../tests/adapter/test_auth_store.py) add #67's
+real bounded filesystem boundary: descriptor anchoring/borrowed ownership, private
+root/leaf/unique-temp permissions, symlink/hardlink/FIFO/socket rejection, short I/O,
+pre-publication rollback versus published-but-not-durable errors, cleanup failure,
+retry and real SIGKILL before replace. A synthetic pinned-SDK dict round-trip
+forbids provider I/O. Credential validation, Go→child FD/TTY handoff, finally token
+refresh and complete J01/J14 remain #68/#69 and later app integration.
 
 ## Release evidence
 

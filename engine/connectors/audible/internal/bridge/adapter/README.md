@@ -1,4 +1,6 @@
-# Read-only Python bootstrap (#63)
+# Private Python adapter
+
+## Read-only bootstrap (#63)
 
 `doctor.py` implements bridge-v1 action `doctor`, not login/library/download yet.
 One bounded request object with protocol 1, ASCII operation ID (1–64 letters,
@@ -35,3 +37,39 @@ printf '%s\n' '{"protocol":1,"operation_id":"doctor-demo","action":"doctor"}' | 
 The Linux Go entry point is `audible.Doctor(ctx, "/path/to/venv/bin/python")`;
 `Diagnostics.Ready()` means these limited dependency probes passed, not signed-in
 or playback/download readiness.
+
+## Private atomic authentication snapshots (#67)
+
+`auth_store.load(root_fd)` / `save(root_fd, payload)` operate on bounded (1 byte
+through 4 MiB) **opaque immutable bytes**, not public events or a signed-in claim.
+SDK serialization, parsing/credential validation and finally-refresh persistence
+belong to #68/#69; the store itself imports no SDK and calls no provider. Doctor
+does not import/call the store. No login command is shipped by this primitive.
+
+Caller supplies a borrowed effective-UID-owned **0700 directory descriptor** and
+holds #56's authenticated-operation gate throughout. Keep that FD open/unreused
+until return; store does not close it or acquire another lock. Directory-relative
+operations remain anchored after rename and never discover/create roots. Actual
+Go→child directory-FD handoff is #68, not implemented here. Cooperative same-UID
+ownership matches the session threat model; hostile same-UID inode replacement
+is not contained.
+
+- `auth.json` must be a same-UID, single-link regular **0600** leaf. Reads use
+  no-follow/nonblocking/close-on-exec, including FIFO rejection without hanging.
+  Unsafe roots/files are rejected, never chmod-repaired or followed.
+- Writes exclusively create a random `.auth-<32 hex>.tmp` at 0600, apply 0600 to
+  that **new** file even with restrictive umask, handle short writes, fsync and
+  close it, recheck the destination, atomically replace and fsync the directory.
+- Pre-commit errors retain the prior file. `StoreError.published=True` means the
+  replacement happened but directory durability could not be confirmed; do not
+  undo it or assume old auth survived. Error text is fixed and contains no paths.
+- Cleanup targets only a successfully created owned temporary. I/O errors or
+  SIGKILL may leave a private temporary; no finally-after-kill guarantee or sweep
+  of other operations' files. A retry uses a new temp and leaves such files alone.
+- `MissingAuth` means absent file; empty/oversize/unsafe files fail safely.
+  Tokens remain plaintext/private on disk; use disk encryption where needed.
+
+Tests cover actual filesystem permissions/links/anchoring, partial I/O, publication
+and durability failures/recovery, FD cleanup, a bounded real SIGKILL-before-replace
+writer and pinned SDK synthetic serialization round-trip with provider I/O forbidden.
+This is persistence-boundary evidence, **not** complete J01/J14/login coverage.

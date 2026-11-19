@@ -96,7 +96,15 @@ bounded escalation and removes owned partials. Do not remove another operation's
 
 Persist refreshed tokens on normal success/provider failure as the baseline does.
 On abrupt kill, token persistence is best effort, never guaranteed; do not claim a
-finally block runs after SIGKILL. Atomic writes preserve the prior usable file.
+finally block runs after SIGKILL. Atomic writes preserve the prior usable file
+before publication. #67's private Python snapshot primitive uses a caller-owned
+verified root directory FD and serialized session, no-follow single-link 0600
+`auth.json`, random exclusive 0600 staging, file fsync, atomic replace and directory
+fsync. It handles opaque bounded bytes only: SDK validation/TTY FD handoff/finally
+refresh integration remain #68/#69. Post-replace directory-fsync error explicitly
+marks `published=True`; do not claim the old snapshot survived or undo publication.
+Only a successfully created owned temp is cleaned, best effort; kill/I/O failure
+may leave private temps, and retries never sweep another operation's files.
 Cancellation racing with final media publication has a defined commit point: if the
 atomic publication occurred, return/report completed Media; otherwise cancel and
 clean partials. A late cancel does not delete an already-published complete book.
