@@ -151,8 +151,8 @@ active-kill barriers. No real account or public UI-journey claim.
 ## Provisional US library pages (#79)
 
 `library.pages(client)` is a private iterator, consumed **inside** the accepted
-`sdk_session.authenticated(root_fd)` context. Not embedded/launched/framed yet:
-#80 owns that Go integration after #78/#79 acceptance. Reuses prototype's SDK
+`sdk_session.authenticated(root_fd)` context. #84 frames it in a private dedicated
+child below; embedding/public Go integration remains #85 after maintainer acceptance. Reuses prototype's SDK
 `library` request/groups/sort, page size100 and 10,000-page ceiling. Unsupported
 marketplace or malformed response/identity/metadata fails with fixed safe codes.
 Within/across-page ASIN dedup retains first occurrence; any nonempty no-fresh page
@@ -181,3 +181,31 @@ metadata, request shape, repeated/failed/endless pages, exact frame reservation 
 real SDK MockTransport→refresh→later throttling/protocol/keyboard failure→persist,
 write-failure preservation and refreshed-snapshot recovery. No live account/HTTP;
 consumer cache replacement is demonstrated only after the complete context exits.
+
+## Private streaming library launcher (#84)
+
+`noninteractive.main(sources, load_sources, null_stdio)` uses #73's trusted loader
+and OS stdio helper capabilities, not a second bootstrap implementation. The loader
+accepts an explicit engine-trusted module order; login's existing default stays
+unchanged. Library loads doctor/auth_store/login/sdk_session/library into the same
+fileless relative-import package. Not a source/runtime discovery path or CLI.
+
+Only verified root FD3 is borrowed, never a TTY/lock. Duplicate stdout to private
+noninheritable control first, disable further root inheritance, null SDK stdout/
+stderr, validate the bounded rootless `action=library` request, then null stdin.
+Emit compact <=4MiB ASCII JSONL, flush every frame, consecutive seq from1 and exact
+operation ID. Stages carry `stage=library_page, books=[...]`; one result has count
+only **after** iterator exhaustion and SDK close/atomic persistence. Ordinary
+provider/validation/cancel/store failure emits fixed `failure.code` only, never a
+result; `storage_uncertain` preserves published-but-not-confirmed semantics. A
+closed control pipe cannot manufacture success or print provider tracebacks.
+
+Parent must still retain gate/root, validate action payload/count, drain/join the
+process owner and check clean EOF/exit before accepting a snapshot. #85 owns that
+integration; this module is not yet embedded/launched by the public Go API. It
+acquires no lock, writes no cache, retries nothing and guarantees no finally after
+hard kill. Tests execute actual -I -B fileless subprocesses and pinned SDK with
+synthetic refresh/HTTP MockTransport, null SDK chatter/stdin, further exec FD
+noninheritance, malformed requests, later-page failures, close/replace/dir-fsync
+faults and handled KeyboardInterrupt. Unit faults measure flushes/frame bounds
+and closed-control/loader errors; no live provider/account/protected-media evidence.

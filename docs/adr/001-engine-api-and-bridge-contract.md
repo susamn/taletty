@@ -200,6 +200,16 @@ sanitized and compact ASCII `{books: [...]}` reserves512 bytes under 4MiB for fi
 v1 headers. Successful iteration alone is insufficient: SDK finally persistence,
 then #80's typed validation/clean process completion are required before a snapshot.
 
+#84's private noninteractive launcher reuses the existing trusted source-loader and
+stdio helpers, preserves login defaults and lends only noninheritable FD3. Private
+duplicated control output is separate from nulled SDK stdio. Library request/ID
+validation precedes client construction, each <=4MiB stage is flushed sequentially,
+and count is emitted only after SDK context exit/persistence. Fixed code-only
+failure includes storage_failed/storage_uncertain; closed pipes cannot emit success.
+Parent #85 still must embed/run it and validate count/typed payloads/EOF/exit before
+snapshot publication. #86 exposes sync only after that acceptance; no new public
+Go provider operation or executable library action is claimed here.
+
 Library and download payload schemas are action-specific; fields not applicable to a
 frame must not carry invented defaults. Unknown optional fields within protocol v1
 are ignored; unknown frame types, invalid required fields or incompatible versions
