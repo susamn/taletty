@@ -1,5 +1,6 @@
 from contextlib import redirect_stderr, redirect_stdout
 import io
+import json
 from pathlib import Path
 import runpy
 import sys
@@ -15,6 +16,7 @@ class InventoryTests(unittest.TestCase):
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)
         self.root = Path(temporary.name)
+        self.write((inventory.ADAPTER / "doctor.py").as_posix(), "pass\n")
         for directory, module in inventory.MODULES.items():
             self.write(f"{directory}/go.mod", f"module {module}\n\ngo 1.26.0\n")
 
@@ -59,6 +61,31 @@ class InventoryTests(unittest.TestCase):
             with self.subTest(filename=filename), self.assertRaises(ValueError):
                 inventory.inventory(self.root)
             path.unlink()
+
+    def test_adapter_report_cannot_omit_add_or_remove_sources(self):
+        source = (inventory.ADAPTER / "doctor.py").as_posix()
+        report = self.write("coverage/adapter.json", json.dumps({"files": {source: {}}}))
+        self.assertEqual(inventory.inventory(self.root, report), ["app", "engine"])
+        for data in [[], {}, {"files": []}, {"files": {}}, {"files": {"wrong.py": {}}}]:
+            report.write_text(json.dumps(data))
+            with self.assertRaises(ValueError):
+                inventory.inventory(self.root, report)
+        report.write_text(json.dumps({"files": {source: {}}}))
+        extra = self.write((inventory.ADAPTER / "new.py").as_posix(), "uncovered = True\n")
+        with self.assertRaisesRegex(ValueError, "every discovered"):
+            inventory.inventory(self.root, report)
+        extra.unlink()
+        (self.root / source).unlink()
+        with self.assertRaisesRegex(ValueError, "source is missing"):
+            inventory.inventory(self.root)
+
+    def test_adapter_report_cli_rejects_missing_and_malformed(self):
+        for content in [None, "not JSON"]:
+            report = self.root / "report.json"
+            if content is not None:
+                report.write_text(content)
+            with redirect_stderr(io.StringIO()):
+                self.assertEqual(inventory.main(["--root", str(self.root), "--adapter-report", str(report)]), 1)
 
     def test_cli_success_and_failure(self):
         out, error = io.StringIO(), io.StringIO()
