@@ -19,9 +19,10 @@ bounded standard-library JSON-lines scanning, not the prototype's all-output buf
 - EOF is **not** successful child exit. Linux `Run` (#62) owns startup, pipes,
   cancellable channel handoff, process-group shutdown and exit checks. It reuses
   ReadStream without calling arbitrary consumer code on its reader goroutine.
-- #63 registers actual independently covered Python/runtime diagnostics. Typed
-  action payload validators land with actual operations (#58/#59/#7), before any
-  public operation API exposes results. No live-provider/login/library/CLI claim.
+- #63 registers [actual independently covered Python/runtime diagnostics](adapter/README.md)
+  and the public Go Doctor with validated fixed-status payloads. Provider action
+  validators still land with #58/#59/#7 before public provider API results.
+  No live-provider/login/library/CLI claim.
 
 Tests cover fragmented reads, retained-buffer ownership, exact limits, malformed
 header/order/termination cases, escaped/optional values, failed reads after terminal

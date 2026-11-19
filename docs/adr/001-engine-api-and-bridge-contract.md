@@ -53,7 +53,7 @@ The `audible` client is configured with private Taletty root, runtime/process se
 and supported marketplace. Reject unsupported marketplaces explicitly. Proposed
 operations (names may be made idiomatic when declarations land):
 
-- `Doctor(ctx)` returns dependency/readiness diagnostics without creating files or
+- `Doctor(ctx, pythonExecutable)` (implemented for Linux under #63) returns dependency/readiness diagnostics without creating files or
   making provider calls. Separate read-only dependency inspection from session init.
 - `Login(ctx, terminal)` is an explicit interactive handoff. Terminal is a narrow
   injected I/O capability, not a Bubble Tea dependency. Never accept/store an Amazon
@@ -116,7 +116,8 @@ The process boundary validates the transport header; the typed connector/adapter
 must validate action/root/book schema before provider access.
 
 Request envelope: `protocol`, `operation_id`, `action`, `root` and optional `book_id`.
-Actions initially `library` and `download`. Protocol integer is exactly `1`. Go checks
+Implemented bootstrap action `doctor` omits root/book; `library` and `download`
+remain the provider-operation targets. Protocol integer is exactly `1`. Go checks
 runtime/protocol compatibility before accepting a result; no implicit downgrade.
 Bridge rejects unknown action/version and invalid inputs without contacting Audible.
 
@@ -142,8 +143,23 @@ non-child descendants are killed, with adoption/reaping handled by their parent/
 This is cooperative process-group ownership, not containment of escaped/privileged
 children or a bound on kernel-uninterruptible tasks. No files are deleted by Run;
 Download must reconcile committed publication before offering a retry.
-#63 registers real independently covered Python/runtime diagnostics; action-payload
-validation still precedes public operation results.
+#63 registers real independently covered Python/runtime diagnostics. Go embeds the
+source, invokes the explicit Python executable with `-I -B` (no cwd/PYTHONPATH,
+bytecode or persisted script), and exposes typed fixed-status `Diagnostics` only.
+Doctor constructs no client/authenticator, acquires no auth lock and receives no
+root. CPython 3.12 and audible==0.13.1 are the evidenced development contract, not
+#26's still-open artifact/minimum-platform policy. ffmpeg/ffprobe checks run
+`-version` with bounded execution; no codec/media/release readiness is implied.
+
+Doctor requests use an ASCII operation ID (1–64 alphanumeric/underscore/hyphen);
+Go generates a fresh random `doctor-` ID. One seq=1 result has required exact-name
+flat fields `python`, `audible`, `ffmpeg`, `ffprobe`, each a fixed `ready`,
+`runtime_missing`, `runtime_incompatible` or `not_checked` state. Incompatible Python
+skips all other probes; compatible Python checks all. Unknown optional fields are
+ignored; aliases cannot override required names. Invalid requests emit a fixed safe
+error before inspection, with fallback ID `invalid` when no valid ID was supplied.
+Error envelopes exit cleanly; arbitrary exceptions/output are never public messages.
+Other action-payload validation still precedes public provider-operation results.
 
 Max frame: 4 MiB. Library pagination uses bounded `library_page` stage payloads (books)
 followed by a terminal result containing count, not a single unbounded library array.

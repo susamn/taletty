@@ -1,0 +1,3 @@
+# Provider client pin preserved from audible-tui. Install only in an explicit venv.
+# Artifact dependency locking/platform policy remains #26; never first-run system pip.
+audible==0.13.1

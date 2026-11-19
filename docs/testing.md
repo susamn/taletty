@@ -109,8 +109,13 @@ malformed/missing output, stderr flood, queued-frame cancellation, blocked pipes
 TERM-ignore escalation, inherited stdout, group-member kill before leader reaping,
 and failed exit inspection. Barriers/FD acknowledgments avoid timing guesses;
 fixture group members are separately test-owned and reaped, never orphaned.
-No Python adapter/source coverage is claimed until #63 (under #57) registers real
-adapter code, independent coverage and the Go↔Python contract job.
+The [Python adapter tests](../tests/adapter/test_doctor.py) and
+[Go↔Python doctor contracts](../engine/connectors/audible/doctor_linux_test.go)
+add #63's real bootstrap/SDK and fake-provider/dependency/error evidence. SDK import
+and private-root sentinels prove no client construction/user-state writes; CI installs
+and requires actual ffmpeg/ffprobe probes. Named Python coverage measures every
+production adapter source independently; inventory rejects omitted reports/files.
+These are read-only diagnostics, not complete J01/J02 login/library evidence.
 
 ## Release evidence
 

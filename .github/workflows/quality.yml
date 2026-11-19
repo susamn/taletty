@@ -9,6 +9,9 @@ on:
 permissions:
   contents: read
 
+env:
+  ADAPTER_DIR: engine/connectors/audible/internal/bridge/adapter
+
 concurrency:
   group: quality-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
@@ -51,6 +54,40 @@ jobs:
           if-no-files-found: warn
           retention-days: 7
 
+  python-adapter:
+    name: Python adapter (3.12)
+    needs: coverage-tooling
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: '3.12'
+      - name: Install explicit test-only runtime dependencies
+        run: |
+          bash .github/scripts/install-ci-media.sh
+          python -m pip install -r tools/requirements.txt -r "$ADAPTER_DIR/requirements.txt"
+      - name: Independently measure all adapter source
+        env:
+          TALETTY_REQUIRE_MEDIA_TOOLS: '1'
+        run: |
+          python -m compileall -q "$ADAPTER_DIR" tests/adapter
+          python -m coverage run --branch --source="$ADAPTER_DIR" -m unittest discover -s tests/adapter -v
+          python -m coverage report -m
+          mkdir -p coverage
+          python -m coverage json -o coverage/adapter.json
+          python tools/check_inventory.py --root . --adapter-report coverage/adapter.json
+          python tools/coverage_gate.py --require adapter --python adapter=coverage/adapter.json
+      - name: Upload independent adapter evidence
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: coverage-python-adapter
+          path: coverage/adapter.json
+          if-no-files-found: warn
+          retention-days: 7
+
   module-coverage:
     name: Go ${{ matrix.module }} (${{ matrix.go }})
     needs: coverage-tooling
@@ -74,6 +111,16 @@ jobs:
         with:
           go-version: ${{ matrix.go }}
           cache: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        if: matrix.module == 'engine'
+        with:
+          python-version: '3.12'
+      - name: Install actual Go-Python contract dependencies
+        if: matrix.module == 'engine'
+        run: |
+          bash ../.github/scripts/install-ci-media.sh
+          python -m pip install -r "../$ADAPTER_DIR/requirements.txt"
+          echo 'TALETTY_REQUIRE_MEDIA_TOOLS=1' >> "$GITHUB_ENV"
       - name: Check formatting and module consistency
         run: |
           go version
@@ -102,7 +149,7 @@ jobs:
   quality-gate:
     name: Quality gate
     if: always()
-    needs: [coverage-tooling, module-coverage]
+    needs: [coverage-tooling, module-coverage, python-adapter]
     runs-on: ubuntu-24.04
     timeout-minutes: 2
     steps:
@@ -110,6 +157,8 @@ jobs:
         env:
           TOOLING_RESULT: ${{ needs.coverage-tooling.result }}
           MODULE_RESULT: ${{ needs.module-coverage.result }}
+          ADAPTER_RESULT: ${{ needs.python-adapter.result }}
         run: |
           test "$TOOLING_RESULT" = success
           test "$MODULE_RESULT" = success
+          test "$ADAPTER_RESULT" = success

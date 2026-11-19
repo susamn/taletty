@@ -1,24 +1,37 @@
-# Coverage and module-inventory tooling
+# Coverage and source-inventory gates
 
-Bootstrap slices #36/#37 implement real tooling and per-module gates. Parent #4
-remains open for #38's command harness/check policy. There is no runnable Taletty
-CLI, Audible adapter or UI yet; do not mistake foundational coverage for features.
+The app, engine, Python adapter and gate tooling are measured **independently**.
+Coverage demonstrates only implemented behavior: shell/Help, auth/process/framing
+and read-only diagnostics are not complete login, library, playback or UI journeys.
 
-## Run locally
+## Local verification
 
-From repository root, install test-only tooling in an isolated environment:
+From repository root, use a fresh explicit CPython 3.12 test venv (not an old-app
+runtime). This installs test dependencies, not Taletty or a managed user runtime:
 
 ```sh
-python3 -m venv /tmp/taletty-quality
-/tmp/taletty-quality/bin/python -m pip install -r tools/requirements.txt
+ADAPTER_DIR=engine/connectors/audible/internal/bridge/adapter
+python3.12 -m venv /tmp/taletty-quality
+/tmp/taletty-quality/bin/python -m pip install -r tools/requirements.txt -r "$ADAPTER_DIR/requirements.txt"
+PYTHON=/tmp/taletty-quality/bin/python
+export TALETTY_TEST_PYTHON="$PYTHON"
 python3 tools/check_inventory.py --root .
-/tmp/taletty-quality/bin/python -m coverage run --branch --source=tools -m unittest discover -s tests/tooling -v
-/tmp/taletty-quality/bin/python -m coverage report -m
 mkdir -p coverage
-/tmp/taletty-quality/bin/python -m coverage json -o coverage/tooling.json
+"$PYTHON" -m coverage run --branch --source=tools -m unittest discover -s tests/tooling -v
+"$PYTHON" -m coverage json -o coverage/tooling.json
+"$PYTHON" -B -m coverage run --branch --source="$ADAPTER_DIR" -m unittest discover -s tests/adapter -v
+"$PYTHON" -m coverage report -m
+"$PYTHON" -m coverage json -o coverage/adapter.json
+python3 tools/check_inventory.py --root . --adapter-report coverage/adapter.json
 ```
 
-Then build and test **each module independently**:
+Engine contract tests always execute real Python and require the pinned SDK. CI
+explicitly installs ffmpeg/ffprobe and sets `TALETTY_REQUIRE_MEDIA_TOOLS=1`, requiring
+both actual tools to be ready. Locally absent tools produce truthful missing states;
+deterministic fake-tool success/failure/timeout cases still run. No provider/account
+or protected-media fixture is used. No installer or silent system pip mutation exists.
+
+Build/test **each Go module independently** (Go 1.26/1.27 in CI):
 
 ```sh
 for module in app engine; do
@@ -30,54 +43,48 @@ for module in app engine; do
     go mod tidy -diff
     go vet ./...
     go build ./...
-    go test -count=1 -race -covermode=atomic -coverpkg=./... -coverprofile="../coverage/$module.out" ./...
+    go test -count=1 -race -timeout=60s -covermode=atomic -coverpkg=./... -coverprofile="../coverage/$module.out" ./...
   ) || exit 1
 done
 python3 tools/coverage_gate.py \
-  --require tooling --require engine --require app \
-  --python tooling=coverage/tooling.json \
+  --require tooling --require adapter --require engine --require app \
+  --python tooling=coverage/tooling.json --python adapter=coverage/adapter.json \
   --go engine=coverage/engine.out --go app=coverage/app.out
 ```
 
-Go modules currently declare Go 1.26.0 and CI verifies the 1.26/1.27 toolchains.
-This is a bootstrap language requirement, not a completed distribution support
-matrix. No external Go dependencies means no fabricated go.sum or local replace.
-Python adapter dependencies/coverage will be registered when adapter code lands.
+There is no permanent relative module replace. Pinned Go dependencies/go.sum are
+real; source cross-builds do not establish release/runtime support. See #26 for
+artifact runtime strategy, full dependency locking and minimum platform versions.
 
-## Validator semantics
+## Fail-closed semantics
 
-The validator needs only Python's standard library. It reads coverage.py statement
-counts (not its branch-combined or rounded percentage) and standard Go coverprofile
-statement weights. Valid repeated Go blocks from multi-package `-coverpkg` runs
-are merged once, covered if any record was executed; conflicting weights fail.
-It rejects exclusions, inconsistent Python file totals, zero executable statements,
-malformed/missing reports, reused paths, duplicate target names and missing/extra
-targets. Each independent ratio must be >=95%; no pooling. Exit codes: 0 pass,
-1 failing/invalid report, 2 invalid CLI usage. Synthetic fixtures test policy, not
-application behavior. Fresh report generation remains the trusted CI responsibility.
+`coverage_gate.py` reads unrounded statement counts, rejects exclusions, malformed/
+empty/missing reports, inconsistent totals, repeated paths/targets and missing/extra
+targets. Each required target independently needs >=95%, never a pooled average.
+Go repeated instrumented blocks merge once; conflicting weights fail. Python branch
+counts are additionally reported, not mixed into the statement threshold.
 
-## Inventory and real CI checks
+`check_inventory.py` discovers all go.mod files and validates registered identities;
+the result drives the actual Go matrix. Go source outside modules and Python outside
+tools/tests/the registered adapter directory fail. The adapter cannot disappear.
+`--adapter-report` requires **exact equality** between every discovered production
+adapter `.py` and report filenames: adding an unimported file or dropping a file from
+a 100%-looking report fails. Fresh all-source report generation remains mandatory.
+Generated `.git`, `.venv`, `__pycache__`, `coverage` and vendor directories are ignored;
+`tests/` contains test-only fixtures. There are no production source exclusions.
 
-`check_inventory.py` discovers all go.mod files and validates them against the
-registered module roots/identities. Adding/removing a module without registration
-fails; the validated list feeds the workflow matrix, so new registered modules
-cannot silently miss the race/vet/coverage jobs. Go source outside module roots
-fails. Tooling/tests own existing Python files; new adapter/other production Python
-fails until its real all-source coverage job is registered in the same PR.
-Generated `.git`, `.venv`, `__pycache__`, `coverage`, and vendored dependencies are
-not production target discovery; `tests/` holds test-only Python/Go fixtures.
+## Real checks
 
-Actual checks are `Coverage tooling`, `Go app/engine (1.26.x/1.27.x)` (four Go
-matrix checks), and the stable `Quality gate` that rejects failed/canceled/skipped
-tooling or matrix jobs. All run on every PR with pinned actions, without live credentials,
-providers or protected audio. Each matrix run fails on test/vet/build/format/tidy
-errors before accepting its fresh report; no stale report may substitute for a
-failed command. Coverage artifacts are uploaded as evidence, not as a replacement
-for test status. See [required-check policy](../docs/quality-checks.md) for branch
-protection and explicit owners of later adapter/UI/PTY/media checks.
+- **Coverage tooling**: inventory, validator tests and independent tooling coverage.
+- **Python adapter (3.12)**: actual production source, real SDK/tool readiness plus
+  fake-provider/error tests, all-source report equality and independent adapter gate.
+- **Go app/engine (1.26.x/1.27.x)**: four format/tidy/vet/build/race/module gates;
+  engine includes actual Go↔Python bootstrap/SDK and fake-provider contracts.
+- **Quality gate**: always runs and requires tooling, the whole Go matrix **and the
+  adapter job** to succeed. Failure, cancellation or skip fails. Tests exercise all
+  64 aggregation status combinations; missing adapter dependency/mapping fails too.
 
-No no-op green Python-adapter, UI, PTY or mpv jobs exist. App currently has only
-read-only default-root resolution, engine only validated provider-neutral BookID.
-No filesystem initialization, SQLite schema, auth or playback is implied. J14's
-path-resolution portion is tested, but the full journey remains pending. Layout/PTY
-journeys and generated-media integration accompany #12/#11.
+All checks run on every PR with pinned actions. Coverage artifacts are evidence,
+not substitutes for tests/status. Required stable Quality gate protection remains
+unchanged; see [check policy](../docs/quality-checks.md). No no-op UI/PTY/media job
+stands in for [actual feature journeys](../docs/testing.md).
