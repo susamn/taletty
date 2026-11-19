@@ -73,3 +73,41 @@ Tests cover actual filesystem permissions/links/anchoring, partial I/O, publicat
 and durability failures/recovery, FD cleanup, a bounded real SIGKILL-before-replace
 writer and pinned SDK synthetic serialization round-trip with provider I/O forbidden.
 This is persistence-boundary evidence, **not** complete J01/J14/login coverage.
+
+## Private US browser login (#72 under #68)
+
+`login.login(root_fd, tty_fd)` is a private callable, **not a CLI entry point**.
+It checks root/leaf safety without reading secrets (`auth_store.check`), explicit
+TTY ownership and shared CPython/SDK readiness before calling the pinned SDK's
+`Authenticator.from_login_external(locale="us", login_url_callback=...)`.
+No login/licensing protocol is reimplemented. Only US Amazon HTTPS `/ap/signin`
+and `/ap/maplanding` URLs are accepted; redirects require exactly one nonempty
+SDK authorization-code query field. Invalid/control/oversize URLs fail safely.
+
+The initial sign-in URL is shown on the owned terminal as browser fallback; it
+contains a public challenge, **not** the final redirect. Browser-launch failure
+keeps that fallback. Wait for the hidden-input prompt before pasting the final
+URL. Input uses the explicit TTY with ECHO/ECHONL off, never an echoed getpass/stdin
+fallback; 2048-byte limit stays below Linux canonical-line truncation. Empty/EOF/
+interrupt cancels. Exact termios settings are restored on Python exception paths.
+The redirect stays in memory, never stdout/stderr/events/argv/auth snapshot.
+
+SDK Python chatter is redirected to the null device. **Host must run a dedicated
+child with stdin/stdout/stderr discarded** (including OS-level library/browser
+output), retain the borrowed root/TTY, hold the auth gate, own foreground handoff,
+terminate/join processes and independently restore terminal state on kill/TERM.
+Those Go/session/process/bootstrap/public-outcome integrations remain **#73**;
+this callable neither acquires locks nor claims finally runs after SIGKILL.
+
+Before publication, require US locale and SDK signing/bearer capability on both
+returned auth and actual SDK-restored serialized snapshot. Cookie-only/empty auth
+is not success; capability is not entitlement/live account proof. Accepted bytes
+use #67's private atomic store. Returns no auth data; `LoginError.code` and message
+are fixed, including cancellation, missing/incompatible runtime, storage failure
+versus published-but-not-durable uncertainty. Refresh-on-failure remains #69.
+
+Tests use fake external provider/browser callbacks and real pinned SDK restore
+with unmistakably synthetic, never-issued placeholders (no account/network).
+Real controlling PTY children verify no echo and exact settings after success,
+EOF, SIGINT and oversize rejection. These are adapter/TTY boundaries, not complete
+app onboarding or live-provider sign-in evidence. CLI wiring remains #59.

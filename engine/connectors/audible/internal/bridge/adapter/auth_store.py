@@ -42,6 +42,15 @@ def _target(root_fd):
         raise OSError()
 
 
+def check(root_fd):
+    """Check descriptor/leaf safety without reading credentials or creating files."""
+    try:
+        _root(root_fd)
+        _target(root_fd)
+    except OSError:
+        raise StoreError() from None
+
+
 def load(root_fd):
     """Read bounded bytes from a private leaf; do not close the borrowed root FD."""
     try:
@@ -80,8 +89,7 @@ def save(root_fd, payload):
         raise StoreError()
     temporary, published = None, False
     try:
-        _root(root_fd)
-        _target(root_fd)
+        check(root_fd)
         candidate = ".auth-" + secrets.token_hex(16) + ".tmp"
         fd = os.open(candidate, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW | os.O_CLOEXEC, 0o600, dir_fd=root_fd)
         temporary = candidate  # Only a successfully created name is ours to unlink.

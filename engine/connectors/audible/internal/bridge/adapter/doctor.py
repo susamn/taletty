@@ -45,10 +45,14 @@ def tool_status(name):
         return INCOMPATIBLE
 
 
+def python_status():
+    return READY if sys.implementation.name == "cpython" and sys.version_info[:2] == (3, 12) else INCOMPATIBLE
+
+
 def diagnose():
     result = dict.fromkeys(("python", "audible", "ffmpeg", "ffprobe"), NOT_CHECKED)
     # This slice has evidence for CPython 3.12 only, not a guessed support matrix.
-    if sys.implementation.name != "cpython" or sys.version_info[:2] != (3, 12):
+    if python_status() != READY:
         result["python"] = INCOMPATIBLE
         return result
     result.update(python=READY, audible=sdk_status(),
