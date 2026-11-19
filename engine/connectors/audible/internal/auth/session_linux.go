@@ -25,6 +25,7 @@ var (
 type Session struct {
 	token  chan struct{}
 	fd     int
+	root   *os.File
 	closed bool
 }
 
@@ -53,7 +54,12 @@ func open(ctx context.Context, root string, inspect func(int, *syscall.Stat_t) e
 	if err != nil {
 		return nil, ErrIO
 	}
-	defer syscall.Close(dir)
+	keepDir := false
+	defer func() {
+		if !keepDir {
+			syscall.Close(dir)
+		}
+	}()
 	var stat syscall.Stat_t
 	if err = inspect(dir, &stat); err != nil {
 		return nil, ErrIO
@@ -84,7 +90,8 @@ func open(ctx context.Context, root string, inspect func(int, *syscall.Stat_t) e
 		syscall.Close(fd)
 		return nil, err
 	}
-	s := &Session{fd: fd, token: make(chan struct{}, 1)}
+	s := &Session{fd: fd, root: os.NewFile(uintptr(dir), "authentication-root"), token: make(chan struct{}, 1)}
+	keepDir = true
 	s.token <- struct{}{}
 	return s, nil
 }
@@ -122,7 +129,16 @@ func (s *Session) Run(ctx context.Context, operation func(context.Context) error
 	return operation(ctx)
 }
 
-// Close waits context-aware for active work, then closes the sole root-lock fd.
+// WithRoot lends the anchored directory inside the existing authenticated-operation
+// gate. The callback must not close/retain the file or reenter Run/WithRoot/Close.
+// Only explicit exec.Cmd.ExtraFiles may inherit it; never pass the lock descriptor.
+// Join all child users before returning, including on failure/cancellation. The
+// borrowed capability is not a snapshot or an arbitrary-callback interrupt API.
+func (s *Session) WithRoot(ctx context.Context, operation func(context.Context, *os.File) error) error {
+	return s.Run(ctx, func(ctx context.Context) error { return operation(ctx, s.root) })
+}
+
+// Close waits context-aware for active work, then closes root and root-lock fds.
 // Canceling this wait leaves the session open and externally locked; cancel/join
 // the operation first and retry Close. It never unlocks underneath active work.
 // Repeated Close with a live context succeeds. The session is unusable afterward,
@@ -136,7 +152,9 @@ func (s *Session) Close(ctx context.Context) error {
 		return nil
 	}
 	s.closed = true
-	if err := syscall.Close(s.fd); err != nil {
+	rootErr := s.root.Close()
+	lockErr := syscall.Close(s.fd) // Release ownership even if the root close failed.
+	if rootErr != nil || lockErr != nil {
 		return ErrIO
 	}
 	return nil
