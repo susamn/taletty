@@ -5,9 +5,9 @@ timestamped notes, and a persistent player. Audible is the first provider; the
 application model will also accommodate local audiobooks.
 
 **Status: foundations.** Independent Go modules and their coverage gates exist;
-the shell/Help model, private auth/bridge lifetime and typed read-only runtime
-Doctor are implemented, but there is no runnable Taletty application or installable
-release yet. The working
+the shell/Help model, private auth/bridge lifetime, SDK auth persistence and typed
+runtime Doctor are implemented. A [source-built headless doctor/login CLI](engine/cmd/taletty-engine/README.md)
+is runnable; the Taletty TUI, library sync and installable release are not ready. The working
 `audible-tui` prototype remains untouched outside this repository.
 
 ## Direction

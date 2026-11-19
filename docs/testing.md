@@ -161,6 +161,16 @@ persists refreshed auth for the next operation, and active pre-persistence kill
 retains old bytes at the controlled barrier (not a general kill-durability promise).
 These are private SDK/process boundaries, not library pagination or full UI journeys.
 
+#78 adds [CLI policy tests](../engine/internal/cli/cli_linux_test.go) and
+[real entrypoint/process journeys](../engine/cmd/taletty-engine/main_linux_test.go):
+actual exit 0/1/2/130, read-only doctor, private root/restart/no-XDG/no-legacy paths,
+unsafe-root rejection, explicit runtime/marketplace/JSON restrictions, safe errors,
+output/session-close faults, SIGINT/TERM joining a real diagnostic child and broken
+stdout without abrupt SIGPIPE. Owned controlling PTYs exercise the real account
+client's startup/cleanup without provider network; fake account success/error/cancel
+covers CLI policy. Main is measured, not excluded. No live-account/full J01/J14 or
+library-sync claim; existing connector PTYs cover hidden input and restoration.
+
 ## Release evidence
 
 A release candidate needs an evidence matrix linking each supported journey to

@@ -1,6 +1,7 @@
 # Linux Audible connector
 
-Development API, not a released/runnable Taletty CLI. Use an explicit CPython 3.12
+Development API; a [headless doctor/login source CLI](../../cmd/taletty-engine/README.md)
+now consumes it (not the Taletty TUI or a release). Use an explicit CPython 3.12
 venv with `internal/bridge/adapter/requirements.txt`; installation/platform policy
 remains #26. `Doctor(ctx, pythonExecutable)` is separate and read-only.
 
@@ -42,5 +43,5 @@ may still follow remote device registration; no automatic remote revocation occu
 The real PTY/Go→Python tests use a fake external provider and real SDK restore,
 with synthetic never-issued placeholders and provider HTTP forbidden. No live
 account sign-in or full J01/J14 is evidenced. CLI/library sync is #59; #69 adds private SDK lifecycle/finally persistence to the
-embedded adapter, not a public provider operation. No executable login command is
-shipped here.
+embedded adapter, not a public provider operation. #78's headless account CLI is
+separate from this package; library sync remains #80.
