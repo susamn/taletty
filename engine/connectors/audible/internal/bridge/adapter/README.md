@@ -126,7 +126,8 @@ Go session gate and root FD throughout, runs a dedicated child with isolated OS
 stdio and emits protocol via a separate control FD. No terminal lease is needed;
 `RunRoot` lends only FD3 through the same full process owner. The child disables
 further root-FD exec inheritance. This module is included in the embedded package;
-there is **no public provider action, library pagination or CLI yet** (#59).
+there is **no public provider action** yet. #79 adds private pagination below;
+Go library/framing/sync integration waits for accepted #78/#79 under #80.
 
 Check runtime and US signing/bearer capability before constructing the client.
 The SDK still owns request authentication/automatic bearer refresh. Close the
@@ -146,3 +147,37 @@ may interrupt finally or publication: **no refreshed-token durability guarantee*
 Tests use real SDK bearer flow with a fake refresh response and MockTransport,
 actual filesystem faults/recovery, and Go→Python blocked-provider/queued-cancel/
 active-kill barriers. No real account or public UI-journey claim.
+
+## Provisional US library pages (#79)
+
+`library.pages(client)` is a private iterator, consumed **inside** the accepted
+`sdk_session.authenticated(root_fd)` context. Not embedded/launched/framed yet:
+#80 owns that Go integration after #78/#79 acceptance. Reuses prototype's SDK
+`library` request/groups/sort, page size100 and 10,000-page ceiling. Unsupported
+marketplace or malformed response/identity/metadata fails with fixed safe codes.
+Within/across-page ASIN dedup retains first occurrence; any nonempty no-fresh page
+or full-page ceiling exhaustion fails, never silently truncates. Empty first page
+is a legitimate empty library; missing/null `items` is not.
+
+Each yielded list is **provisional**. Failed later pages invalidate all candidates.
+Only successful exhaustion, SDK close/finally persistence AND future clean transport
+completion permit a snapshot; iteration/closing early is not completion. No cache,
+app database, automatic retry, Go events or CLI `sync` in this slice.
+
+Books include structured `id` (audible/us/strict ASCII 10-character ASIN), nonempty
+title (`Untitled` fallback), and optional subtitle/contributor name objects/integer
+`duration_ms`. Unknown/null optional metadata is omitted; known empty lists and
+zero duration survive. Finite nonnegative minutes round to milliseconds bounded
+by floor(Go int64 nanoseconds /1e6). Complete CSI/OSC are stripped; remaining
+controls/format/surrogate code points flatten to spaces before presentation. No
+customer IDs, content/signed URLs or invented download/entitlement capabilities.
+Compact ASCII JSON `{books: [...]}` is capped at 4MiB minus512 bytes reserved for
+#80's fixed v1 header (ASCII ID<=64, uint64 seq/stage). No metadata truncation.
+SDK response decoding still belongs to the pinned SDK; this bounds normalized
+page payloads, not raw HTTP body memory or remote snapshot consistency.
+
+Tests cover sparse/null/unicode/control/duplicate/invalid/nonfinite/huge/boundary
+metadata, request shape, repeated/failed/endless pages, exact frame reservation and
+real SDK MockTransport→refresh→later throttling/protocol/keyboard failure→persist,
+write-failure preservation and refreshed-snapshot recovery. No live account/HTTP;
+consumer cache replacement is demonstrated only after the complete context exits.

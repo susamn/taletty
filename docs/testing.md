@@ -55,6 +55,16 @@ Use fake time, scripted providers, temp roots and deterministic event scheduling
 No real sleep loops in policy/UI tests. Exercise out-of-order/stale updates and
 late completion after cancellation. Run `go vet`, formatting and Python checks.
 
+#79's [private library tests](../tests/adapter/test_library.py) cover bounded SDK
+request pagination, within/across-page dedup, repeated/nonterminating-page failure,
+strict response/identity/metadata, absent-vs-empty/zero values, Unicode/control safety,
+exact page/envelope byte boundary and invalid/nonfinite/overflow durations. Actual
+pinned SDK/MockTransport pages test refresh→later throttle/protocol/cancel→persist,
+closed clients, failed persistence preserving caller cache and next-operation reuse.
+All page candidates remain provisional until exhaustion AND successful SDK context
+exit; later Go clean EOF/exit/typed snapshot/event/CLI integration is #80. These are
+private provider contracts, not public sync, app cache or full J01/J02/J14 evidence.
+
 ## Required journey matrix
 
 Each row must link to executable tests when implemented. Every feature PR adds its

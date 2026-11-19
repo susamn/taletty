@@ -19,6 +19,8 @@ _FAILURES = {
     "entitlement_denied": ("Audible did not grant access.", "check_entitlement"),
     "canceled": ("Operation canceled.", "none"),
     "internal": ("Audible operation failed.", "none"),
+    "protocol_error": ("Audible library response was invalid.", "none"),
+    "unsupported": ("Audible marketplace is unsupported.", "none"),
 }
 
 

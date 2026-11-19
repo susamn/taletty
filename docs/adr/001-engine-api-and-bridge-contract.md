@@ -190,6 +190,16 @@ Accumulate/validate privately; do not publish a partial snapshot on failure. A s
 oversized item is a safe protocol failure, not silently truncated metadata. Stage
 payload variants are specified with fixtures when declarations land.
 
+#79 implements a private Python candidate-page iterator, not an action/launcher.
+Strict US ASIN identity, required list response, first-occurrence dedup, no-fresh-page
+failure and 10,000x100 raw-item ceiling avoid silent truncation. Null optional fields
+are absent; known empty contributors/zero duration survive. Normalized books carry
+id/title, optional subtitle/name objects/duration_ms (bounded before Go conversion),
+never customer/content URLs or download entitlement guesses. Terminal controls are
+sanitized and compact ASCII `{books: [...]}` reserves512 bytes under 4MiB for fixed
+v1 headers. Successful iteration alone is insufficient: SDK finally persistence,
+then #80's typed validation/clean process completion are required before a snapshot.
+
 Library and download payload schemas are action-specific; fields not applicable to a
 frame must not carry invented defaults. Unknown optional fields within protocol v1
 are ignored; unknown frame types, invalid required fields or incompatible versions
@@ -292,7 +302,7 @@ Alternative terminal error after licensing, not appended to the success transcri
 Library success (a separate operation/transcript):
 
 ```jsonl
-{"protocol":1,"operation_id":"op-library","seq":1,"type":"stage","stage":"library_page","books":[{"id":{"provider":"audible","namespace":"us","id":"B000000001"},"title":"Example Book","authors":[],"narrators":[],"capabilities":{"download":true}}]}
+{"protocol":1,"operation_id":"op-library","seq":1,"type":"stage","stage":"library_page","books":[{"id":{"provider":"audible","namespace":"us","id":"B000000001"},"title":"Example Book","authors":[],"narrators":[]}]}
 {"protocol":1,"operation_id":"op-library","seq":2,"type":"result","count":1}
 ```
 
