@@ -66,8 +66,7 @@ jobs:
           python-version: '3.12'
       - name: Install explicit test-only runtime dependencies
         run: |
-          sudo apt-get update
-          sudo apt-get install -y ffmpeg
+          bash .github/scripts/install-ci-media.sh
           python -m pip install -r tools/requirements.txt -r "$ADAPTER_DIR/requirements.txt"
       - name: Independently measure all adapter source
         env:
@@ -119,8 +118,7 @@ jobs:
       - name: Install actual Go-Python contract dependencies
         if: matrix.module == 'engine'
         run: |
-          sudo apt-get update
-          sudo apt-get install -y ffmpeg
+          bash ../.github/scripts/install-ci-media.sh
           python -m pip install -r "../$ADAPTER_DIR/requirements.txt"
           echo 'TALETTY_REQUIRE_MEDIA_TOOLS=1' >> "$GITHUB_ENV"
       - name: Check formatting and module consistency
