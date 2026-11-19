@@ -23,6 +23,9 @@ var browserLoginSource string
 //go:embed internal/bridge/adapter/interactive.py
 var interactiveSource string
 
+//go:embed internal/bridge/adapter/sdk_session.py
+var sdkSessionSource string
+
 var (
 	ErrAuthBusy    = auth.ErrBusy
 	ErrClosed      = auth.ErrClosed
@@ -80,7 +83,7 @@ func authError(err error) error {
 
 func loginScript(login string) string {
 	// Marshal cannot fail for a map of strings; only engine-embedded code is encoded.
-	sources, _ := json.Marshal(map[string]string{"doctor": doctorSource, "auth_store": authStoreSource, "login": login})
+	sources, _ := json.Marshal(map[string]string{"doctor": doctorSource, "auth_store": authStoreSource, "login": login, "sdk_session": sdkSessionSource})
 	return "import json\nSOURCES=json.loads(" + strconv.Quote(string(sources)) + ")\n" + interactiveSource + "\nmain(SOURCES)\n"
 }
 

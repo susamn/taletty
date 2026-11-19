@@ -15,8 +15,6 @@ var ErrTerminal = errors.New("login terminal ownership or restoration failed")
 // across distinct roots. Read-only/noninteractive work never takes this lease.
 var terminalLease = make(chan struct{}, 1)
 
-type ttyFiles struct{ root, terminal *os.File }
-
 // RunTTY reuses Run's bounded control decoder and complete process-group owner.
 // Prompts/input use only terminal (child FD4), never the private JSONL stdout pipe.
 // root is child FD3; neither file is closed here. Caller must suspend other terminal
@@ -52,7 +50,7 @@ func RunTTY(ctx context.Context, program string, args []string, request []byte, 
 		}
 	}()
 	return runConfigured(ctx, program, args, request, operationID, frames,
-		processTiming{termGrace, pipeDrain}, observeExit, &ttyFiles{root, terminal})
+		processTiming{termGrace, pipeDrain}, observeExit, &processFiles{root, terminal})
 }
 
 func restoreTTY(fd, foreground int, saved *unix.Termios) error {

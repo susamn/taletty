@@ -101,10 +101,25 @@ before publication. #67's private Python snapshot primitive uses a caller-owned
 verified root directory FD and serialized session, no-follow single-link 0600
 `auth.json`, random exclusive 0600 staging, file fsync, atomic replace and directory
 fsync. It handles opaque bounded bytes only: SDK validation and anchored FD/TTY
-handoff are #68/#73; finally-refresh integration remains #69. Post-replace directory-fsync error explicitly
+handoff are #68/#73; #69 implements the private ordinary-operation SDK lifecycle.
+Post-replace directory-fsync error explicitly
 marks `published=True`; do not claim the old snapshot survived or undo publication.
 Only a successfully created owned temp is cleaned, best effort; kill/I/O failure
 may leave private temps, and retries never sweep another operation's files.
+
+#69's embedded `sdk_session.authenticated(root_fd)` borrows the gate/root, loads
+bounded validated US SDK auth, yields the real synchronous Client, closes it and
+persists validated SDK serialization even after ordinary provider failure. Request
+auth/refresh remain SDK-owned. Safe provider failure/code/retry survive successful
+persistence and secondary close failure; unknown SDK errors never expose raw text.
+Persistence failure takes precedence, with StoreError publication uncertainty kept
+explicit. No automatic retries or abrupt-kill finally promise. Missing/malformed/
+unsafe input starts no provider client and is not overwritten. `RunRoot` passes
+only FD3 via the existing noninteractive process owner, without a TTY lease; child
+marks it noninheritable for further exec. SDK stdio is isolated from control output.
+The private lifecycle is available to #59; library pagination/Go results/CLI remain
+unimplemented until that dependent slice, not fabricated provider probe actions.
+
 Cancellation racing with final media publication has a defined commit point: if the
 atomic publication occurred, return/report completed Media; otherwise cancel and
 clean partials. A late cancel does not delete an already-published complete book.

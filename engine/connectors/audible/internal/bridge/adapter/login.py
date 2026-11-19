@@ -92,6 +92,15 @@ def _validate(auth):
         raise LoginError("login_failed")
 
 
+def snapshot(auth, sdk):
+    """Private validated SDK serialization shared by login and finally persistence."""
+    _validate(auth)
+    payload = json.dumps(auth.to_dict(), allow_nan=False).encode("utf-8")
+    # SDK from_dict mutates input; validate the representation too.
+    _validate(sdk.Authenticator.from_dict(json.loads(payload)))
+    return payload
+
+
 def login(root_fd, tty_fd):
     """Persist a validated SDK snapshot or raise a fixed LoginError; return no auth data.
 
@@ -111,11 +120,7 @@ def login(root_fd, tty_fd):
             import audible
             auth = audible.Authenticator.from_login_external(
                 locale="us", login_url_callback=lambda url: _browser_login(url, tty_fd))
-            _validate(auth)
-            payload = json.dumps(auth.to_dict(), allow_nan=False).encode("utf-8")
-            # Verify the serialized representation too; SDK from_dict mutates its input.
-            restored = audible.Authenticator.from_dict(json.loads(payload))
-            _validate(restored)
+            payload = snapshot(auth, audible)
         auth_store.save(root_fd, payload)
     except (KeyboardInterrupt, EOFError):
         raise LoginError("canceled") from None
