@@ -5,17 +5,19 @@
 | Check | Evidence / failure behavior |
 |---|---|
 | Coverage tooling | Discovered module inventory, Python compilation/unit tests, independent >=95% tooling coverage |
+| Python adapter (3.12) | Fresh all-source independent coverage, exact discovered-source/report equality, real pinned SDK/media-tool probes and fake dependency/provider cases |
 | Go app (1.26.x), Go app (1.27.x) | Formatting, tidy diff, vet/build, fresh race tests of all packages and independent >=95% app coverage |
 | Go engine (1.26.x), Go engine (1.27.x) | Same gates independently for engine |
-| Quality gate | Requires tooling and the entire discovered Go matrix to succeed; failed, canceled or skipped dependencies fail this check |
+| Quality gate | Requires tooling, Python adapter and the entire discovered Go matrix to succeed; failed, canceled or skipped dependencies fail this check |
 
 Require the stable **Quality gate** context from GitHub Actions (app ID 15368) for
 merging into main. Matrix expansion then cannot bypass merge protection merely
 because a new check name was not added to branch settings. It is a real status
 aggregation gate, not a no-op UI/media job. Keep all checks on every PR, with no
 path filter or continue-on-error bypass. A new adapter/job must be added to its
-`needs` list in the same PR as implementation; inventory currently rejects such
-unregistered Python source.
+`needs` list in the same PR as implementation. #63 registers the real adapter
+and tests all 64 tooling/matrix/adapter aggregation states. Inventory rejects Python
+outside its registered location and reports omitting any discovered adapter source.
 
 ## Main-branch protection policy
 
@@ -50,7 +52,8 @@ A slice PR may close #38; it must not automatically close #4 before that audit.
 
 | Check / journey | Delivery owner | Required before |
 |---|---|---|
-| Python Audible adapter coverage, Go↔Python contract tests | #5/#6/#7 | Any adapter source may pass CI; register fresh all-source report and gate needs |
+| Python adapter coverage, read-only bootstrap Go↔Python contracts | #63 under #57 | Delivered with first real source; named job + all-source equality + independent gate |
+| Login/library/download Python/Go contracts | #58/#59/#7 | Claiming the corresponding actual provider operation |
 | Full coordinator/key/focus/layout journeys, PTY startup/resize/quit | #12 and each following UI feature | Claiming that UI feature complete |
 | Real mpv/ffmpeg generated-media tests with null audio | #11 | Claiming playback lifecycle complete |
 | Clean install/upgrade/architecture and package lifecycle | #26–#29 | Claiming target/package supported |

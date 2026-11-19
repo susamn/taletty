@@ -24,3 +24,14 @@ locking, platform support and installation remain #26; first-run system pip is n
 implemented. CI independently measures every discovered adapter `.py` (including
 future unimported files), checks report/source equality, and requires its named job
 in Quality gate. Go contract tests do not substitute for Python source coverage.
+
+For a source-level probe with an explicitly prepared venv (CLI wiring is #59):
+
+```sh
+printf '%s\n' '{"protocol":1,"operation_id":"doctor-demo","action":"doctor"}' | \
+  /path/to/venv/bin/python -I -B engine/connectors/audible/internal/bridge/adapter/doctor.py
+```
+
+The Linux Go entry point is `audible.Doctor(ctx, "/path/to/venv/bin/python")`;
+`Diagnostics.Ready()` means these limited dependency probes passed, not signed-in
+or playback/download readiness.
