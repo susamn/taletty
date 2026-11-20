@@ -65,6 +65,16 @@ All page candidates remain provisional until exhaustion AND successful SDK conte
 exit; later Go clean EOF/exit/typed snapshot/event/CLI integration is #80. These are
 private provider contracts, not public sync, app cache or full J01/J02/J14 evidence.
 
+#84's [streaming launcher tests](../tests/adapter/test_noninteractive.py) execute
+actual isolated fileless Python/SDK children: stage pages followed by count only
+after persistence, later throttle/repeated/malformed/cancel/close/storage failures
+never emit success, precommit preservation vs published uncertainty, hidden OS
+chatter/stdin EOF and further-exec root/control noninheritance. Malformed requests
+never construct a client; bounded frame/flush/closed-control/loader faults are
+independently covered. Provider HTTP is forbidden. These are private child contracts;
+public Go embedding/count validation/snapshot/event/cancel ownership is #85, CLI
+sync #86. No full UI/real account/cache/release evidence is claimed.
+
 ## Required journey matrix
 
 Each row must link to executable tests when implemented. Every feature PR adds its

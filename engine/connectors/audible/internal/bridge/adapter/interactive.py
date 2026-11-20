@@ -7,12 +7,12 @@ import sys
 import types
 
 
-def load_sources(sources):
+def load_sources(sources, names=("doctor", "auth_store", "login", "sdk_session")):
     # Only engine-embedded sources, never cwd/PYTHONPATH or persisted scripts.
     package = types.ModuleType("_taletty_login")
     package.__path__ = []
     sys.modules[package.__name__] = package
-    for name in ("doctor", "auth_store", "login", "sdk_session"):
+    for name in names:
         module = types.ModuleType(package.__name__ + "." + name)
         module.__package__ = package.__name__
         sys.modules[module.__name__] = module
