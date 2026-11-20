@@ -290,6 +290,27 @@ invalid data fails safely, never truncates. Generated-media CI validates copy-re
 chapter times/titles and unchanged audio packet hashes; no license/transfer/publish
 or public Download claim. Inherited key-in-process-args risk remains unchanged.
 
+#92 adds only private `licensing.entitled(root_fd, asin)` and `signed_stream(plan)`.
+The former borrows the existing SDK session/gate, preserves the prototype request
+body and uses the pinned SDK voucher decryptor, never a licensing rewrite. Explicit
+Granted/matching-ASIN responses yield an ephemeral non-serializable, redacted-repr
+plan; denied/throttled/malformed responses fail with fixed codes and no retry.
+Plan URL/key/IV references are cleared before SDK close/finally persistence, including
+consumer failure. This is reference release, not Python immutable-memory zeroization.
+
+Signed media uses a fresh unauthenticated HTTPS client, `trust_env=False`, no shared
+cookies/headers and **no redirects** (all 3xx fail closed). There is no guessed CDN
+allowlist; an actual redirect-requiring provider response is deliberately unsupported
+until a reviewed policy exists. URL checks reject credentials, fragments, non-HTTPS,
+non-443 ports, literal IPs, local single-label names and malformed/control characters.
+Authenticated provider URL origin plus DNS/TLS are trusted; this is not an arbitrary
+user-URL fetcher or DNS-rebinding/SSRF sandbox. Use only inside the dedicated child
+with existing OS stdio isolation, never log requests/plans/tracebacks. No provider
+URL, response, key or exception text crosses the public event/error boundary.
+Response and fresh transport close on success, body/consumer failure or cancellation.
+No transfer file, publication, launcher, public Download or CLI is added. #93/#94
+remain downstream; inherited ffmpeg key-in-argv exposure remains unsolved.
+
 ## Progress and failures
 
 Stages: `licensing`, `downloading`, `preparing`, `publishing`. Download byte samples
