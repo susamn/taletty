@@ -123,9 +123,12 @@ injected snapshots. The same suite covers J07's browse-target separation only.
 [Help owner journeys](../app/internal/ui/help_test.go) additionally exercise real
 read-only key ownership, origin restoration, transport/session whitelisting, scrollable
 errors and resize/failed-shutdown recovery. These do **not** complete J13/J07:
-#49 continues via #53 (modal/draft ownership) and #54 (actual PTY/restoration and
-acceptance audit); real playback, persistence and cross-book confirmation remain
-feature work.
+#53's [modal component journeys](../app/internal/ui/modal_test.go) cover real
+textarea ownership, frozen note/confirmation submissions, failed-submit/retry,
+stale replies, nested Back/focus and bounded resize/unsaved-quit recovery. These
+are coordinator-opened presentation components, not bookmark persistence or actual
+cross-book playback. #49 continues via #54 (actual PTY/restoration and acceptance
+audit); real playback, persistence and feature entry-point integration remain work.
 
 For J13 include long CJK/combining text, embedded terminal escapes, missing titles,
 no chapters, unknown duration, unknown byte total, many list rows and help/errors

@@ -64,7 +64,7 @@ func (m Model) helpRows() []string {
 		"Player Left/Right: select control; Enter: activate it",
 		"UNAVAILABLE IN THIS SHELL",
 		"Filter/sort/favorites, destinations, chapter jumps and text panning await their feature slices.",
-		"Bookmarks/downloads, account/Settings, modal editors and real playback are not implemented.",
+		"Bookmarks/downloads, account/Settings and real playback await feature wiring; note/dialog components require a coordinator.",
 		"ERROR DETAILS - sticky until explicitly acknowledged",
 	}
 	if m.failure != "" {
@@ -117,6 +117,9 @@ func (m Model) helpLines() []string {
 	rows := m.helpRows()
 	capacity := m.layout.Content.Height - 2
 	offset := min(m.helpOffset, max(0, len(rows)-capacity))
-	label := fmt.Sprintf(" [Focus] Help %d-%d/%d ", offset+1, min(len(rows), offset+capacity), len(rows))
-	return m.box(m.layout.Content, label, rows[offset:], -1, true, false)
+	label := fmt.Sprintf(" Help %d-%d/%d ", offset+1, min(len(rows), offset+capacity), len(rows))
+	if !m.ownsModal() {
+		label = " [Focus]" + label
+	}
+	return m.box(m.layout.Content, label, rows[offset:], -1, !m.ownsModal(), false)
 }
