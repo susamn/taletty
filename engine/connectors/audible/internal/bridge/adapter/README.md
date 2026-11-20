@@ -209,3 +209,34 @@ synthetic refresh/HTTP MockTransport, null SDK chatter/stdin, further exec FD
 noninheritance, malformed requests, later-page failures, close/replace/dir-fsync
 faults and handled KeyboardInterrupt. Unit faults measure flushes/frame bounds
 and closed-control/loader errors; no live provider/account/protected-media evidence.
+
+## Private chapter preparation (#91, download parent #6)
+
+`chapters.prepare(info)` returns an owned normalized tree and optional ffmetadata.
+Reuses the same maintainer's `audible-tui/bridge.py` positive-leaf/stable-start-sort/
+escaping algorithm, plus the accepted library text sanitizer and ProviderError;
+no third-party source/license is added. The tree retains source hierarchy/order,
+structural book-local index-path IDs (stable only for an unchanged tree), safe
+titles, absolute start_ms, optional end_ms and children. Unknown fields never pass
+through. Legacy missing start defaults to0, missing length stays unknown; null or
+empty title becomes Chapter. No positive leaves means None: later remux retains
+embedded chapters, never emits a phantom chapter. Parent durations do not become
+leaves or clip absolute child offsets; overlaps/ties are preserved, not repaired.
+
+Strict integer nonnegative/bounded times (no bool/fractions/overflow),32 levels,
+10,000 nodes,4096 UTF-8 bytes/title and separately <=4MiB minus512 for normalized
+ASCII tree JSON and UTF-8 ffmetadata. Cycles/depth/shape/size faults fail with fixed
+protocol_error, no mutation/truncation/raw provider prose. Bounds apply to output,
+not raw SDK HTTP memory. Leaf ffmetadata keeps TIMEBASE=1/1000, stable start order,
+positive lengths and escaped backslash/equals/semicolon/hash; controls flatten
+through the existing sanitizer. No provider/credential/filesystem/process access.
+
+Tests include exact depth/count/text/wire/metadata bounds, owned copies, malformed
+and sparse/zero/unknown metadata and escaping/overlaps. Mandatory CI's generated
+silence→copy-remux→ffprobe/hash roundtrip verifies titles/times and unchanged audio
+packet bytes with actual ffmpeg/ffprobe. Local absent tools are explicitly skipped;
+CI sets TALETTY_REQUIRE_MEDIA_TOOLS=1 and absence fails, never silently skips.
+This callable is not embedded in the current library/login runtime; #93 consumes
+it only after acceptance. #92 license planning, #93 private transfer/remux/publication
+and #94 public Download/API/CLI remain unimplemented. No live/protected-media,
+working download/release/full J04/J06 claim; key-in-ffmpeg-argv limitation remains.
