@@ -1,6 +1,6 @@
 # Linux Audible connector
 
-Development API; a [headless doctor/login source CLI](../../cmd/taletty-engine/README.md)
+Development API; a [headless doctor/login/sync source CLI](../../cmd/taletty-engine/README.md)
 now consumes it (not the Taletty TUI or a release). Use an explicit CPython 3.12
 venv with `internal/bridge/adapter/requirements.txt`; installation/platform policy
 remains #26. `Doctor(ctx, pythonExecutable)` is separate and read-only.
@@ -48,5 +48,5 @@ account sign-in or full J01/J14 is evidenced.
 using the accepted embedded SDK/page/persistence pipeline. See the [library API
 contract](library.md) for fixed safe failures, ordered provisional-count events,
 strict schema/bounds, cancellation and callback ownership. Every error returns a
-zero snapshot; no app cache is written. Public CLI sync remains #86, not this PR;
+zero snapshot; no app cache is written. #86 exposes this API through CLI sync;
 #80/#59/#5 remain open for downstream implementation/acceptance.

@@ -1,7 +1,7 @@
-# Headless account commands (Linux source development)
+# Headless account/library commands (Linux source development)
 
 This is the first runnable engine CLI, **not the Taletty TUI or an installable
-release**. Only `doctor` and `login` exist. Library `sync` is #80; download/playback
+release**. `doctor`, `login` and `sync` exist; download/playback
 remain later work. Runtime installation/artifacts/full dependency locks remain #26.
 
 From `engine/`, with Go and an explicitly prepared CPython 3.12 venv:
@@ -11,12 +11,14 @@ From `engine/`, with Go and an explicitly prepared CPython 3.12 venv:
 go build -o /tmp/taletty-engine ./cmd/taletty-engine
 /tmp/taletty-engine doctor --python /path/to/venv/bin/python --json
 /tmp/taletty-engine login --python /path/to/venv/bin/python
+/tmp/taletty-engine sync --python /path/to/venv/bin/python
+/tmp/taletty-engine sync --python /path/to/venv/bin/python --json
 ```
 
 Use `--help`. Flags follow the command. `--python` is required; no first-run pip,
 runtime discovery, shell or migration. Marketplace defaults to `us`; any other
-`--marketplace` fails before work. JSON is available only for doctor, never login.
-Usage errors never echo supplied values. No `sync`/`download` placeholder commands.
+`--marketplace` fails before work. JSON is available for doctor and sync, never login.
+Usage errors never echo supplied values. No download placeholder command.
 
 Doctor is read-only and takes no auth lock: it never creates the Taletty root.
 JSON is `{ "ready": bool, "diagnostics": { "python": ..., "audible": ...,
@@ -48,6 +50,21 @@ Hard kill/parent death cannot guarantee restoration/finally persistence. Cancell
 may race auth publication; `storage_uncertain` explicitly means published but not
 confirmed durable. Retry is manual. A restoration warning must not be ignored.
 
+Sync is noninteractive (pipes/no controlling TTY are supported) and uses the same
+private root/session and explicit Python/SDK contract. It does not require media
+tools. Sign in first; no implicit login, retry, cache or SQLite writes occur. Plain
+success is only `Library synced: N books.` JSON success is
+`{"snapshot":{"operation_id":"cli-sync","books":[...]}}`, preserving native
+`duration_ns` and unknown-vs-empty/zero metadata. A complete empty library has
+`books:[]`. No candidate pages/events reach stdout: success is emitted only after
+Library completion **and session Close**. Failure uses the existing typed failure
+envelope/exit codes, including sign_in/wait retry hints and storage uncertainty.
+Do not redirect over your last good cache: check exit0 before replacing caller data.
+Output failures can leave incomplete bytes on the output stream; stdout is not an
+atomic file publication interface. Session cleanup has already run before output.
+
 Tests use injected fake accounts, synthetic diagnostic children and actual command
 entrypoint/controlling PTYs/signals, plus the accepted SDK/TTY connector contracts.
+Sync command tests additionally run the real embedded SDK with synthetic auth,
+fake HTTP/refresh, atomic persistence faults/restart and actual SIGINT/TERM reaping.
 No live account evidence, full J01/J14, app cache or schema-upgrade claim.

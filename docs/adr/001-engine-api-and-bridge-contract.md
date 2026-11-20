@@ -309,6 +309,18 @@ connector cleanup and closes the session/TTY before exit. JSON failures have fix
 code/message/retry; readiness results contain Ready plus typed Diagnostics. No
 runnable TUI, sync/download placeholder, released artifact or live-account evidence.
 
+#86 extends that same parser/session/entrypoint with sync (no TTY). Explicit Python,
+US-only and optional JSON remain; Client.Library uses a fixed per-process cli-sync
+ID and nil reporter, emitting no provisional output. Close with uncanceled context
+precedes any success output; cleanup failure suppresses snapshot success while
+retaining primary safe failure. JSON success is {snapshot: LibrarySnapshot}; empty
+books is [], public duration is duration_ns. Plain output is count only. Safe typed
+engine Failure code/message/retry is preserved; context/usage/output exit rules
+unchanged. No media preflight, retries, app cache/SQLite or download command. Stdout
+writes cannot guarantee atomic output bytes; callers replace caches only on exit0.
+Actual embedded SDK/fake provider, refresh/store/restart, signal reaping and broken
+stdout are tested, not live-account/full-journey/release evidence.
+
 Tag modules `engine/v0.x.y` and `app/v0.x.y`. Bridge protocol version is independent
 of Go semantic version; changing required framing requires a protocol bump and
 compatibility plan. Pin Python dependencies with the engine release. App updates its

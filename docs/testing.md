@@ -197,6 +197,20 @@ client's startup/cleanup without provider network; fake account success/error/ca
 covers CLI policy. Main is measured, not excluded. No live-account/full J01/J14 or
 library-sync claim; existing connector PTYs cover hidden input and restoration.
 
+#86 extends the same CLI with complete-only sync (not app-cache/UI evidence).
+[Policy tests](../engine/internal/cli/sync_linux_test.go) verify no TTY access,
+empty/complete snapshots only after Close, typed retry/failure, no candidate on
+provider/close failure, private HOME faults, cancellation and output failure.
+[Actual sync entrypoint tests](../engine/cmd/taletty-engine/sync_linux_test.go) run
+embedded Python/pinned SDK with synthetic auth and fake HTTP/refresh:100+1 dedup,
+empty, later throttle, precommit storage failure, published uncertainty, restart
+without refresh, unsafe-root/no-repair/busy/missing-auth and OS broken stdout.
+Socket barriers at a real later provider page synchronize SIGINT/TERM: exit130,
+no candidate JSON, child reaped, root immediately reusable. Controlled cancellation
+before persistence is not a general kill-durability guarantee. Explicit test runtime
+wrapper changes trusted transports only; production has no env-based test hooks.
+No live account, app-cache/SQLite, download/playback/release or full J01/J14 claim.
+
 ## Release evidence
 
 A release candidate needs an evidence matrix linking each supported journey to

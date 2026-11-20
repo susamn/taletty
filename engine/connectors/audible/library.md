@@ -58,5 +58,5 @@ automatically. Successful auth refresh may survive an ordinary library failure.
 
 Tests use real embedded Python/pinned SDK with synthetic auth/HTTP MockTransport,
 real barriers, process ownership/cancellation and filesystem faults; no live account
-or protected media. This is a Go API, **not CLI sync** (#86), the TUI, full J01/J14
-or a release. Runtime artifacts/locks/minimum platforms remain #26.
+or protected media. The [headless sync CLI](../../cmd/taletty-engine/README.md)
+now consumes this API under #86; neither implements the TUI, full J01/J14 or a release. Runtime artifacts/locks/minimum platforms remain #26.

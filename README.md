@@ -7,8 +7,8 @@ application model will also accommodate local audiobooks.
 **Status: foundations.** Independent Go modules and their coverage gates exist;
 the shell/Help model, private auth/bridge lifetime, SDK auth persistence and typed
 runtime Doctor are implemented, with a [typed Go library API](engine/connectors/audible/library.md).
-A [source-built headless doctor/login CLI](engine/cmd/taletty-engine/README.md)
-is runnable; the Taletty TUI, CLI sync and installable release are not ready. The working
+A [source-built headless doctor/login/sync CLI](engine/cmd/taletty-engine/README.md)
+is runnable; the Taletty TUI, download/playback integration and installable release are not ready. The working
 `audible-tui` prototype remains untouched outside this repository.
 
 ## Direction
