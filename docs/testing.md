@@ -223,6 +223,15 @@ tools; local absence is explicitly skipped, required CI absence fails. This test
 chapter preparation only, not licensed transfer, private staging/publication, Go
 Download/CLI, protected media/live accounts or complete J04/J06. Those remain #92–#94.
 
+#92's [private license and signed-media tests](../tests/adapter/test_licensing.py)
+use the actual pinned SDK with fake HTTP and a generated never-issued AES voucher.
+They verify the inherited request body, SDK voucher handling, refresh/persist after
+success/refusal/throttle/malformed plan and signed transport failure, then recovery.
+Invalid ASIN/URL/voucher, fixed errors/redacted plan repr, cleared references, no
+blind retries, response/client cleanup, no Amazon headers/cookies and fail-closed
+redirect refusal are covered. No external provider HTTP, protected media, transfer
+files/publication or complete J04/J06/live-account/release claim is made.
+
 ## Release evidence
 
 A release candidate needs an evidence matrix linking each supported journey to
