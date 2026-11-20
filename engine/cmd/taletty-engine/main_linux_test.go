@@ -41,7 +41,7 @@ func command(t *testing.T, home string, args ...string) *exec.Cmd {
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
 	return cmd
 }
-func fakePython(t *testing.T) string {
+func testPython(t *testing.T) string {
 	t.Helper()
 	python := os.Getenv("TALETTY_TEST_PYTHON")
 	if python == "" {
@@ -51,6 +51,11 @@ func fakePython(t *testing.T) string {
 			t.Fatal(err)
 		}
 	}
+	return python
+}
+func fakePython(t *testing.T) string {
+	t.Helper()
+	python := testPython(t)
 	script := filepath.Join(t.TempDir(), "python-fixture")
 	source := "#!" + python + `
 import json, os, socket, sys
