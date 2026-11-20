@@ -31,6 +31,9 @@ class _Plan:
     def __repr__(self):
         return "<private media plan>"
 
+    def __reduce_ex__(self, protocol):
+        raise TypeError("Private media plans cannot be serialized.")
+
     def clear(self):
         # Drop references, not a promise of zeroizing Python/SDK immutable strings.
         self._url = self._key = self._iv = None

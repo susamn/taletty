@@ -4,6 +4,7 @@ import importlib
 import json
 import os
 from pathlib import Path
+import pickle
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -72,6 +73,9 @@ class LicenseTests(unittest.TestCase):
                 self.assertNotIn(URL, repr(plan))
                 self.assertNotIn(KEY, repr(plan))
                 self.assertFalse(hasattr(plan, "__dict__"))
+                for serialize in (json.dumps, pickle.dumps):
+                    with self.assertRaises(TypeError):
+                        serialize(plan)
                 values = plan._key, plan._iv
             self.assertEqual((plan._url, plan._key, plan._iv), (None, None, None))
             return values
