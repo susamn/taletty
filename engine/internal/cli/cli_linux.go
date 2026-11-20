@@ -12,12 +12,14 @@ import (
 	"path/filepath"
 
 	"github.com/susamn/taletty/engine/connectors/audible"
+	"github.com/susamn/taletty/engine/model"
 )
 
-const usage = "Usage: taletty-engine {doctor|login} --python /path/to/venv/bin/python [--marketplace us]\nDoctor also accepts --json; login requires an owned foreground terminal.\n"
+const usage = "Usage: taletty-engine {doctor|login|sync} --python /path/to/venv/bin/python [--marketplace us]\nDoctor and sync accept --json; login requires an owned foreground terminal.\n"
 
 type account interface {
 	Login(context.Context, *os.File) error
+	Library(context.Context, string, func(model.OperationEvent)) (model.LibrarySnapshot, error)
 	Close(context.Context) error
 }
 type dependencies struct {
@@ -45,7 +47,7 @@ func run(ctx context.Context, args []string, out, errOut io.Writer, deps depende
 		}
 		return 0
 	}
-	if len(args) == 0 || (args[0] != "doctor" && args[0] != "login") {
+	if len(args) == 0 || (args[0] != "doctor" && args[0] != "login" && args[0] != "sync") {
 		io.WriteString(errOut, usage)
 		return 2
 	}
@@ -54,7 +56,7 @@ func run(ctx context.Context, args []string, out, errOut io.Writer, deps depende
 	flags.SetOutput(io.Discard)
 	python := flags.String("python", "", "Explicit Python executable")
 	marketplace := flags.String("marketplace", "us", "Supported marketplace")
-	machine := flags.Bool("json", false, "Machine-readable doctor diagnostics")
+	machine := flags.Bool("json", false, "Machine-readable diagnostics or complete library")
 	if err := flags.Parse(args[1:]); errors.Is(err, flag.ErrHelp) {
 		if _, err := io.WriteString(out, usage); err != nil {
 			return outputFailure(errOut)
@@ -88,27 +90,36 @@ func run(ctx context.Context, args []string, out, errOut io.Writer, deps depende
 		}
 		return 0
 	}
-	terminal, err := deps.terminal()
-	if err != nil {
-		return reportFailure(out, errOut, false, audible.ErrTerminal)
+	var terminal *os.File
+	if command == "login" {
+		var err error
+		terminal, err = deps.terminal()
+		if err != nil {
+			return reportFailure(out, errOut, false, audible.ErrTerminal)
+		}
+		defer terminal.Close()
 	}
-	defer terminal.Close()
 	home, err := os.UserHomeDir()
 	if err != nil || !filepath.IsAbs(home) {
-		return reportFailure(out, errOut, false, audible.ErrAuthStorage)
+		return reportFailure(out, errOut, *machine, audible.ErrAuthStorage)
 	}
 	// Only this Taletty root; no XDG/legacy discovery or chmod repair. Open verifies
 	// existing root/lock ownership and exact private modes before any provider work.
 	root := filepath.Join(home, ".config", "taletty")
 	if err := os.MkdirAll(root, 0700); err != nil {
-		return reportFailure(out, errOut, false, audible.ErrAuthStorage)
+		return reportFailure(out, errOut, *machine, audible.ErrAuthStorage)
 	}
 	client, err := deps.open(ctx, root, *python)
 	if err != nil {
-		return reportFailure(out, errOut, false, err)
+		return reportFailure(out, errOut, *machine, err)
 	}
-	err = client.Login(ctx, terminal)
-	closeErr := client.Close(context.Background()) // Login joined; canceled ctx must not skip release.
+	var snapshot model.LibrarySnapshot
+	if command == "login" {
+		err = client.Login(ctx, terminal)
+	} else {
+		snapshot, err = client.Library(ctx, "cli-sync", nil)
+	}
+	closeErr := client.Close(context.Background()) // Operation joined; canceled ctx must not skip release.
 	if closeErr != nil {
 		io.WriteString(errOut, "Authentication session cleanup failed.\n")
 		if err == nil {
@@ -116,9 +127,20 @@ func run(ctx context.Context, args []string, out, errOut io.Writer, deps depende
 		}
 	}
 	if err != nil {
-		return reportFailure(out, errOut, false, err)
+		return reportFailure(out, errOut, *machine, err)
 	}
-	if _, err := io.WriteString(out, "Signed in. Private credentials saved.\n"); err != nil {
+	if command == "sync" {
+		if *machine {
+			err = json.NewEncoder(out).Encode(struct {
+				Snapshot model.LibrarySnapshot `json:"snapshot"`
+			}{snapshot})
+		} else {
+			_, err = fmt.Fprintf(out, "Library synced: %d books.\n", len(snapshot.Books))
+		}
+	} else {
+		_, err = io.WriteString(out, "Signed in. Private credentials saved.\n")
+	}
+	if err != nil {
 		return outputFailure(errOut)
 	}
 	return 0
@@ -145,6 +167,11 @@ func classify(err error) failure {
 		return failure{"runtime_missing", "Python runtime could not start.", "none"}
 	case errors.Is(err, audible.ErrRuntimeIncompatible):
 		return failure{"runtime_incompatible", "Python bridge readiness could not be validated.", "none"}
+	}
+	// Library returns engine-owned safe records, never raw provider exception text.
+	var provider *model.Failure
+	if errors.As(err, &provider) {
+		return failure{provider.Code, provider.Message, provider.Retry}
 	}
 	var login *audible.LoginError
 	if errors.As(err, &login) {

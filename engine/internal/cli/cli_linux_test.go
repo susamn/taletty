@@ -12,10 +12,13 @@ import (
 	"testing"
 
 	"github.com/susamn/taletty/engine/connectors/audible"
+	"github.com/susamn/taletty/engine/model"
 )
 
 type fakeAccount struct {
 	loginErr, closeErr error
+	libraryErr         error
+	snapshot           model.LibrarySnapshot
 	closed             bool
 	cancel             context.CancelFunc
 	tty                *os.File
@@ -28,6 +31,16 @@ func (a *fakeAccount) Login(ctx context.Context, tty *os.File) error {
 		return ctx.Err()
 	}
 	return a.loginErr
+}
+func (a *fakeAccount) Library(ctx context.Context, id string, report func(model.OperationEvent)) (model.LibrarySnapshot, error) {
+	if id != "cli-sync" || report != nil {
+		panic("CLI must not stream provisional events")
+	}
+	if a.cancel != nil {
+		a.cancel()
+		return model.LibrarySnapshot{}, ctx.Err()
+	}
+	return a.snapshot, a.libraryErr
 }
 func (a *fakeAccount) Close(ctx context.Context) error {
 	if ctx.Err() != nil {
