@@ -271,6 +271,25 @@ restoration error stays visible alongside cancellation; callers must not blindly
 resume UI. Hard parent death cannot guarantee restoration. CLI wiring remains #59;
 no live-account or full onboarding/library journey evidence is claimed.
 
+## Incremental download extraction (#6)
+
+Accepted #5/#80 extraction is complete on merged main628a1b0; download is separate.
+Native children: #91 bounded private chapter normalization/leaf ffmetadata, #92
+independent license planning/signed-HTTP boundary, #93 anchored transfer/remux/
+publication after91/92, #94 typed Go Download/API/CLI after93 (split further if needed).
+#7 adds truthful transfer/preparation progress downstream, not a dependency cycle.
+
+#91 implements only chapter preparation, reusing the prototype's positive-leaf,
+stable-start-order and escaping algorithm. Private owned DTO retains hierarchy,
+book-local structural index-path IDs, safe title, absolute start_ms, optional end_ms
+and children; IDs are not provider revision identities. Missing start defaults0 as
+before; missing length remains unknown, no positive leaf means retain embedded
+chapters. No overlap clipping or parent-duration invention. Bounded32 levels/10,000
+nodes/4096 UTF-8 bytes per title and separate4MiB-minus512 tree/metadata payloads;
+invalid data fails safely, never truncates. Generated-media CI validates copy-remux
+chapter times/titles and unchanged audio packet hashes; no license/transfer/publish
+or public Download claim. Inherited key-in-process-args risk remains unchanged.
+
 ## Progress and failures
 
 Stages: `licensing`, `downloading`, `preparing`, `publishing`. Download byte samples

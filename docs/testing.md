@@ -211,6 +211,15 @@ before persistence is not a general kill-durability guarantee. Explicit test run
 wrapper changes trusted transports only; production has no env-based test hooks.
 No live account, app-cache/SQLite, download/playback/release or full J01/J14 claim.
 
+#91's [private chapter tests](../tests/adapter/test_chapters.py) cover normalized
+hierarchy/structural IDs and owned copies, optional end vs known zero, inherited
+missing-start0 policy, safe title fallback, positive stable leaf sorting, escaping,
+overlap preservation and exact depth/node/title/tree/ffmetadata limits. A generated
+silence/copy-remux/ffprobe/audio-packet-hash test runs with actual mandatory CI media
+tools; local absence is explicitly skipped, required CI absence fails. This tests
+chapter preparation only, not licensed transfer, private staging/publication, Go
+Download/CLI, protected media/live accounts or complete J04/J06. Those remain #92–#94.
+
 ## Release evidence
 
 A release candidate needs an evidence matrix linking each supported journey to
