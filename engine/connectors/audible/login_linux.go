@@ -8,6 +8,7 @@ import (
 	"errors"
 	"os"
 	"strconv"
+	"sync"
 
 	"github.com/susamn/taletty/engine/connectors/audible/internal/auth"
 	"github.com/susamn/taletty/engine/connectors/audible/internal/bridge"
@@ -59,6 +60,9 @@ func (e *LoginError) Error() string {
 type Client struct {
 	session        *auth.Session
 	python, script string
+	librarySource  string
+	operationsMu   sync.Mutex
+	operations     map[string]bool
 }
 
 // Open requires an existing effective-UID-owned 0700 root. It creates only the
@@ -68,7 +72,7 @@ func Open(ctx context.Context, root, python string) (*Client, error) {
 	if err != nil {
 		return nil, authError(err)
 	}
-	return &Client{session: session, python: python, script: loginScript(browserLoginSource)}, nil
+	return &Client{session: session, python: python, script: loginScript(browserLoginSource), librarySource: libraryScript()}, nil
 }
 
 // Close waits for active authenticated work. A canceled Close can be retried.
