@@ -232,6 +232,19 @@ blind retries, response/client cleanup, no Amazon headers/cookies and fail-close
 redirect refusal are covered. No external provider HTTP, protected media, transfer
 files/publication or complete J04/J06/live-account/release claim is made.
 
+#98's [private media store tests](../tests/adapter/test_media_store.py) cover actual
+Linux no-clobber publication, root/download-directory rename anchoring, strict
+no-follow ownership/permissions, short/failed writes, validators and name mutation,
+inode-owned cleanup, precommit failures and postcommit fsync/close uncertainty.
+Repeated barrier-synchronized rename races distinguish identical validated reuse
+from conflict. Real synchronous SIGINT before/after syscall commit tests inode
+reconciliation; a pipe-acknowledged SIGKILL leaves a private partial and retry
+never sweeps it. Mandatory CI publishes/ffprobes generated silence through a test
+validator; local missing tools are reported as skipped, required CI absence fails.
+This is a production filesystem primitive, not yet production remux/validation,
+licensed composition, embedded download, public Go/CLI or complete J04/J05/J06.
+Those remain dependency-linked #99/#100/#94 after maintainer acceptance.
+
 ## Release evidence
 
 A release candidate needs an evidence matrix linking each supported journey to

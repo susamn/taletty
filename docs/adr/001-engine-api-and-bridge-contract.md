@@ -278,6 +278,18 @@ Native children: #91 bounded private chapter normalization/leaf ffmetadata, #92
 independent license planning/signed-HTTP boundary, #93 anchored transfer/remux/
 publication after91/92, #94 typed Go Download/API/CLI after93 (split further if needed).
 #7 adds truthful transfer/preparation progress downstream, not a dependency cycle.
+#93 is split natively into #98 private anchored store (implemented separately below),
+#99 capability-based copy-remux/media validation (blocked by98), and #100 licensed
+composition/commit reconciliation (blocked by98/99). Acceptance, not a stacked
+implementation, unblocks the next child. #98 adds private `media_store` capabilities
+only: borrowed root/gate, strict owned 0700 directories/0600 single-link regular
+files, exclusive inode-owned partials/full writes, caller-validated ready reuse,
+file fsync and Linux renameat2 NOREPLACE commit plus directory fsync. Concurrent
+byte-identical validated output is reused; different content conflicts, never
+replaces/deletes final media. Postcommit errors preserve published=True; SIGINT at
+the syscall/flag window reconciles the inode. No production validator, remux,
+license composition, embedded download action or public Media API is implied.
+Details and ownership limits are in the private adapter README.
 
 #91 implements only chapter preparation, reusing the prototype's positive-leaf,
 stable-start-order and escaping algorithm. Private owned DTO retains hierarchy,
