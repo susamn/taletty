@@ -200,9 +200,9 @@ provider/validation/cancel/store failure emits fixed `failure.code` only, never 
 result; `storage_uncertain` preserves published-but-not-confirmed semantics. A
 closed control pipe cannot manufacture success or print provider tracebacks.
 
-Parent must still retain gate/root, validate action payload/count, drain/join the
-process owner and check clean EOF/exit before accepting a snapshot. #85 owns that
-integration; this module is not yet embedded/launched by the public Go API. It
+Parent must retain gate/root, validate action payload/count, drain/join the process
+owner and check clean EOF/exit before accepting a snapshot. #85 now embeds/runs
+this callable through public Client.Library and the same RunRoot/WithRoot owner. It
 acquires no lock, writes no cache, retries nothing and guarantees no finally after
 hard kill. Tests execute actual -I -B fileless subprocesses and pinned SDK with
 synthetic refresh/HTTP MockTransport, null SDK chatter/stdin, further exec FD

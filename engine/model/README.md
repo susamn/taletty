@@ -23,6 +23,12 @@ Book values include mutable slices/pointers: an owner must not share them for
 concurrent mutation. Validate is read-only; ownership/defensive copies at event/API
 boundaries belong to that implementation, not a generic clone framework.
 
-Tests cover native/JSON optionality and invalid boundaries. These declarations do
-not establish complete snapshots, events, provider sync, cache persistence or full
-UI journeys. #85 consumes them only after maintainer acceptance; CLI sync is #86.
+`LibrarySnapshot`, `Failure` and `OperationEvent` are engine-created result/lifecycle
+records used by [Client.Library](../connectors/audible/library.md). A stage count is
+provisional, not a snapshot; the successful API return owns complete Books. Fixed
+safe Failure values implement error; context identity may also be joined. Callers
+must not substitute remote exception text in these records.
+
+Tests cover native/JSON optionality and invalid boundaries. The declarations alone
+do not prove provider sync/cache persistence/full UI journeys; #85 adds the actual
+owned transport/completion tests. CLI sync remains #86.

@@ -23,7 +23,13 @@ func (c *libraryCandidate) page(frame bridge.Frame) error {
 	fields, err := strictFields(frame.Raw)
 	var stage string
 	var items []json.RawMessage
-	if err != nil || frame.Type != bridge.Stage || required(fields, "stage", &stage) != nil || stage != "library_page" || required(fields, "books", &items) != nil || len(items) == 0 || len(items) > 100 || c.pages >= 10000 || len(frame.Raw) > maxLibraryBytes-c.bytes {
+	if err != nil || frame.Type != bridge.Stage {
+		return bridge.ErrProtocol
+	}
+	if required(fields, "stage", &stage) != nil || stage != "library_page" || required(fields, "books", &items) != nil {
+		return bridge.ErrProtocol
+	}
+	if len(items) == 0 || len(items) > 100 || c.pages >= 10000 || len(frame.Raw) > maxLibraryBytes-c.bytes {
 		return bridge.ErrProtocol
 	}
 	if c.seen == nil {
@@ -72,7 +78,15 @@ func libraryBook(raw json.RawMessage) (model.Book, error) {
 		return book, err
 	}
 	identity, err := object(fields["id"])
-	if err != nil || required(identity, "provider", &book.ID.Provider) != nil || required(identity, "namespace", &book.ID.Namespace) != nil || required(identity, "id", &book.ID.ID) != nil || book.ID.Provider != "audible" || book.ID.Namespace != "us" || required(fields, "title", &book.Title) != nil {
+	if err != nil {
+		return book, bridge.ErrProtocol
+	}
+	for key, target := range map[string]*string{"provider": &book.ID.Provider, "namespace": &book.ID.Namespace, "id": &book.ID.ID} {
+		if required(identity, key, target) != nil {
+			return book, bridge.ErrProtocol
+		}
+	}
+	if book.ID.Provider != "audible" || book.ID.Namespace != "us" || required(fields, "title", &book.Title) != nil {
 		return book, bridge.ErrProtocol
 	}
 	if _, ok := fields["subtitle"]; ok {

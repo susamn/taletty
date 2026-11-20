@@ -126,8 +126,8 @@ explicit. No automatic retries or abrupt-kill finally promise. Missing/malformed
 unsafe input starts no provider client and is not overwritten. `RunRoot` passes
 only FD3 via the existing noninteractive process owner, without a TTY lease; child
 marks it noninheritable for further exec. SDK stdio is isolated from control output.
-The private lifecycle is available to #59; library pagination/Go results/CLI remain
-unimplemented until that dependent slice, not fabricated provider probe actions.
+The lifecycle now supports #85's typed Library API. Public CLI sync remains #86;
+no fabricated provider probe actions or download integration are implied.
 
 Cancellation racing with final media publication has a defined commit point: if the
 atomic publication occurred, return/report completed Media; otherwise cancel and
@@ -218,6 +218,24 @@ failure includes storage_failed/storage_uncertain; closed pipes cannot emit succ
 Parent #85 still must embed/run it and validate count/typed payloads/EOF/exit before
 snapshot publication. #86 exposes sync only after that acceptance; no new public
 Go provider operation or executable library action is claimed here.
+
+#85 implements public Client.Library with model.LibrarySnapshot/Failure/
+OperationEvent and the real embedded root-only producer. IDs are ASCII1–64,
+unique among this client's live Library calls; invalid/duplicate IDs emit no events
+or child. Accepted calls report started, provisional count-only library_page stages
+and exactly one completed/failed/canceled terminal (except caller reporter panic).
+Public sequence includes wrapper lifecycle and differs from private seq. Events
+never expose books/raw frames and have independent failure copies. Reporter runs
+on caller thread, returns promptly/no reentry; cancellation cannot forcibly
+interrupt caller code. Panic cancels/joins child users before releasing root/ID.
+Strict exact-key schema, recursive duplicate-key and invalid UTF-8/lone-surrogate
+checks precede known-field decoding; optional v1 fields remain ignored. Private
+integer milliseconds are range-checked before native duration conversion. Limits:
+100 books/page,10,000 stages,64MiB cumulative stage wire bytes,depth64; exceeding
+bounds fails rather than truncates. Snapshot requires count agreement, SDK finally
+persistence and clean control EOF/process exit. All error returns are zero snapshots.
+Context cancellation wins until completion is validated; not retroactively from
+completed callback. CLI sync remains #86; no app/cache/live-account/full-journey claim.
 
 Library and download payload schemas are action-specific; fields not applicable to a
 frame must not carry invented defaults. Unknown optional fields within protocol v1

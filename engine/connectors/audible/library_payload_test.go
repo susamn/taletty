@@ -130,7 +130,7 @@ func TestLibraryRejectsMalformedPagesBooksAndCompletion(t *testing.T) {
 	if exact.page(pagePayload(bookPayload)) != nil || exact.bytes != maxLibraryBytes {
 		t.Fatal("exact wire bound")
 	}
-	for _, raw := range []string{"", `{"key"`, `{"key":`, `[1`, `{`} {
+	for _, raw := range []string{"", `{"key"`, `{"key":`, `[1`, `[1 `, `{"key":0 `, `{`} {
 		decoder := json.NewDecoder(strings.NewReader(raw))
 		if uniqueValue(decoder, 0) == nil {
 			t.Fatal("decoder fault accepted")

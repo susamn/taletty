@@ -57,6 +57,7 @@ func (e *LoginError) Error() string {
 // Client owns one root lock and authenticated-operation gate for its lifetime.
 // Playback and Doctor do not use it. The Python executable is explicitly supplied;
 // no runtime installation, legacy discovery or credentials are accepted here.
+// Do not copy a Client; its gate, operation IDs and root have shared ownership.
 type Client struct {
 	session        *auth.Session
 	python, script string
