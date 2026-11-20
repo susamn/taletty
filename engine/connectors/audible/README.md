@@ -42,6 +42,11 @@ may still follow remote device registration; no automatic remote revocation occu
 
 The real PTY/Go→Python tests use a fake external provider and real SDK restore,
 with synthetic never-issued placeholders and provider HTTP forbidden. No live
-account sign-in or full J01/J14 is evidenced. CLI/library sync is #59; #69 adds private SDK lifecycle/finally persistence to the
-embedded adapter, not a public provider operation. #78's headless account CLI is
-separate from this package; library sync remains #80.
+account sign-in or full J01/J14 is evidenced.
+
+`client.Library(ctx, operationID, report)` now exposes a complete typed snapshot
+using the accepted embedded SDK/page/persistence pipeline. See the [library API
+contract](library.md) for fixed safe failures, ordered provisional-count events,
+strict schema/bounds, cancellation and callback ownership. Every error returns a
+zero snapshot; no app cache is written. Public CLI sync remains #86, not this PR;
+#80/#59/#5 remain open for downstream implementation/acceptance.

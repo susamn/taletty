@@ -75,6 +75,22 @@ independently covered. Provider HTTP is forbidden. These are private child contr
 public Go embedding/count validation/snapshot/event/cancel ownership is #85, CLI
 sync #86. No full UI/real account/cache/release evidence is claimed.
 
+#85 adds [strict library payload tests](../engine/connectors/audible/library_payload_test.go),
+[public lifecycle/process tests](../engine/connectors/audible/library_linux_test.go),
+[incoming-page cancellation](../engine/connectors/audible/library_cancel_linux_test.go)
+and [real embedded SDK boundaries](../engine/connectors/audible/library_sdk_linux_test.go).
+Exact required keys, nested duplicates, malformed Unicode/surrogates/time/count,
+optional absence/empty/zero, repeat/size/depth limits and fuzz seeds protect typed
+results. Public Go→Python→SDK success/empty/denied/repeated/malformed/unsupported/
+cancel/close/storage failures never expose partial snapshots or SDK text. Refreshed
+snapshots survive ordinary failure and are reused; canceled queued operations never
+construct a client. Socket/PIDFD barriers prove active child exit while caller's
+callback is blocked, callback remains caller-owned, then root/process users join;
+controlled pre-persistence kill is not a general durability guarantee. Panic and
+failure release IDs/gate; nil reporters, preflight refusal, error-copy isolation,
+late cancel after completion and nonzero/truncated processes are covered. No CLI
+sync/UI/cache/live-account or full J01/J14 claim.
+
 ## Required journey matrix
 
 Each row must link to executable tests when implemented. Every feature PR adds its
