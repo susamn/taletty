@@ -40,6 +40,15 @@ Final Go declarations land with tests in #4/#5; these are normative semantics.
 | Failure | Safe code, safe message, retry disposition and optional operation/book ID. No provider response body or arbitrary exception string. |
 | OperationEvent | Operation ID, sequence, stage/type, optional bytes/total and safe failure or result. No account secrets. |
 
+#83 implements the library subset in `engine/model`: Book/Contributor reuse
+BookID.Validate; required safe UTF-8 title/names, optional subtitle and contributor
+lists, optional nonnegative native duration. Nil metadata is unknown; known empty
+lists/zero duration survive standard JSON via omitzero/pointers. Public JSON names
+native time.Duration **duration_ns**; the private DTO's **duration_ms** is distinct
+and #85 must validate/bound it before conversion. Validate never normalizes or
+rewrites metadata, and safe errors contain no input. No speculative capabilities,
+artwork, history, snapshot-completion or new provider support is inferred.
+
 Keep provider metadata separate from local playback position/speed/completion/notes.
 Use seconds in finite Go `time.Duration` values internally; bridge times are integer
 milliseconds, byte counts nonnegative integers. Validate bounds before conversion.
