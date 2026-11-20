@@ -96,7 +96,7 @@ func (m Model) paneRows(pane Pane, width int) (string, []string, int) {
 // frame owns borders, a cursor gutter and one-cell inner padding. It never clips
 // renderer styles as untrusted metadata: raw text is fitted before paint is added.
 func (m Model) frame(pane Pane, size Rect, name string, rows []string, selected int) []string {
-	focused := pane == m.focus && !m.help
+	focused := pane == m.focus && !m.help && !m.ownsModal()
 	if focused {
 		name = "[Focus] " + name
 	}
@@ -148,6 +148,9 @@ func (m Model) View() tea.View {
 	}
 	if g.Mode == ResizeOnly {
 		message := fmt.Sprintf("Resize to %dx%d (now %dx%d); q quit", MinWidth, MinHeight, g.Screen.Width, g.Screen.Height)
+		if m.quitWarning {
+			message = "Unsaved draft: q again quits; Esc keeps draft"
+		}
 		return tea.NewView(PadLine(message, g.Screen.Width, m.tail()))
 	}
 	var lines []string
@@ -161,6 +164,9 @@ func (m Model) View() tea.View {
 		}
 	} else {
 		lines = m.pane(m.content, g.Content)
+	}
+	if m.ownsModal() {
+		lines = m.modalLines(lines)
 	}
 	lines = append(lines, m.playerLines(g.Player)...)
 	activity, tint := m.data.Activity, m.appearance.Palette.Muted
@@ -190,6 +196,17 @@ func (m Model) View() tea.View {
 	if m.help {
 		hints = "Esc Back | j/k scroll | PgUp/PgDown | g/G bounds | " + m.helpTransport()
 	}
+	if m.ownsModal() {
+		hints = "Enter/Ctrl+S save | Alt+Enter newline | Tab local focus | Esc back"
+		if m.confirmation != nil {
+			hints = "Tab/Left/Right choose | Enter act | Esc back | Up/Down scroll"
+		}
+		if m.ownsModalPending() {
+			hints = "Action pending; input held until coordinator confirmation"
+		}
+	}
 	lines = append(lines, m.paint(PadLine(hints, g.Hints.Width, m.tail()), m.appearance.Palette.Muted))
-	return tea.NewView(strings.Join(lines, "\n"))
+	view := tea.NewView(strings.Join(lines, "\n"))
+	view.Cursor = m.noteCursor()
+	return view
 }

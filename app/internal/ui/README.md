@@ -14,7 +14,8 @@ shell Model, not a standalone player or provider coordinator. The approved
   content pane visible instead of duplicating the player. Below minimum, the resize
   owner hides content while retaining focus, highlighted identity and current audio.
 - Dialog geometry centers inside content with two-column side/one-row vertical
-  margins; at 80×20 its maximum is 76×11. Modal behavior is still #49.
+  margins; at 80×20 its maximum is 76×11. #53 uses this for the note editor and
+  named confirmation components, without covering the persistent player.
 - ClipLine/PadLine strip untrusted ANSI and flatten controls before measuring with
   the existing ANSI/grapheme library. Pass raw metadata, not styled renderer output.
   Borders/styles are added only after fitting raw text to its allocated cells.
@@ -55,7 +56,8 @@ Player, Player Left/Right, current-audio Space/comma/period/volume/speed and shu
 requests, plus `?` for scrollable Help. Library destinations, filtering/sorting/panning, detailed chapter navigation
 and domain actions ship with their owning features; hints do not advertise them as
 working. There is no executable demo, mpv, filesystem/config initialization or artwork.
-Modal/other supporting-view ownership, draft recovery and PTY integration remain #49.
+The coordinator-opened modal components below supply draft ownership/recovery;
+actual feature entry points and PTY integration remain separate work.
 
 ## Help ownership (#52)
 
@@ -73,10 +75,67 @@ remain fully scrollable without acknowledging the error. Reflow clamps the visib
 page but preserves the stored reading offset. Below minimum the resize/quit owner
 supersedes hidden Help: no hidden navigation/transport, q/Ctrl+C requests orderly
 shutdown; recovery, including shutdown failure, restores Help and its root origin.
-Help itself owns no unsaved draft. Modal draft warnings belong to #53.
+Help itself owns no unsaved draft. A nested note editor uses #53's draft warning.
 
 This is the first #49 slice: #52 → #53 (modal/draft ownership) → #54 (real PTY and
 shell acceptance audit). No domain editor/download/bookmark workflow is implied.
+
+## Bounded note and confirmation components (#53)
+
+`OpenNoteEditorMsg` opens the real Bubbles v2 textarea, not a simulated text field.
+The coordinator supplies a unique opening ID and frozen `NoteTarget`: book identity,
+optional existing bookmark identity, title/chapter, captured position and already
+computed absolute jump position. The component never recaptures, computes pre-roll,
+reads a repository or claims it saved a bookmark. `b/B` and feature-service wiring
+remain #18/#19; there is no new root shortcut or standalone runnable app.
+
+Enter/Ctrl+S requests `SaveNote`; Alt+Enter inserts a newline. Tab cycles the field,
+Save and Cancel; Esc/Cancel returns to the exact parent. The field owns Space, q,
+numbers, navigation letters and Ctrl+C. Bracketed paste is sanitized as plain text
+with newlines retained; clipboard subprocess shortcuts are disabled. The textarea
+supplies editing, wrapping, a four-row scrolled viewport and a real terminal cursor.
+An existing note that cannot round-trip through the widget's logical-line limit is
+rejected visibly rather than opening a truncated draft that could overwrite it.
+The shell supplies semantic colors and bounds, not a second text-editing engine.
+
+`OpenConfirmationMsg` freezes a named `Action` and explanatory Keep/Confirm labels.
+It defaults to Keep/Stay, owns all input, scrolls long explanations with Up/Down,
+and activates only the focused choice with Enter. Its body includes full button
+labels even when the bounded button row ellipsizes. It can be a child of an editor;
+closing it restores the editor's exact local focus/draft. Both components can sit
+above Help; no hidden Help/root transport or focus key is redispatched.
+
+Submission carries `RequestID` and an incrementing `Attempt`. Only matching pending
+`ModalResultMsg` closes a layer on success; failure retains target/input and enables
+retry. The coordinator supplies sanitized errors and sends success **only after**
+the authoritative operation completes. Duplicate submits are suppressed. While
+pending, keys (including Esc) are held: cancellation cannot promise to undo a write
+that already committed. The coordinator must validate stale sessions/removed
+identities before executing confirmations and reconcile late domain results.
+Opening IDs must be unique across canceled/reopened components; an active component
+cannot be silently replaced, and pending work cannot be hidden by a new child.
+
+Snapshots, palette changes and resize retain the field, local focus and frozen
+identities. Unsupported sizes hide the entire owner stack, suppress typing/paste
+and transport, and remove the cursor. With a note open, q/Ctrl+C first warns;
+q after that warning requests orderly quit, while Esc retains the draft. Returning
+to supported geometry disarms the warning and restores the modal; failed shutdown
+also retains it. The warning is cell-clipped even at one-column/zero-sized terminals.
+
+### Supporting-view transport contract
+
+These are the approved integration rules, **not implemented domain destinations**:
+
+| Owner | Current-audio passthrough | Other ownership |
+|---|---|---|
+| Downloads / read-only Bookmarks | Seven transport keys (Space, comma, period, minus, equals, brackets) and b capture | Tab cycles local areas/Player; numbers explicitly return to root; note scroller owns navigation |
+| Help (implemented) | Same seven transport keys only | All other keys local/blocked; Esc returns to origin |
+| Settings / account / action menus / confirmations / filter editors | None | Local navigation/actions only, Esc one layer back |
+| Note editor (implemented) | None | Text/local buttons own input; Ctrl+C is not global quit |
+| Below-minimum resize owner (implemented) | None | Resize/quit warning/recovery supersede hidden owners |
+
+Background audio continues in every case. Feature coordinators must integrate these
+rules without inventing account/download/bookmark services in the presentation layer.
 
 ## Evidence
 
@@ -87,6 +146,10 @@ and dismissal; focus/resize/recovery; safe long metadata; named states and glyph
 [`help_test.go`](help_test.go) adds real model/command journeys for exclusive Help
 ownership from every pane, transport/session whitelisting, blocked quit/focus keys,
 scroll bounds, long safe errors, resize/repaint and failed-shutdown recovery.
+[`modal_test.go`](modal_test.go) exercises actual field input, bracketed paste,
+local buttons, default-safe/nested confirmations, frozen submissions, pending and
+stale replies, failed-submit/retry, one-layer close, theme/snapshot preservation,
+long Unicode scrolling, cell bounds and two-step tiny-terminal quit recovery.
 Pure geometry tests include the boundary grid and extreme integer dimensions;
 actual rendered views are checked at supported/minimum/tiny sizes in terminal cells.
 This is partial J13 (and the browse-target portion of J07), not complete app journeys.

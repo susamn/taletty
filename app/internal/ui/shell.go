@@ -95,6 +95,7 @@ const (
 	SpeedDown      ActionKind = "speed-down"
 	SpeedUp        ActionKind = "speed-up"
 	RequestQuit    ActionKind = "request-quit"
+	SaveNote       ActionKind = "save-note"
 )
 
 // Current-audio actions carry the source session so the coordinator can reject
@@ -102,22 +103,29 @@ const (
 type Action struct {
 	Kind         ActionKind
 	Key, Session string
+	Target       NoteTarget
+	Text         string
+	RequestID    string
+	Attempt      uint64
 }
 
 // Model owns presentation only. Dispatch creates commands; it must not perform
 // blocking I/O. Playback is authoritative only when a coordinator sends a snapshot.
 type Model struct {
-	data       SnapshotMsg
-	appearance AppearanceMsg
-	layout     Layout
-	focus      Pane
-	content    Pane
-	selected   string
-	control    int
-	failure    string
-	help       bool
-	helpOffset int
-	dispatch   func(Action) tea.Cmd
+	data         SnapshotMsg
+	appearance   AppearanceMsg
+	layout       Layout
+	focus        Pane
+	content      Pane
+	selected     string
+	control      int
+	failure      string
+	help         bool
+	helpOffset   int
+	note         *noteEditor
+	confirmation *confirmation
+	quitWarning  bool
+	dispatch     func(Action) tea.Cmd
 }
 
 func NewModel(data SnapshotMsg, dispatch func(Action) tea.Cmd) Model {
@@ -163,6 +171,22 @@ func (m Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := message.(type) {
 	case tea.WindowSizeMsg:
 		m.layout = ComputeLayout(msg.Width, msg.Height)
+		m.sizeNote()
+		if m.layout.Mode != ResizeOnly {
+			m.quitWarning = false
+		}
+	case OpenNoteEditorMsg:
+		m.openNote(msg)
+	case OpenConfirmationMsg:
+		if msg.ID != "" && msg.Title != "" && msg.Keep != "" && msg.Confirm != "" && msg.Action.Kind != "" && !m.ownsModalPending() && m.confirmation == nil {
+			m.confirmation = &confirmation{spec: msg}
+		}
+	case ModalResultMsg:
+		return m.modalResult(msg)
+	case tea.PasteMsg:
+		if m.layout.Mode != ResizeOnly && m.note != nil && m.confirmation == nil && !m.note.pending && m.note.focus == 0 {
+			m.note.field, _ = m.note.field.Update(tea.PasteMsg{Content: safeNote(msg.Content)})
+		}
 	case SnapshotMsg:
 		m.accept(msg)
 	case AppearanceMsg:
@@ -176,16 +200,29 @@ func (m Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 		m.failure = ""
 	case tea.KeyPressMsg:
 		key := msg.String()
-		// The resize owner supersedes hidden views. At supported sizes Help owns
-		// every key first, including q/Ctrl+C; consumed keys never reach root.
-		if m.help && m.layout.Mode != ResizeOnly {
+		// The resize owner supersedes hidden editors: never send hidden typing or
+		// transport through. Only a repeated q confirms discarding an unsaved draft.
+		if m.layout.Mode == ResizeOnly {
+			if key == "esc" {
+				m.quitWarning = false
+			} else if key == "q" || key == "ctrl+c" {
+				if m.note != nil && !(key == "q" && m.quitWarning) {
+					m.quitWarning = true
+					return m, nil
+				}
+				m.quitWarning = false
+				return m.request(Action{Kind: RequestQuit})
+			}
+			return m, nil
+		}
+		if m.ownsModal() {
+			return m.modalKey(msg)
+		}
+		if m.help {
 			return m.helpKey(key)
 		}
 		if key == "q" || key == "ctrl+c" {
 			return m.request(Action{Kind: RequestQuit})
-		}
-		if m.layout.Mode == ResizeOnly {
-			return m, nil
 		}
 		switch key {
 		case "?":
