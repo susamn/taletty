@@ -1,0 +1,28 @@
+# Provider-neutral library contracts
+
+`BookID` is a comparable catalog key; `Book`/`Contributor` add provider display
+metadata only. No auth/customer/content URLs, playback/history, favorites, cache
+writes or guessed download/entitlement capabilities. Deferred artwork/acquisition/
+description/capability contracts will land with their real consumers.
+
+Call `Book.Validate()` at trust boundaries. It checks identity syntax, nonempty
+UTF-8 title/contributor names, optional text and nonnegative native duration;
+terminal controls and format characters are rejected, not silently transformed.
+Provider adapters sanitize first. Errors never echo malformed metadata. A valid
+catalog namespace is not proof that a particular connector supports that market.
+
+Unknown fields are nil, not invented defaults. Public JSON omits nil metadata but
+preserves known empty subtitle/contributor lists and zero duration. Standard Go
+`omitzero` preserves the nil/empty slice distinction; no custom marshaler/global
+JSON policy. `Duration` is `*time.Duration`; its explicitly named public JSON field
+is **`duration_ns`**. The private Python DTO uses **`duration_ms`** instead: #85
+must bound/validate integers before conversion, not reinterpret JSON as native
+nanoseconds. No milliseconds converter or transport decoder is hidden here.
+
+Book values include mutable slices/pointers: an owner must not share them for
+concurrent mutation. Validate is read-only; ownership/defensive copies at event/API
+boundaries belong to that implementation, not a generic clone framework.
+
+Tests cover native/JSON optionality and invalid boundaries. These declarations do
+not establish complete snapshots, events, provider sync, cache persistence or full
+UI journeys. #85 consumes them only after maintainer acceptance; CLI sync is #86.
