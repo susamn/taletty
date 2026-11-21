@@ -43,6 +43,8 @@ jobs:
           python -m coverage report -m
           mkdir -p coverage
           python -m coverage json -o coverage/tooling.json
+      - name: Execute app-owned SQLite schema contract
+        run: python tests/storage/test_schema.py
       - name: Enforce exact independent statement threshold
         run: python tools/coverage_gate.py --require tooling --python tooling=coverage/tooling.json
       - name: Upload coverage evidence

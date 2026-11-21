@@ -66,6 +66,19 @@ source "$SCRIPT"
         self.assertNotIn("t.Skip", journey)
         self.assertNotIn("os.Getenv", journey)
 
+    def test_sql_contract_is_mandatory_in_tooling_dependency(self):
+        workflow = (ROOT / ".github/workflows/quality.yml").read_text()
+        tooling = workflow.split("  coverage-tooling:\n", 1)[1].split("  python-adapter:\n", 1)[0]
+        step = tooling.split("      - name: Execute app-owned SQLite schema contract\n", 1)[1].split("      - name:", 1)[0]
+        self.assertEqual(step.strip(), "run: python tests/storage/test_schema.py")
+        self.assertNotIn("continue-on-error", workflow)
+        # Execute the same entry point; the runner rejects zero tests and skips.
+        result = subprocess.run([os.sys.executable, "tests/storage/test_schema.py"], cwd=ROOT,
+                                capture_output=True, text=True, timeout=15)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("SQLite contract oracle: SQLite", result.stdout)
+        self.assertIn("Ran 8 tests", result.stderr)
+
     def test_adapter_cannot_be_omitted_from_aggregate(self):
         workflow = (ROOT / ".github/workflows/quality.yml").read_text()
         self.assertIn("  python-adapter:\n", workflow)
