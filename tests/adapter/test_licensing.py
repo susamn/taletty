@@ -210,3 +210,44 @@ class SignedStreamTests(unittest.TestCase):
         with self.assertRaises(session.ProviderError):
             with license.signed_stream(license._Plan(None, None, None)):
                 self.fail("cleared plan used")
+        with self.assertRaises(session.ProviderError):
+            with license.signed_stream(None):
+                self.fail("none plan used")
+
+    def test_content_length_parsing_and_cleanup(self):
+        real_client = httpx.Client
+        cases = [
+            (None, None),
+            ([("Content-Length", "0")], 0),
+            ([("Content-Length", "27")], 27),
+            ([("Content-Length", str((1 << 63) - 1))], (1 << 63) - 1),
+            ([("Content-Length", "")], None),
+            ([("Content-Length", "-1")], None),
+            ([("Content-Length", "+10")], None),
+            ([("Content-Length", "10.5")], None),
+            ([("Content-Length", "abc")], None),
+            ([("Content-Length", " 10")], None),
+            ([("Content-Length", "10 ")], None),
+            ([(b"content-length", "١٢".encode("utf-8"))], None),
+            ([("Content-Length", str(1 << 63))], None),
+            ([("Content-Length", "10"), ("Content-Length", "10")], None),
+        ]
+        for headers, expected in cases:
+            with self.subTest(headers=headers):
+                class Body(httpx.SyncByteStream):
+                    def __iter__(self):
+                        yield b"synthetic-unprotected-bytes"
+                def handle(request):
+                    return httpx.Response(200, headers=headers, stream=Body())
+                def factory(**kwargs):
+                    return real_client(**kwargs, transport=httpx.MockTransport(handle))
+                plan = license._Plan(URL, KEY, IV)
+                plan._total_bytes = 999
+                with patch.object(httpx, "Client", side_effect=factory):
+                    with license.signed_stream(plan) as chunks:
+                        self.assertEqual(plan._total_bytes, expected)
+                        self.assertEqual(b"".join(chunks), b"synthetic-unprotected-bytes")
+                self.assertIsNone(plan._total_bytes)
+                plan._total_bytes = 123
+                plan.clear()
+                self.assertIsNone(plan._total_bytes)

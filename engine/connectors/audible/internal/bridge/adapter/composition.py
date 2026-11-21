@@ -35,33 +35,65 @@ def _cancel(cancel_fd):
         raise sdk_session.ProviderError("canceled")
 
 
-def _transfer(plan, source, cancel_fd):
+class _EmitError(Exception):
+    pass
+
+
+def _emit(emit, kind, **payload):
+    if emit is not None:
+        try:
+            emit(kind, **payload)
+        except Exception as error:
+            raise _EmitError() from error
+
+
+def _transfer(plan, source, cancel_fd, emit=None):
     # signed_stream sanitizes consumer exceptions as network failures. Capture
-    # storage/cancellation codes inside its context so their meaning survives.
+    # storage/cancellation/emit errors inside its context so their meaning survives.
     failure = None
+    emit_error = None
+    received = 0
     with licensing.signed_stream(plan) as chunks:
+        total = getattr(plan, "_total_bytes", None)
         for chunk in chunks:
             try:
                 _cancel(cancel_fd)
+                if not chunk:
+                    continue
                 source.write(chunk)
+                received += len(chunk)
+                if emit is not None:
+                    payload = {"bytes": received}
+                    if total is not None and total >= received:
+                        payload["total"] = total
+                    _emit(emit, "progress", **payload)
             except media_store.MediaStoreError:
                 failure = "storage_failed"
                 break
             except sdk_session.ProviderError as error:
                 failure = error.code
                 break
+            except _EmitError as error:
+                emit_error = error
+                break
+    if emit_error is not None:
+        raise emit_error
     if failure == "storage_failed":
         raise media_store.MediaStoreError()
     if failure is not None:
         raise sdk_session.ProviderError(failure)
 
 
-def _compose(store, plan, asin, outcome, cancel_fd):
+def _compose(store, plan, asin, outcome, cancel_fd, emit=None):
     with store.partial() as source, store.partial() as output:
-        _transfer(plan, source, cancel_fd)
         _cancel(cancel_fd)
+        _emit(emit, "stage", stage="downloading")
+        _transfer(plan, source, cancel_fd, emit)
+        _cancel(cancel_fd)
+        _emit(emit, "stage", stage="preparing")
         tree = remux.copy(source, output, store, plan._chapter_info, plan, cancel_fd)
         _cancel(cancel_fd)
+        _emit(emit, "stage", stage="publishing")
         outcome.reused = not store.publish(output, asin, remux.validator(tree, cancel_fd))
         # No cancellation check after the commit point. Publication wins.
         outcome.ready = True
@@ -69,7 +101,7 @@ def _compose(store, plan, asin, outcome, cancel_fd):
             outcome.chapters = tree or None
 
 
-def run(root_fd, asin, cancel_fd=None):
+def run(root_fd, asin, cancel_fd=None, emit=None):
     """Return safe independent auth/media facts after ordinary owned cleanup.
 
     published describes this operation's store commit exactly (including None),
@@ -90,10 +122,12 @@ def run(root_fd, asin, cancel_fd=None):
             if store.ready(asin, remux.validator(cancel_fd=cancel_fd)):
                 outcome.ready = outcome.reused = True
             else:
+                _cancel(cancel_fd)
+                _emit(emit, "stage", stage="licensing")
                 try:
                     with licensing.entitled(root_fd, asin, prepare_chapters=True) as plan:
                         try:
-                            _compose(store, plan, asin, outcome, cancel_fd)
+                            _compose(store, plan, asin, outcome, cancel_fd, emit)
                         except media_store.MediaStoreError as error:
                             outcome.published = error.published
                             outcome.media_code = ("storage_uncertain" if error.published is not False else

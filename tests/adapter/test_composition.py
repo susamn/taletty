@@ -72,7 +72,8 @@ class CompositionTests(unittest.TestCase):
 
     @contextmanager
     def provider(self, response=None, *, license_status=200, metadata_status=200,
-                 body_status=200, body_error=False, payload=PAYLOAD, body_hook=None, real_media=False,
+                 body_status=200, body_error=False, payload=PAYLOAD, chunks=None,
+                 body_headers=None, body_hook=None, real_media=False,
                  close_error=False, metadata_interrupt=False):
         response = granted() if response is None else response
         owner = self
@@ -81,7 +82,8 @@ class CompositionTests(unittest.TestCase):
             def __iter__(self):
                 if body_hook:
                     body_hook()
-                yield payload
+                for item in (chunks if chunks is not None else (payload,)):
+                    yield item
                 if body_error:
                     raise httpx.ReadError(URL)
             def close(self):
@@ -114,7 +116,10 @@ class CompositionTests(unittest.TestCase):
                 self.assertNotIn(header, request.headers)
             body = Body()
             owner.streams.append(body)
-            return httpx.Response(body_status, headers={"location": "https://other.example.test/secret"}, stream=body)
+            headers = {"location": "https://other.example.test/secret"}
+            if body_headers:
+                headers.update(body_headers)
+            return httpx.Response(body_status, headers=headers, stream=body)
         def plan(*args):
             value = self.real_plan(*args)
             self.plans.append(value)
@@ -406,15 +411,120 @@ class CompositionTests(unittest.TestCase):
             return [packet["data_hash"] for packet in json.loads(result.stdout)["packets"]]
         with self.provider(payload=b"generated-invalid-container", real_media=True):
             self.safe(composition.run(self.fd, ASIN), media_code="preparation_failed")
-        with self.provider(payload=source.read_bytes(), real_media=True):
-            self.safe(composition.run(self.fd, ASIN), ready=True, published=True)
+        events = []
+        raw = source.read_bytes()
+        with self.provider(payload=raw, body_headers={"Content-Length": str(len(raw))}, real_media=True):
+            self.safe(composition.run(self.fd, ASIN, emit=lambda kind, **kw: events.append((kind, kw))),
+                      ready=True, published=True)
+        self.assertEqual(events, [
+            ("stage", {"stage": "licensing"}),
+            ("stage", {"stage": "downloading"}),
+            ("progress", {"bytes": len(raw), "total": len(raw)}),
+            ("stage", {"stage": "preparing"}),
+            ("stage", {"stage": "publishing"}),
+        ])
         self.assertEqual(hashes(source), hashes(self.target))
         (self.root / "auth.json").unlink()
+        reuse_events = []
         with self.provider(real_media=True), patch.object(audible, "Client") as client:
-            self.safe(composition.run(self.fd, ASIN), ready=True, reused=True)
+            self.safe(composition.run(self.fd, ASIN, emit=lambda kind, **kw: reuse_events.append((kind, kw))),
+                      ready=True, reused=True)
             client.assert_not_called()
+        self.assertEqual(reuse_events, [])
         self.target.write_bytes(b"generated-invalid-container")
         with self.provider(real_media=True), patch.object(audible, "Client") as client:
             self.safe(composition.run(self.fd, ASIN), media_code="storage_failed")
             client.assert_not_called()
         self.assertEqual(self.target.read_bytes(), b"generated-invalid-container")
+
+    def test_stage_and_progress_emission_content_length_and_emit_faults(self):
+        chunk1 = PAYLOAD + b"x" * ((1024 * 1024) - len(PAYLOAD))
+        chunk2 = b"y" * 100
+        chunks = (chunk1, chunk2)
+        total = len(chunk1) + len(chunk2)
+        for name, headers, expected_progress in (
+            ("known", {"Content-Length": str(total)}, [
+                ("progress", {"bytes": len(chunk1), "total": total}),
+                ("progress", {"bytes": total, "total": total}),
+            ]),
+            ("unknown", None, [
+                ("progress", {"bytes": len(chunk1)}),
+                ("progress", {"bytes": total}),
+            ]),
+            ("invalid", {"Content-Length": "-5"}, [
+                ("progress", {"bytes": len(chunk1)}),
+                ("progress", {"bytes": total}),
+            ]),
+            ("smaller", {"Content-Length": str(len(chunk1) + 50)}, [
+                ("progress", {"bytes": len(chunk1), "total": len(chunk1) + 50}),
+                ("progress", {"bytes": total}),
+            ]),
+            ("zero", {"Content-Length": "0"}, [
+                ("progress", {"bytes": len(chunk1)}),
+                ("progress", {"bytes": total}),
+            ]),
+        ):
+            with self.subTest(name=name):
+                if self.target.exists():
+                    self.target.unlink()
+                events = []
+                with self.provider(chunks=chunks, body_headers=headers):
+                    self.safe(composition.run(self.fd, ASIN, emit=lambda kind, **kw: events.append((kind, kw))),
+                              ready=True, published=True)
+                self.assertEqual(events, [
+                    ("stage", {"stage": "licensing"}),
+                    ("stage", {"stage": "downloading"}),
+                    *expected_progress,
+                    ("stage", {"stage": "preparing"}),
+                    ("stage", {"stage": "publishing"}),
+                ])
+                self.assertEqual(self.target.read_bytes(), chunk1 + chunk2)
+        # Empty chunks yielded by a stream do not emit duplicate progress frames.
+        self.target.unlink()
+        empty_chunk_events = []
+        with (self.provider(),
+              patch.object(license, "signed_stream", return_value=composition.licensing.contextmanager(lambda p: (yield iter((b"", PAYLOAD))))(None))):
+            self.safe(composition.run(self.fd, ASIN, emit=lambda kind, **kw: empty_chunk_events.append((kind, kw))),
+                      ready=True, published=True)
+        self.assertEqual(empty_chunk_events, [
+            ("stage", {"stage": "licensing"}),
+            ("stage", {"stage": "downloading"}),
+            ("progress", {"bytes": len(PAYLOAD)}),
+            ("stage", {"stage": "preparing"}),
+            ("stage", {"stage": "publishing"}),
+        ])
+        # Verified ready reuse skips all stages and progress.
+        reuse_events = []
+        with self.provider(), patch.object(audible, "Client") as client:
+            self.safe(composition.run(self.fd, ASIN, emit=lambda kind, **kw: reuse_events.append((kind, kw))),
+                      ready=True, reused=True)
+            client.assert_not_called()
+        self.assertEqual(reuse_events, [])
+        self.target.unlink()
+        # Closed control pipe (OSError) during progress aborts cleanly, cleans partials, and persists auth.
+        def fail_on_progress(kind, **kw):
+            if kind == "progress":
+                raise BrokenPipeError("closed control")
+        with self.provider(chunks=chunks, body_headers={"Content-Length": str(total)}):
+            self.safe(composition.run(self.fd, ASIN, emit=fail_on_progress), media_code="internal")
+        self.assertFalse(self.target.exists())
+        self.assertEqual(json.loads(session.auth_store.load(self.fd))["access_token"], REFRESHED["access_token"])
+        # Cancellation during remux emits preparing but never publishing and cleans partials.
+        read, write = os.pipe()
+        self.addCleanup(os.close, read)
+        self.addCleanup(os.close, write)
+        cancel_events = []
+        def cancel_remux(source, output, media, info=None, plan=None, cancel_fd=None):
+            os.write(write, b"x")
+            raise remux.RemuxError("canceled")
+        with self.provider(), patch.object(remux, "copy", side_effect=cancel_remux):
+            self.safe(composition.run(self.fd, ASIN, read, emit=lambda kind, **kw: cancel_events.append((kind, kw))),
+                      media_code="canceled")
+        os.read(read, 1)
+        self.assertEqual(cancel_events, [
+            ("stage", {"stage": "licensing"}),
+            ("stage", {"stage": "downloading"}),
+            ("progress", {"bytes": len(PAYLOAD)}),
+            ("stage", {"stage": "preparing"}),
+        ])
+        self.assertFalse(self.target.exists())

@@ -169,3 +169,52 @@ func TestMediaAndChapterValidationBounds(t *testing.T) {
 		t.Fatal("depth overflow")
 	}
 }
+
+func TestOperationEventProgressOptionality(t *testing.T) {
+	for _, total := range []*int64{nil, pointer(int64(0)), pointer(int64(2048))} {
+		event := model.OperationEvent{
+			OperationID: "op-progress",
+			Sequence:    3,
+			Type:        model.Progress,
+			Bytes:       pointer(int64(0)),
+			Total:       total,
+		}
+		data, err := json.Marshal(event)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var fields map[string]json.RawMessage
+		if err := json.Unmarshal(data, &fields); err != nil {
+			t.Fatal(err)
+		}
+		if string(fields["bytes"]) != "0" {
+			t.Fatal("known zero bytes lost", string(data))
+		}
+		_, hasTotal := fields["total"]
+		if hasTotal != (total != nil) {
+			t.Fatal("total optionality lost", string(data))
+		}
+		if total != nil && *total == 0 && string(fields["total"]) != "0" {
+			t.Fatal("known zero total lost", string(data))
+		}
+		var restored model.OperationEvent
+		if err := json.Unmarshal(data, &restored); err != nil || !reflect.DeepEqual(event, restored) {
+			t.Fatal("progress event roundtrip failed", err, string(data))
+		}
+	}
+	started := model.OperationEvent{OperationID: "op-progress", Sequence: 1, Type: model.Started}
+	data, err := json.Marshal(started)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(data, &fields); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := fields["bytes"]; ok {
+		t.Fatal("unexpected bytes on started event", string(data))
+	}
+	if _, ok := fields["total"]; ok {
+		t.Fatal("unexpected total on started event", string(data))
+	}
+}
