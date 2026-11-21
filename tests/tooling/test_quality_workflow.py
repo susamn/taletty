@@ -54,6 +54,18 @@ source "$SCRIPT"
                 self.assertIn("https://archive.ubuntu.com/ubuntu noble-updates ", lines[1])
                 self.assertIn("https://security.ubuntu.com/ubuntu noble-security ", lines[2])
 
+    def test_real_terminal_journeys_are_mandatory_in_app_matrix(self):
+        workflow = (ROOT / ".github/workflows/quality.yml").read_text()
+        step = workflow.split("      - name: Repeat real controlling-PTY shell journeys\n", 1)[1].split("      - name:", 1)[0]
+        self.assertIn("if: matrix.module == 'app'", step)
+        self.assertIn("go test -count=3 -race -timeout=60s -run '^TestControllingTerminalJourney$' -v ./internal/ui", step)
+        self.assertNotIn("continue-on-error", workflow)
+        self.assertNotIn("TALETTY_TERMINAL_FIXTURE", workflow)
+        source = (ROOT / "app/internal/ui/terminal_linux_test.go").read_text()
+        journey = source.split("func TestControllingTerminalJourney", 1)[1].split("type failingTerminalWriter", 1)[0]
+        self.assertNotIn("t.Skip", journey)
+        self.assertNotIn("os.Getenv", journey)
+
     def test_adapter_cannot_be_omitted_from_aggregate(self):
         workflow = (ROOT / ".github/workflows/quality.yml").read_text()
         self.assertIn("  python-adapter:\n", workflow)

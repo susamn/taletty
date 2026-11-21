@@ -127,8 +127,18 @@ errors and resize/failed-shutdown recovery. These do **not** complete J13/J07:
 textarea ownership, frozen note/confirmation submissions, failed-submit/retry,
 stale replies, nested Back/focus and bounded resize/unsaved-quit recovery. These
 are coordinator-opened presentation components, not bookmark persistence or actual
-cross-book playback. #49 continues via #54 (actual PTY/restoration and acceptance
-audit); real playback, persistence and feature entry-point integration remain work.
+cross-book playback. #54 adds [actual controlling-PTY journeys](../app/internal/ui/terminal_linux_test.go)
+and a [production terminal lifecycle boundary](../app/internal/terminal/run_linux.go):
+real key/Alt+Enter/bracketed-paste decoding, focus/audio separation, frozen editor
+failure/retry, nested Back, wide/compact/tiny SIGWINCH, draft-safe quit/recovery,
+context cancel/external SIGINT, writer failure and exact termios/foreground/file-status
+restoration. Socket acknowledgments observe actual Update transitions, not screen
+output timing; bounded contexts and unconditional kill/wait cleanup own children.
+The app matrix runs the suite plus a mandatory named three-repeat PTY step on both
+Go versions; Quality gate requires it. [The shell acceptance audit](shell-acceptance.md)
+records every #12/#49 requirement and deferred domain journey. Real playback,
+persistence and feature entry-point integration remain work; parents stay open for
+maintainer acceptance. The source-built test host is not a full audiobook app.
 
 For J13 include long CJK/combining text, embedded terminal escapes, missing titles,
 no chapters, unknown duration, unknown byte total, many list rows and help/errors

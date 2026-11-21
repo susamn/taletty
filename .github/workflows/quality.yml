@@ -135,6 +135,9 @@ jobs:
           mkdir -p ../coverage
           go test -count=1 -race -timeout=60s -covermode=atomic -coverpkg=./... -coverprofile=../coverage/${{ matrix.module }}.out ./...
           go tool cover -func=../coverage/${{ matrix.module }}.out
+      - name: Repeat real controlling-PTY shell journeys
+        if: matrix.module == 'app'
+        run: go test -count=3 -race -timeout=60s -run '^TestControllingTerminalJourney$' -v ./internal/ui
       - name: Enforce independent statement threshold
         run: python3 ../tools/coverage_gate.py --require ${{ matrix.module }} --go ${{ matrix.module }}=../coverage/${{ matrix.module }}.out
       - name: Upload module coverage evidence

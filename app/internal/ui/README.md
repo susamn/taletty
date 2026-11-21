@@ -57,7 +57,9 @@ requests, plus `?` for scrollable Help. Library destinations, filtering/sorting/
 and domain actions ship with their owning features; hints do not advertise them as
 working. There is no executable demo, mpv, filesystem/config initialization or artwork.
 The coordinator-opened modal components below supply draft ownership/recovery;
-actual feature entry points and PTY integration remain separate work.
+actual feature entry points remain separate work. #54 adds a real production
+[terminal lifecycle boundary](../terminal/run_linux.go) and controlling-PTY tests,
+not an application/domain coordinator.
 
 ## Help ownership (#52)
 
@@ -153,8 +155,14 @@ long Unicode scrolling, cell bounds and two-step tiny-terminal quit recovery.
 Pure geometry tests include the boundary grid and extreme integer dimensions;
 actual rendered views are checked at supported/minimum/tiny sizes in terminal cells.
 This is partial J13 (and the browse-target portion of J07), not complete app journeys.
-There is no persistence, live media, actual terminal key decoding/restoration or PTY
-coverage claimed until those implementations land.
+[terminal_linux_test.go](terminal_linux_test.go) now runs the actual model inside
+Bubble Tea on controlling PTYs, including real key/paste decoding, resize, nested
+Back, draft/save failure/retry, quit recovery, cancellation/SIGINT, writer failure,
+exact termios/foreground/file-status restoration and bounded child cleanup. The
+same journeys repeat three times in each app CI Go version and cannot be skipped
+by an integration environment flag. See the [complete shell acceptance audit](../../../docs/shell-acceptance.md)
+for evidence and explicit deferred requirements. There is still no persistence,
+live media, complete domain J13 or usable audiobook application claim.
 
 The reviewed [80×20 plain fixture](testdata/shell-minimum-plain.golden) supplements,
 not replaces, cell/semantic assertions. From app/ deliberately regenerate with:
