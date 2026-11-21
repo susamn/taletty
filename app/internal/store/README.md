@@ -162,3 +162,29 @@ Without that environment, tests create/remove their own private temporary cache.
 A warmed compiler cache does not cache query results, bypass VFS work or disable
 race instrumentation of Go file/locking/lifecycle code. Cold race startup on
 this constrained host has **not** passed the 60s budget; do not imply otherwise.
+
+## Typed local-state repositories (#108)
+
+All repository methods run synchronously over `Store.withConn` inside `withTx`,
+rolling back explicitly (`c.SetInterrupt(context.Background()); c.Exec("ROLLBACK")`)
+on any error, panic or cancellation without exposing `*sqlite3.Conn` or raw SQLite
+error text outside `package store`. All inputs are validated before starting a
+transaction (`ErrInvalidInput` and explicit conflict sentinels):
+
+- **Identity & scoped catalog (`catalog_linux.go`)**: `BookKey` syntax checks
+  match `001_initial.sql` and `model.BookID`. `ReplaceCatalog` atomically
+  replaces `catalog_book` for a single `(provider, namespace)` and updates
+  `library_snapshot.refreshed_at_ms` while preserving `book_identity` rows and
+  all independent local state; `Catalog` and `SnapshotRefreshedAt` query cached
+  rows with unknown (`nil`) vs known empty/zero fields preserved.
+- **Playback & UI state (`state_linux.go`)**: `PutListeningState`/`ListeningState`,
+  `PutSettings`/`Settings` (defaults `unicode`, `100`), `PutViewState`/`ViewState`
+  (defaults `all`, `books`, `title`, optional `Selected`), `SetFavorite`/`Favorites`,
+  and `PutBookmark`/`DeleteBookmark`/`Bookmarks` (multiline safe notes, cross-book
+  ID guard).
+- **Local media & download jobs (`jobs_media_linux.go`)**: `LocalMedia` path-shape
+  confinement (`downloads/...` `.m4b` only, `ErrMediaPathConflict` on duplicate
+  path across books), `DownloadJob` uniqueness/state checks (`ErrActiveJobExists`,
+  `ErrDownloadInProgress`, `ErrQueueOrderConflict`), `NormalizeFailureCode`,
+  two-phase `ReorderDownloadQueue` using unused nonnegative intermediate order
+  values, and `ReconcileActiveJobs` for startup recovery of interrupted jobs.
