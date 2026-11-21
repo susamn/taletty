@@ -569,3 +569,328 @@ func TestListeningStateSettingsViewStateFavoritesAndBookmarks(t *testing.T) {
 		t.Fatalf("bookmarks lost across reopen: %+v", bmsAfter)
 	}
 }
+
+func TestLocalMediaInventoryAndValidation(t *testing.T) {
+	path, _, owner := ownerFixture(t)
+	s := storeFixture(t, owner)
+	ctx := context.Background()
+
+	k1 := BookKey{Provider: "audible", Namespace: "us", ID: "B000000001"}
+	k2 := BookKey{Provider: "local", Namespace: "user", ID: "book-2"}
+
+	if _, found, err := s.LocalMedia(ctx, k1); err != nil || found {
+		t.Fatalf("expected absent media, got (%v, %v)", found, err)
+	}
+
+	m1 := LocalMedia{Key: k1, RelativePath: "downloads/B000000001.m4b", Format: "m4b", PublishedAtMS: 100}
+	m2 := LocalMedia{Key: k2, RelativePath: "downloads/sub/book-2.m4b", Format: "m4b", PublishedAtMS: 200}
+	must(t, s.PutLocalMedia(ctx, m1))
+	must(t, s.PutLocalMedia(ctx, m2))
+
+	// Unique relative_path conflict across different books returns ErrMediaPathConflict.
+	if err := s.PutLocalMedia(ctx, LocalMedia{
+		Key: k2, RelativePath: "downloads/B000000001.m4b", Format: "m4b", PublishedAtMS: 300,
+	}); err != ErrMediaPathConflict {
+		t.Fatalf("expected ErrMediaPathConflict, got %v", err)
+	}
+
+	// Same book updating its own path succeeds.
+	m1.RelativePath = "downloads/B000000001-v2.m4b"
+	m1.PublishedAtMS = 400
+	must(t, s.PutLocalMedia(ctx, m1))
+
+	got, found, err := s.LocalMedia(ctx, k1)
+	must(t, err)
+	if !found || got != m1 {
+		t.Fatalf("unexpected local media: (%+v, %v)", got, found)
+	}
+	list, err := s.LocalMediaList(ctx)
+	must(t, err)
+	if !reflect.DeepEqual(list, []LocalMedia{m1, m2}) {
+		t.Fatalf("unexpected media list: %+v", list)
+	}
+
+	// Delete removes only local_media, preserving identity & unrelated local state.
+	must(t, s.SetFavorite(ctx, k1, true, 50))
+	must(t, s.DeleteLocalMedia(ctx, k1))
+	if _, found, err := s.LocalMedia(ctx, k1); err != nil || found {
+		t.Fatalf("expected deleted media, got (%v, %v)", found, err)
+	}
+	favs, err := s.Favorites(ctx)
+	must(t, err)
+	if !reflect.DeepEqual(favs, []BookKey{k1}) {
+		t.Fatalf("favorite lost after DeleteLocalMedia: %+v", favs)
+	}
+
+	// Invalid inputs before transaction.
+	for _, bad := range []LocalMedia{
+		{Key: BookKey{}, RelativePath: "downloads/a.m4b", Format: "m4b"},
+		{Key: k1, RelativePath: "downloads/a.m4b", Format: "mp3"},
+		{Key: k1, RelativePath: "downloads/a.m4b", Format: "m4b", PublishedAtMS: -1},
+		{Key: k1, RelativePath: "other/a.m4b", Format: "m4b"},
+		{Key: k1, RelativePath: "downloads/../a.m4b", Format: "m4b"},
+		{Key: k1, RelativePath: "downloads/a..b.m4b", Format: "m4b"},
+		{Key: k1, RelativePath: "downloads/./a.m4b", Format: "m4b"},
+		{Key: k1, RelativePath: "downloads//a.m4b", Format: "m4b"},
+		{Key: k1, RelativePath: "downloads\\a.m4b", Format: "m4b"},
+		{Key: k1, RelativePath: "downloads/a.mp3", Format: "m4b"},
+		{Key: k1, RelativePath: "downloads/.m4b", Format: "m4b"},
+		{Key: k1, RelativePath: "downloads/.hidden.m4b", Format: "m4b"},
+		{Key: k1, RelativePath: "downloads/a\x00.m4b", Format: "m4b"},
+	} {
+		if err := s.PutLocalMedia(ctx, bad); !errors.Is(err, ErrInvalidInput) {
+			t.Fatalf("expected ErrInvalidInput for %+v, got %v", bad, err)
+		}
+	}
+	if _, _, err := s.LocalMedia(ctx, BookKey{}); !errors.Is(err, ErrInvalidInput) {
+		t.Fatal(err)
+	}
+	if err := s.DeleteLocalMedia(ctx, BookKey{}); !errors.Is(err, ErrInvalidInput) {
+		t.Fatal(err)
+	}
+
+	canceled, cancel := context.WithCancel(ctx)
+	cancel()
+	if _, _, err := s.LocalMedia(canceled, k2); err != context.Canceled {
+		t.Fatal(err)
+	}
+	if _, err := s.LocalMediaList(canceled); err != context.Canceled {
+		t.Fatal(err)
+	}
+
+	// Reopen durability.
+	must(t, s.Close(ctx))
+	must(t, owner.Close(ctx))
+	_, reopened := reopenStoreFixture(t, path)
+	listAfter, err := reopened.LocalMediaList(ctx)
+	must(t, err)
+	if !reflect.DeepEqual(listAfter, []LocalMedia{m2}) {
+		t.Fatalf("media inventory lost across reopen: %+v", listAfter)
+	}
+}
+
+func TestDownloadJobsUniquenessOrderingReconciliationAndReopen(t *testing.T) {
+	path, _, owner := ownerFixture(t)
+	s := storeFixture(t, owner)
+	ctx := context.Background()
+
+	k1 := BookKey{Provider: "audible", Namespace: "us", ID: "B000000001"}
+	k2 := BookKey{Provider: "audible", Namespace: "us", ID: "B000000002"}
+	k3 := BookKey{Provider: "local", Namespace: "user", ID: "book-3"}
+
+	if code := NormalizeFailureCode("network"); code != FailureNetwork {
+		t.Fatalf("unexpected normalized code: %s", code)
+	}
+	if code := NormalizeFailureCode("raw_engine_prose"); code != FailureInternal {
+		t.Fatalf("expected FailureInternal, got %s", code)
+	}
+
+	// Terminal history coexists for the same book; only live jobs are unique per book.
+	must(t, s.PutDownloadJob(ctx, DownloadJob{
+		ID:            "job-done",
+		Key:           k1,
+		State:         JobReady,
+		BytesReceived: 100,
+		BytesTotal:    int64Ptr(100),
+		CreatedAtMS:   1,
+		UpdatedAtMS:   2,
+	}))
+	must(t, s.PutDownloadJob(ctx, DownloadJob{
+		ID:            "job-canceled",
+		Key:           k1,
+		State:         JobCanceled,
+		BytesReceived: 10,
+		CreatedAtMS:   3,
+		UpdatedAtMS:   4,
+	}))
+
+	// One active job globally + waiting queue jobs.
+	must(t, s.PutDownloadJob(ctx, DownloadJob{
+		ID:            "job-active-1",
+		Key:           k1,
+		State:         JobDownloading,
+		BytesReceived: 50,
+		BytesTotal:    int64Ptr(200),
+		CreatedAtMS:   5,
+		UpdatedAtMS:   6,
+	}))
+	must(t, s.PutDownloadJob(ctx, DownloadJob{
+		ID:            "job-wait-2",
+		Key:           k2,
+		QueueOrder:    int64Ptr(0),
+		State:         JobWaiting,
+		BytesReceived: 0,
+		CreatedAtMS:   7,
+		UpdatedAtMS:   8,
+	}))
+	must(t, s.PutDownloadJob(ctx, DownloadJob{
+		ID:            "job-wait-3",
+		Key:           k3,
+		QueueOrder:    int64Ptr(1),
+		State:         JobWaiting,
+		BytesReceived: 0,
+		CreatedAtMS:   9,
+		UpdatedAtMS:   10,
+	}))
+
+	// Duplicate live job for k1 -> ErrActiveJobExists.
+	if err := s.PutDownloadJob(ctx, DownloadJob{
+		ID:          "job-live-dup",
+		Key:         k1,
+		QueueOrder:  int64Ptr(2),
+		State:       JobWaiting,
+		CreatedAtMS: 11,
+		UpdatedAtMS: 11,
+	}); err != ErrActiveJobExists {
+		t.Fatalf("expected ErrActiveJobExists, got %v", err)
+	}
+
+	// Second globally active job for k2 -> ErrDownloadInProgress (note: k2 already has waiting job-wait-2, so test with fresh k4).
+	k4 := BookKey{Provider: "local", Namespace: "user", ID: "book-4"}
+	if err := s.PutDownloadJob(ctx, DownloadJob{
+		ID:          "job-active-dup",
+		Key:         k4,
+		State:       JobPreparing,
+		CreatedAtMS: 12,
+		UpdatedAtMS: 12,
+	}); err != ErrDownloadInProgress {
+		t.Fatalf("expected ErrDownloadInProgress, got %v", err)
+	}
+
+	// Duplicate queue_order -> ErrQueueOrderConflict.
+	if err := s.PutDownloadJob(ctx, DownloadJob{
+		ID:          "job-order-dup",
+		Key:         k4,
+		QueueOrder:  int64Ptr(1),
+		State:       JobWaiting,
+		CreatedAtMS: 13,
+		UpdatedAtMS: 13,
+	}); err != ErrQueueOrderConflict {
+		t.Fatalf("expected ErrQueueOrderConflict, got %v", err)
+	}
+
+	// Reassigning existing job ID to another book -> ErrInvalidInput.
+	if err := s.PutDownloadJob(ctx, DownloadJob{
+		ID:          "job-wait-2",
+		Key:         k4,
+		QueueOrder:  int64Ptr(0),
+		State:       JobWaiting,
+		CreatedAtMS: 7,
+		UpdatedAtMS: 14,
+	}); !errors.Is(err, ErrInvalidInput) {
+		t.Fatalf("expected ErrInvalidInput for changing job's book, got %v", err)
+	}
+
+	// Reorder waiting queue atomically (swap 0 and 1).
+	must(t, s.ReorderDownloadQueue(ctx, []string{"job-wait-3", "job-wait-2"}, 20))
+
+	// Verify ordering: active first, then waiting by queue_order (job-wait-3 then job-wait-2), then terminal.
+	jobs, err := s.DownloadJobs(ctx)
+	must(t, err)
+	wantOrder := []string{"job-active-1", "job-wait-3", "job-wait-2", "job-done", "job-canceled"}
+	var gotOrder []string
+	for _, j := range jobs {
+		gotOrder = append(gotOrder, j.ID)
+	}
+	if !reflect.DeepEqual(gotOrder, wantOrder) {
+		t.Fatalf("unexpected job order: got %v, want %v", gotOrder, wantOrder)
+	}
+
+	// ReorderDownloadQueue validation failures leave queue untouched.
+	for _, err := range []error{
+		s.ReorderDownloadQueue(ctx, []string{"job-wait-3", "job-wait-2"}, -1),
+		s.ReorderDownloadQueue(ctx, []string{""}, 30),
+		s.ReorderDownloadQueue(ctx, []string{"job-wait-3", "job-wait-3"}, 30),
+		s.ReorderDownloadQueue(ctx, []string{"job-wait-3"}, 30),
+		s.ReorderDownloadQueue(ctx, []string{"job-wait-3", "missing"}, 30),
+		s.ReorderDownloadQueue(ctx, []string{"job-wait-3", "job-wait-2"}, 1), // < created_at_ms
+	} {
+		if !errors.Is(err, ErrInvalidInput) {
+			t.Fatalf("expected ErrInvalidInput from ReorderDownloadQueue, got %v", err)
+		}
+	}
+
+	// Reconcile interrupted active job (not published -> failed/interrupted).
+	reconciled, err := s.ReconcileActiveJobs(ctx, 25, nil)
+	must(t, err)
+	if len(reconciled) != 1 || reconciled[0].ID != "job-active-1" ||
+		reconciled[0].State != JobFailed || reconciled[0].FailureCode != FailureInterrupted {
+		t.Fatalf("unexpected reconciled job: %+v", reconciled)
+	}
+
+	// Reconcile when another active job WAS published -> ready.
+	must(t, s.PutDownloadJob(ctx, DownloadJob{
+		ID:            "job-pub-4",
+		Key:           k4,
+		State:         JobPublishing,
+		BytesReceived: 200,
+		BytesTotal:    int64Ptr(200),
+		CreatedAtMS:   30,
+		UpdatedAtMS:   31,
+	}))
+	if _, err := s.ReconcileActiveJobs(ctx, -1, nil); !errors.Is(err, ErrInvalidInput) {
+		t.Fatal(err)
+	}
+	if _, err := s.ReconcileActiveJobs(ctx, 10, nil); !errors.Is(err, ErrInvalidInput) { // < CreatedAtMS 30
+		t.Fatal(err)
+	}
+	reconciled, err = s.ReconcileActiveJobs(ctx, 40, map[BookKey]bool{k4: true})
+	must(t, err)
+	if len(reconciled) != 1 || reconciled[0].ID != "job-pub-4" || reconciled[0].State != JobReady || reconciled[0].FailureCode != "" {
+		t.Fatalf("expected published active job reconciled to ready: %+v", reconciled)
+	}
+
+	// After transition to failed/ready, k1 can be retried and empty queue reorder succeeds.
+	must(t, s.PutDownloadJob(ctx, DownloadJob{
+		ID:          "job-retry-k1",
+		Key:         k1,
+		QueueOrder:  int64Ptr(2),
+		State:       JobWaiting,
+		CreatedAtMS: 50,
+		UpdatedAtMS: 50,
+	}))
+
+	// Invalid DownloadJob inputs before transaction.
+	for _, bad := range []DownloadJob{
+		{ID: "", Key: k4, State: JobReady},
+		{ID: "bad", Key: BookKey{}, State: JobReady},
+		{ID: "bad", Key: k4, State: "unknown"},
+		{ID: "bad", Key: k4, State: JobWaiting},                                           // missing queue_order
+		{ID: "bad", Key: k4, State: JobReady, QueueOrder: int64Ptr(0)},                    // queue_order on non-waiting
+		{ID: "bad", Key: k4, State: JobWaiting, QueueOrder: int64Ptr(-1)},                 // negative queue_order
+		{ID: "bad", Key: k4, State: JobFailed},                                            // missing failure_code
+		{ID: "bad", Key: k4, State: JobReady, FailureCode: FailureInternal},               // failure_code on non-failed
+		{ID: "bad", Key: k4, State: JobFailed, FailureCode: "raw_prose"},                  // non-allowlisted failure_code
+		{ID: "bad", Key: k4, State: JobReady, BytesReceived: -1},                          // negative bytes
+		{ID: "bad", Key: k4, State: JobReady, BytesReceived: 10, BytesTotal: int64Ptr(5)}, // total < received
+		{ID: "bad", Key: k4, State: JobReady, CreatedAtMS: -1, UpdatedAtMS: 0},            // negative created
+		{ID: "bad", Key: k4, State: JobReady, CreatedAtMS: 10, UpdatedAtMS: 9},            // updated < created
+	} {
+		if err := s.PutDownloadJob(ctx, bad); !errors.Is(err, ErrInvalidInput) {
+			t.Fatalf("expected ErrInvalidInput for %+v, got %v", bad, err)
+		}
+	}
+
+	canceled, cancel := context.WithCancel(ctx)
+	cancel()
+	if _, err := s.DownloadJobs(canceled); err != context.Canceled {
+		t.Fatal(err)
+	}
+	if _, err := s.ReconcileActiveJobs(canceled, 60, nil); err != context.Canceled {
+		t.Fatal(err)
+	}
+
+	// Reopen durability & zero-waiting-queue reorder test on fresh store.
+	must(t, s.Close(ctx))
+	must(t, owner.Close(ctx))
+	_, reopened := reopenStoreFixture(t, path)
+	jobsAfter, err := reopened.DownloadJobs(ctx)
+	must(t, err)
+	if len(jobsAfter) != 7 {
+		t.Fatalf("expected 7 jobs after reopen, got %d", len(jobsAfter))
+	}
+
+	_, _, emptyOwner := ownerFixture(t)
+	emptyStore := storeFixture(t, emptyOwner)
+	must(t, emptyStore.ReorderDownloadQueue(ctx, nil, 0))
+}

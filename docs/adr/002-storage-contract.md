@@ -264,3 +264,29 @@ are cancelable after that boundary. See the store README for tested limits,
 permissions, supported build/filesystem and constrained-host cache instructions.
 No startup/bootstrap/UI persistence, repositories (#108), release linkage, general
 crash/disk-full proof, full J14 or parent closure is claimed by this slice.
+
+## Typed local-state repositories (#108 under #9)
+
+`app/internal/store` implements the typed repository boundary over `Store.withConn`
+and the accepted `001_initial.sql` schema (`catalog_linux.go`, `state_linux.go`,
+`jobs_media_linux.go`) without leaking `*sqlite3.Conn` or raw SQLite diagnostics.
+Inputs are validated before starting transactions (`ErrInvalidInput` and fixed
+conflict sentinels `ErrActiveJobExists`, `ErrDownloadInProgress`,
+`ErrQueueOrderConflict`, `ErrMediaPathConflict`), and `withTx` rolls back on any
+error, cancellation or panic.
+
+- `ReplaceCatalog` atomically replaces `catalog_book` for a single validated
+  `(provider, namespace)` and updates `library_snapshot.refreshed_at_ms`,
+  preserving `book_identity` keys and all local state (`listening_state`,
+  `favorite`, `bookmark`, `local_media`, `download_job`, `view_state`).
+- `ListeningState`, `Settings`, `ViewState`, `SetFavorite`/`Favorites`, and
+  `Bookmark` CRUD preserve nullable unknown vs known empty/zero semantics,
+  singleton defaults (`unicode`/`100`, `all`/`books`/`title`), and multiline note
+  safety.
+- `LocalMedia` enforces `downloads/...` `.m4b` relative path syntax and path
+  uniqueness; `DownloadJob` enforces live-per-book, single-active-slot and
+  queue-order uniqueness, `NormalizeFailureCode` fallback to `internal`,
+  two-phase `ReorderDownloadQueue` with nonnegative intermediate orders, and
+  startup `ReconcileActiveJobs` (marking active jobs `ready` only when confirmed
+  published, otherwise `failed`/`interrupted`). No app startup wiring, engine
+  integration or UI persistence wiring is claimed by `#108`.
