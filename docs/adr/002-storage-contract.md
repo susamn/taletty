@@ -209,12 +209,58 @@ before unregistering the VFS/releasing the directory. No unknown-file sweep,
 chmod repair, recursive .auth.lock, engine import or authenticated-gate ownership.
 Cooperative ownership excludes name mutation, not a hostile same-UID attacker.
 
-**Not a validated app opener:** SQLite can recover a hot journal on access. #115
-must authorize existing headers/markers/sidecars before this transport can modify
-anything, embed/dispatch exact v1 SQL, validate exact schema/integrity/FK rows,
-refuse/preserve foreign/unversioned/nonempty/corrupt/too-new/forged state, and define
-a public engine-compatible owner/lease/Close contract independent of auth work.
-One-time Wasm initialization also needs an explicit startup policy. The new
-transport is deliberately unexported and unused by app startup. Tests embed the
-merged schema without redefining it; they are transport evidence, not acceptance
-of that deferred dispatcher, public engine integration, #107/#9 or a full J14.
+**Transport alone is not a validated app opener:** SQLite can recover a hot
+journal on access. It remains unexported and unused by app startup. #115 adds the
+following dispatcher; transport evidence is not public engine integration,
+#107/#9 acceptance or a full J14.
+
+## Validated Linux v1 opener and external owner (#115)
+
+`store.Open(ctx, RootOwner)` validates before opening writable SQLite. Missing or
+zero-length DBs, or valid unversioned SQLite files with no schema objects, may
+initialize using the exact embedded artifact. Every initialization script error
+explicitly rolls back, including canceled work. Existing v1 requires exact full
+sqlite_schema agreement with an in-memory execution of that same artifact,
+markers, SQLite >=3.38, full integrity_check and zero foreign_key_check rows.
+Rewritten-but-equivalent schema SQL is deliberately refused; no permissive forged
+schema matching. Every connection enables/verifies foreign_keys. Check is a
+non-writing health operation; typed SQL remains private to the store package.
+
+Before ANY SQLite access, inspect private leaves and raw header/markers through
+the anchored directory with O_NOATIME. Refuse malformed file/page counts, foreign,
+nonempty unversioned, corrupt and too-new state. Refuse/preserve **every existing
+rollback journal, WAL and SHM**, including zero/cold journals: markers cannot prove
+a journal's provenance. No automatic recovery, deletion/reset, backup, upgrade,
+unknown-file cleanup or import. A real abrupt-exit hot-journal test proves public
+refusal/preservation; recovery requires future explicit tooling. Crash availability
+is intentionally limited rather than recovering unknown files speculatively.
+
+The inspection VFS forbids all write/truncate/create/delete/sidecar opens, reads
+through O_NOATIME and retains upstream OFD locking. It uses SQLite `mode=rw` with
+no CREATE, not `mode=ro`: real SQLite 3.51.3 regression tests demonstrate that
+readonly integrity_check skips CHECK constraints. The VFS is the write barrier;
+full schema matching precedes integrity expression evaluation. Refusal tests
+compare all bytes and stat metadata, including atime/ctime. Failed no-atime access
+fails closed. This remains cooperative ownership, not malicious same-UID defense.
+
+`NewOwner` takes an already externally owned root and a nonblocking cleanup
+callback, duplicates the anchored descriptor, and provides public RootOwner/lease
+capabilities independently of the caller's authenticated-operation gate. Transfer
+occurs on success only. ALL external/auth users must retain leases and honor their
+cancellation. Close stops admission, cancels/joins leases before closing its own
+descriptor and invoking external cleanup exactly once. Canceled waits preserve
+ownership until retry; cleanup must not block/reenter. Store independently
+serializes/cancels/joins local connection work and Close does not wait on an auth
+transfer. No raw DB handle escapes, no recursive .auth.lock, no engine imports.
+The current engine public Client has no public root-lifetime lease: this contract
+is an external handoff foundation, not engine wiring. Future public integration
+must arrange all engine users under lifetime leases or equivalent capability,
+never retain the private gated WithRoot callback or monopolize auth for DB lifetime.
+
+`store.Initialize()` explicitly exposes upstream one-time synchronous Wasm startup
+before interactive admission; compilation itself is not context-interruptible.
+Open initializes implicitly if necessary. Query/busy waits and local/owner shutdown
+are cancelable after that boundary. See the store README for tested limits,
+permissions, supported build/filesystem and constrained-host cache instructions.
+No startup/bootstrap/UI persistence, repositories (#108), release linkage, general
+crash/disk-full proof, full J14 or parent closure is claimed by this slice.

@@ -309,6 +309,29 @@ failures are injected at the stat boundary (no privileged chown). Existing profi
 path tests retain no-XDG/no-old-app evidence. This is partial J14 service evidence,
 not SQLite connection/migration, bootstrap, persistence or a complete UI journey.
 
+## Linux SQLite transport and validated v1 opener (#114, #115)
+
+[`sqlite_linux_test.go`](../app/internal/store/sqlite_linux_test.go),
+[`validated_linux_test.go`](../app/internal/store/validated_linux_test.go) and
+[`validation_faults_linux_test.go`](../app/internal/store/validation_faults_linux_test.go)
+exercise the pinned `ncruces/go-sqlite3` transport, `store.Open`/`Check`/`Close`
+and `NewOwner`/`RootLease` against real temporary SQLite databases and the exact
+embedded v1 SQL artifact. Real regression tests discovered that SQLite 3.51.3's
+`PRAGMA integrity_check` skips `CHECK` constraints under `mode=ro`; inspection
+therefore opens with `mode=rw` (no create) behind an inspection VFS write/truncate/
+sidecar/delete ban and `O_NOATIME` reads while retaining upstream OFD locks.
+Refusal tests verify byte-for-byte and `O_NOATIME` stat metadata (including
+atime/ctime) preservation across foreign, nonempty unversioned, corrupt, too-new,
+forged-schema, FK-violating and CHECK-violating databases, plus all `-journal`/
+`-wal`/`-shm` sidecars. An abruptly exited child produces a real hot journal that
+`Open`/`Check` refuse and preserve without auto-recovery. `Owner`/`RootLease`
+tests prove session-lifetime cancellation/join and retryable `Close` remain
+independent of `.auth.lock` and any external auth gate. See
+[the store README](../app/internal/store/README.md) and
+[ADR 002](adr/002-storage-contract.md) for constrained-host cache notes and
+explicit limits: no #108 typed repositories, #10 root bootstrap, engine
+integration, general crash/disk-full proof or full J14 acceptance is claimed.
+
 ## Release evidence
 
 A release candidate needs an evidence matrix linking each supported journey to
