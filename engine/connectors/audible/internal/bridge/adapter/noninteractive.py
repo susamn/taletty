@@ -1,7 +1,8 @@
-"""Dedicated root-only library child. Host supplies trusted loader/stdio helpers.
+"""Dedicated root-only operation child; trusted host selects the entrypoint.
 
-Not a stand-alone CLI/Go entrypoint yet. No TTY, root discovery, locks or retries;
-caller retains the verified root/gate and owns cancel/drain/exit before any success.
+Library, download producer and read-only reconciliation reuse the same loader and
+stdio isolation. No TTY, discovery, locks or retries; caller owns the gate and must
+join/check exit before interpreting results. Public Download lifecycle is #112.
 """
 
 import json
@@ -16,10 +17,11 @@ def write_frame(control, frame):
     control.flush()
 
 
-def main(sources, load_sources, null_stdio):
+def main(sources, load_sources, null_stdio, action="library"):
     # PEP446 dup is noninheritable. SDK stdio/exec never own the protocol channel.
     with os.fdopen(os.dup(1), "w", encoding="utf-8") as control:
         operation_id, sequence, count, code, package = "invalid", 0, 0, "internal", None
+        result = {}
 
         def emit(kind, **payload):
             nonlocal sequence
@@ -30,21 +32,40 @@ def main(sources, load_sources, null_stdio):
         try:
             os.set_inheritable(3, False)
             null_stdio((1, 2))
-            package = load_sources(sources, ("doctor", "auth_store", "login", "sdk_session", "library"))
+            names = ("doctor", "auth_store", "login", "sdk_session", "library")
+            if action != "library":
+                names += ("chapters", "licensing", "media_store", "remux", "composition", "reconciliation")
+            package = load_sources(sources, names)
             # Request errors are distinct from trusted-source/normalization errors.
             try:
                 request = package.doctor.read_request()
                 operation_id = request["operation_id"]
-                package.doctor.require_action(request, "library")
+                package.doctor.require_action(request, action)
+                if action != "library":
+                    book = request.get("book_id")
+                    if (not isinstance(book, dict) or book.get("provider") != "audible"
+                            or book.get("namespace") != "us"):
+                        raise ValueError()
+                    try:
+                        package.media_store._leaf(book.get("id"))
+                    except package.media_store.MediaStoreError:
+                        raise ValueError() from None
             except (ValueError, UnicodeError):
                 code = "invalid_input"
             else:
                 null_stdio((0,))
-                with package.sdk_session.authenticated(3) as client:
-                    for books in package.library.pages(client):
-                        emit("stage", stage="library_page", books=books)
-                        count += len(books)
-                code = None  # Only after exhaustion AND SDK close/finally persistence.
+                if action == "library":
+                    with package.sdk_session.authenticated(3) as client:
+                        for books in package.library.pages(client):
+                            emit("stage", stage="library_page", books=books)
+                            count += len(books)
+                    result = {"count": count}
+                elif action == "download":
+                    from dataclasses import asdict
+                    result = {"outcome": asdict(package.composition.run(3, book["id"]))}
+                else:  # Engine-trusted reconcile entrypoint; never license or write.
+                    result = {"state": package.reconciliation.inspect(3, book["id"])}
+                code = None  # Library exhaustion/SDK finally, or independent media/auth facts.
         except (KeyboardInterrupt, EOFError):
             code = "canceled"
         except Exception as error:
@@ -56,7 +77,7 @@ def main(sources, load_sources, null_stdio):
                     code = error.code
         try:
             if code is None:
-                emit("result", count=count)
+                emit("result", **result)
             else:
                 emit("error", failure={"code": code})
         except OSError:

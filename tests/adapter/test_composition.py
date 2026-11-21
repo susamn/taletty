@@ -46,8 +46,14 @@ class CompositionTests(unittest.TestCase):
         self.real_client, self.real_plan = audible.Client, license._Plan
 
     def safe(self, outcome, **facts):
-        self.assertEqual(asdict(outcome), dict(ready=False, reused=False, published=False,
-                                              media_code=None, auth_code=None) | facts)
+        actual = asdict(outcome)
+        chapters = actual.pop("chapters")
+        self.assertEqual(actual, dict(ready=False, reused=False, published=False,
+                                     media_code=None, auth_code=None) | facts)
+        if chapters is not None:
+            self.assertEqual(chapters, remux.chapters.prepare(INFO)[0])
+            self.assertTrue(outcome.ready)
+            self.assertFalse(outcome.reused)
         for secret in (URL, KEY, IV, "fixture-user", "fixture-serial", REFRESHED["access_token"]):
             self.assertNotIn(secret, repr(outcome))
         for plan in self.plans:
@@ -128,14 +134,18 @@ class CompositionTests(unittest.TestCase):
 
     def test_sdk_refresh_transfer_publish_reuse_without_auth_or_license(self):
         with self.provider(granted(True)):
-            self.safe(composition.run(self.fd, ASIN), ready=True, published=True)
+            outcome = composition.run(self.fd, ASIN)
+            self.safe(outcome, ready=True, published=True)
+            self.assertEqual(outcome.chapters, remux.chapters.prepare(INFO)[0])
         self.assertEqual(self.target.read_bytes(), PAYLOAD)
         self.assertEqual(json.loads(session.auth_store.load(self.fd))["access_token"], REFRESHED["access_token"])
         self.assertEqual(len(self.calls), 2)
         self.assertEqual(len(self.streams), 1)
         (self.root / "auth.json").unlink()
         with self.provider(), patch.object(audible, "Client") as client:
-            self.safe(composition.run(self.fd, ASIN), ready=True, reused=True)
+            outcome = composition.run(self.fd, ASIN)
+            self.safe(outcome, ready=True, reused=True)
+            self.assertIsNone(outcome.chapters)
             client.assert_not_called()
         self.assertEqual(self.target.stat().st_mode & 0o777, 0o600)
 
