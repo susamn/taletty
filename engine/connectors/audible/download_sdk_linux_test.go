@@ -3,6 +3,7 @@ package audible
 import (
 	"bufio"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net"
@@ -71,8 +72,8 @@ main(SOURCES,fixture_load`, 1)
 			}
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer cancel()
-			var terminal model.OperationEvent
-			result, err := c.Download(ctx, "actual-public", fixtureDownloadBook, func(e model.OperationEvent) { terminal = e })
+			var events []model.OperationEvent
+			result, err := c.Download(ctx, "actual-public", fixtureDownloadBook, func(e model.OperationEvent) { events = append(events, e) })
 			expected := map[string]string{"denied": "entitlement_denied", "throttle": "throttled", "auth_failed": "storage_failed", "auth_uncertain": "storage_uncertain", "media_uncertain": "storage_uncertain", "nonzero": "protocol_error", "truncated": "protocol_error", "malformed": "protocol_error", "missing": "not_authenticated", "close": "internal"}[mode]
 			if expected == "" {
 				if err != nil {
@@ -82,8 +83,35 @@ main(SOURCES,fixture_load`, 1)
 				t.Fatal("unsafe/wrong public failure", err)
 			}
 			ready := mode != "denied" && mode != "throttle" && mode != "missing"
-			if (result.Media != nil) != ready || (result.State == model.MediaReady) != ready || terminal.Download == nil || terminal.Download.State != result.State || terminal.Sequence != 2 {
+			if len(events) < 3 {
+				t.Fatal("missing lifecycle events", events)
+			}
+			for i, e := range events {
+				if e.Sequence != uint64(i+1) || e.OperationID != "actual-public" {
+					t.Fatal("non-monotonic sequence/id", i, e)
+				}
+			}
+			encodedEvents, _ := json.Marshal(events)
+			if strings.Contains(string(encodedEvents), "fixture-private") || strings.Contains(string(encodedEvents), "Atna|") || strings.Contains(string(encodedEvents), "https:") {
+				t.Fatal("events leaked provider material", string(encodedEvents))
+			}
+			terminal := events[len(events)-1]
+			if (result.Media != nil) != ready || (result.State == model.MediaReady) != ready || terminal.Download == nil || terminal.Download.State != result.State {
 				t.Fatal("independent media facts lost", result, err)
+			}
+			if mode == "denied" || mode == "throttle" || mode == "missing" {
+				if len(events) != 3 || events[0].Type != model.Started || events[1].Type != model.Stage || events[1].Stage != "licensing" || terminal.Type != model.Failed {
+					t.Fatal("unexpected refusal/missing event sequence", events)
+				}
+			} else {
+				if len(events) != 7 || events[0].Type != model.Started ||
+					events[1].Type != model.Stage || events[1].Stage != "licensing" ||
+					events[2].Type != model.Stage || events[2].Stage != "downloading" ||
+					events[3].Type != model.Progress || events[3].Bytes == nil || *events[3].Bytes != 15 || events[3].Total == nil || *events[3].Total != 15 ||
+					events[4].Type != model.Stage || events[4].Stage != "preparing" ||
+					events[5].Type != model.Stage || events[5].Stage != "publishing" {
+					t.Fatal("unexpected download event sequence", events)
+				}
 			}
 			if ready {
 				target := filepath.Join(root, "downloads", "B000000001.m4b")
@@ -108,7 +136,7 @@ main(SOURCES,fixture_load`, 1)
 				if mode == "media_uncertain" && result.MediaDurability != model.PersistenceUncertain {
 					t.Fatal("media durability lost")
 				}
-				// A new Client/root session, no auth file: public ready reuse must not license.
+				// A new Client/root session, no auth file: public ready reuse must not license or emit stages.
 				if err := c.Close(ctx); err != nil {
 					t.Fatal(err)
 				}
@@ -121,9 +149,13 @@ main(SOURCES,fixture_load`, 1)
 				}
 				defer next.Close(context.Background())
 				publicDownloadFixture(next, "success", "", nil)
-				reused, reuseErr := next.Download(ctx, "restart", fixtureDownloadBook, nil)
+				var reuseEvents []model.OperationEvent
+				reused, reuseErr := next.Download(ctx, "restart", fixtureDownloadBook, func(e model.OperationEvent) { reuseEvents = append(reuseEvents, e) })
 				if reuseErr != nil || !reused.Reused || reused.Published == nil || *reused.Published || reused.Media == nil || reused.Media.Chapters != nil || reused.MediaDurability != model.PersistenceUnknown || reused.AuthPersistence != model.PersistenceUnknown {
 					t.Fatal("restart relicense/invented hierarchy", reuseErr)
+				}
+				if len(reuseEvents) != 2 || reuseEvents[0].Type != model.Started || reuseEvents[1].Type != model.Completed || reuseEvents[1].Sequence != 2 {
+					t.Fatal("reuse emitted unexpected stages", reuseEvents)
 				}
 				after, _ := os.ReadFile(target)
 				if string(after) != string(before) {
@@ -235,18 +267,31 @@ func TestActualPublicDownloadCancelJoinsBeforeRecoveryWithSameGate(t *testing.T)
 				if !errors.Is(unix.Kill(pid, 0), unix.ESRCH) {
 					t.Fatal("original child not reaped before return")
 				}
-				if len(events) != 2 || events[1].Download == nil || events[1].Download.State != result.State {
-					t.Fatal("terminal facts/order")
+				wantLen := 3
+				if mode == "postcommit" {
+					wantLen = 7
+				}
+				if len(events) != wantLen {
+					t.Fatal("unexpected event count", len(events), events)
+				}
+				for i, e := range events {
+					if e.Sequence != uint64(i+1) {
+						t.Fatal("non-monotonic sequence", i, events)
+					}
+				}
+				terminal := events[len(events)-1]
+				if terminal.Download == nil || terminal.Download.State != result.State {
+					t.Fatal("terminal facts/order", events)
 				}
 				if mode == "postcommit" {
 					if result.State != model.MediaReady || result.Media == nil || result.Media.Chapters != nil || result.Published != nil || result.MediaDurability != model.PersistenceUnknown || result.AuthPersistence != model.PersistenceUnknown {
 						t.Fatal("committed artifact/facts lost", result)
 					}
 					if kill {
-						if failureCode(t, downloadErr) != "protocol_error" || events[1].Type != model.Failed {
+						if failureCode(t, downloadErr) != "protocol_error" || terminal.Type != model.Failed {
 							t.Fatal(downloadErr)
 						}
-					} else if downloadErr != nil || events[1].Type != model.Completed {
+					} else if downloadErr != nil || terminal.Type != model.Completed {
 						t.Fatal("media cancellation beat commit", downloadErr)
 					}
 				} else {
@@ -257,7 +302,7 @@ func TestActualPublicDownloadCancelJoinsBeforeRecoveryWithSameGate(t *testing.T)
 						if failureCode(t, downloadErr) != "protocol_error" {
 							t.Fatal(downloadErr)
 						}
-					} else if !errors.Is(downloadErr, context.Canceled) || events[1].Type != model.Canceled {
+					} else if !errors.Is(downloadErr, context.Canceled) || terminal.Type != model.Canceled {
 						t.Fatal("cancel identity", downloadErr)
 					}
 				}
@@ -320,16 +365,48 @@ func TestActualPublicDownloadGeneratedMediaAndRestart(t *testing.T) {
 	publicDownloadFixture(c, "real", "", clear)
 	ctx, cancel := context.WithTimeout(context.Background(), 25*time.Second)
 	defer cancel()
-	result, err := c.Download(ctx, "real-public", fixtureDownloadBook, nil)
+	var events []model.OperationEvent
+	result, err := c.Download(ctx, "real-public", fixtureDownloadBook, func(e model.OperationEvent) {
+		events = append(events, e)
+	})
 	if err != nil || result.Media == nil || result.Media.Validate() != nil || result.Published == nil || !*result.Published || len(result.Media.Chapters) != 1 || result.MediaDurability != model.PersistenceConfirmed {
 		t.Fatal("real public media failed", err)
+	}
+	if len(events) < 7 || events[0].Type != model.Started ||
+		events[1].Type != model.Stage || events[1].Stage != "licensing" ||
+		events[2].Type != model.Stage || events[2].Stage != "downloading" ||
+		events[len(events)-3].Type != model.Stage || events[len(events)-3].Stage != "preparing" ||
+		events[len(events)-2].Type != model.Stage || events[len(events)-2].Stage != "publishing" ||
+		events[len(events)-1].Type != model.Completed {
+		t.Fatal("real generated-media stage sequence wrong", events)
+	}
+	var prevBytes int64 = -1
+	for _, e := range events[3 : len(events)-3] {
+		if e.Type != model.Progress || e.Bytes == nil || *e.Bytes <= prevBytes || e.Total == nil || *e.Total != int64(len(clear)) {
+			t.Fatal("real generated-media progress wrong", e)
+		}
+		prevBytes = *e.Bytes
+	}
+	if prevBytes != int64(len(clear)) {
+		t.Fatal("real generated-media final bytes mismatch", prevBytes, len(clear))
+	}
+	for i, e := range events {
+		if e.Sequence != uint64(i+1) || e.OperationID != "real-public" {
+			t.Fatal("real generated-media sequence/id wrong", i, e)
+		}
 	}
 	if err := os.Remove(filepath.Join(root, "auth.json")); err != nil {
 		t.Fatal(err)
 	}
-	reused, err := c.Download(ctx, "real-reuse", fixtureDownloadBook, nil)
+	var reuseEvents []model.OperationEvent
+	reused, err := c.Download(ctx, "real-reuse", fixtureDownloadBook, func(e model.OperationEvent) {
+		reuseEvents = append(reuseEvents, e)
+	})
 	if err != nil || !reused.Reused || reused.Media == nil || reused.Media.Chapters != nil {
 		t.Fatal("real reuse licensed/invented hierarchy", err)
+	}
+	if len(reuseEvents) != 2 || reuseEvents[0].Type != model.Started || reuseEvents[1].Type != model.Completed {
+		t.Fatal("real reuse emitted stages", reuseEvents)
 	}
 	// Force lost terminal delivery on a second root through the same public API:
 	// actual production validator must recover the generated file without auth.

@@ -148,3 +148,77 @@ func reconciliationTerminal(frame bridge.Frame) (model.MediaState, error) {
 		return model.MediaUnknown, bridge.ErrProtocol
 	}
 }
+
+type downloadTracker struct {
+	stageRank   int
+	stage       string
+	hasProgress bool
+	bytes       int64
+	hasTotal    bool
+	total       int64
+}
+
+func downloadStageRank(stage string) int {
+	switch stage {
+	case "licensing":
+		return 1
+	case "downloading":
+		return 2
+	case "preparing":
+		return 3
+	case "publishing":
+		return 4
+	default:
+		return 0
+	}
+}
+
+func (t *downloadTracker) next(frame bridge.Frame) (model.OperationEvent, error) {
+	switch frame.Type {
+	case bridge.Stage:
+		fields, err := strictFields(frame.Raw)
+		var stage string
+		if err != nil || required(fields, "stage", &stage) != nil {
+			return model.OperationEvent{}, bridge.ErrProtocol
+		}
+		rank := downloadStageRank(stage)
+		if rank == 0 || rank <= t.stageRank {
+			return model.OperationEvent{}, bridge.ErrProtocol
+		}
+		t.stageRank = rank
+		t.stage = stage
+		return model.OperationEvent{Type: model.Stage, Stage: stage}, nil
+	case bridge.Progress:
+		if t.stage != "downloading" {
+			return model.OperationEvent{}, bridge.ErrProtocol
+		}
+		fields, err := strictFields(frame.Raw)
+		var received int64
+		if err != nil || required(fields, "bytes", &received) != nil || received < 0 {
+			return model.OperationEvent{}, bridge.ErrProtocol
+		}
+		if t.hasProgress && received < t.bytes {
+			return model.OperationEvent{}, bridge.ErrProtocol
+		}
+		var totalPtr *int64
+		if _, ok := fields["total"]; ok {
+			var total int64
+			if required(fields, "total", &total) != nil || total < received {
+				return model.OperationEvent{}, bridge.ErrProtocol
+			}
+			if t.hasTotal && total != t.total {
+				return model.OperationEvent{}, bridge.ErrProtocol
+			}
+			t.hasTotal = true
+			t.total = total
+			totalCopy := total
+			totalPtr = &totalCopy
+		}
+		t.hasProgress = true
+		t.bytes = received
+		bytesCopy := received
+		return model.OperationEvent{Type: model.Progress, Bytes: &bytesCopy, Total: totalPtr}, nil
+	default:
+		return model.OperationEvent{}, bridge.ErrProtocol
+	}
+}

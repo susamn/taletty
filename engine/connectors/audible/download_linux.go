@@ -17,10 +17,11 @@ import (
 const reconciliationTimeout = 8 * time.Second
 
 // Download returns independent media/auth facts even on error; inspect BOTH.
-// It never retries, deletes final media or reports preparation/byte progress.
-// IDs share Library's live namespace. Accepted calls emit Started and exactly one
-// terminal with an owned result copy, unless the caller reporter panics. The
-// authoritative return must not be applied twice with its terminal notification.
+// It never retries or deletes final media. IDs share Library's live namespace.
+// Accepted calls emit Started, ordered Stage/Progress notifications (skipping
+// stages on verified ready reuse), and exactly one terminal with an owned
+// result copy, unless the caller reporter panics. The authoritative return must
+// not be applied twice with its terminal notification.
 //
 // Reporter ownership matches Library: synchronous caller code, prompt/no reentry,
 // nil allowed. Panic propagates after owned users join. Close waits root/process
@@ -37,25 +38,42 @@ func (c *Client) Download(ctx context.Context, id string, book model.BookID, rep
 	defer c.releaseOperation(id)
 	result := model.DownloadResult{OperationID: id, BookID: book, State: model.MediaUnknown, MediaDurability: model.PersistenceUnknown, AuthPersistence: model.PersistenceUnknown}
 	var sequence uint64
-	emit := func(kind model.EventType, failure *model.Failure, terminal bool) {
+	emit := func(event model.OperationEvent) {
 		sequence++
 		if report == nil {
 			return
 		}
-		event := model.OperationEvent{OperationID: id, Sequence: sequence, Type: kind}
-		if failure != nil {
-			value := *failure
+		event.OperationID = id
+		event.Sequence = sequence
+		if event.Bytes != nil {
+			value := *event.Bytes
+			event.Bytes = &value
+		}
+		if event.Total != nil {
+			value := *event.Total
+			event.Total = &value
+		}
+		if event.Failure != nil {
+			value := *event.Failure
 			event.Failure = &value
 		}
-		if terminal {
-			value := result.Clone()
+		if event.Download != nil {
+			value := event.Download.Clone()
 			event.Download = &value
 		}
 		report(event)
 	}
-	emit(model.Started, nil, false)
+	emit(model.OperationEvent{Type: model.Started})
 	err := c.session.WithRoot(ctx, func(work context.Context, root *os.File) error {
-		frame, runErr := c.downloadChild(work, root, id, book, "download", c.downloadSource)
+		var tracker downloadTracker
+		frame, runErr := c.downloadChild(work, root, id, book, "download", c.downloadSource, func(frame bridge.Frame) error {
+			event, err := tracker.next(frame)
+			if err != nil {
+				return err
+			}
+			emit(event)
+			return nil
+		})
 		var out downloadOutcome
 		if runErr == nil {
 			out, runErr = downloadTerminal(frame)
@@ -99,7 +117,7 @@ func (c *Client) Download(ctx context.Context, id string, book model.BookID, rep
 		// reuse the canceled operation context. Reconciliation is provider-free.
 		if runErr != nil && (result.State != model.MediaReady || errors.Is(runErr, context.Canceled) || errors.Is(runErr, context.DeadlineExceeded)) {
 			recovery, cancel := context.WithTimeout(context.Background(), reconciliationTimeout)
-			recovered, recoveryErr := c.downloadChild(recovery, root, id, book, "reconcile", c.reconcileSource)
+			recovered, recoveryErr := c.downloadChild(recovery, root, id, book, "reconcile", c.reconcileSource, nil)
 			cancel() // RunRoot has already joined; no recovery users outlive this loan.
 			if recoveryErr == nil {
 				state, decodeErr := reconciliationTerminal(recovered)
@@ -152,16 +170,17 @@ func (c *Client) Download(ctx context.Context, id string, book model.BookID, rep
 		if failure.Code == "canceled" {
 			kind = model.Canceled
 		}
-		emit(kind, failure, true)
+		emit(model.OperationEvent{Type: kind, Failure: failure, Download: &result})
 		return result, err
 	}
-	emit(model.Completed, nil, true)
+	emit(model.OperationEvent{Type: model.Completed, Download: &result})
 	return result, nil
 }
 
-// Only terminal frames are part of #111's contract. Reject unexpected stages or
-// progress rather than silently discarding them or claiming #7 is implemented.
-func (c *Client) downloadChild(ctx context.Context, root *os.File, id string, book model.BookID, action, source string) (bridge.Frame, error) {
+// downloadChild streams validated nonterminal frames when onFrame is non-nil
+// (action="download") and rejects any nonterminal frame when onFrame is nil
+// (action="reconcile"). All owned process-group users join before return/panic.
+func (c *Client) downloadChild(ctx context.Context, root *os.File, id string, book model.BookID, action, source string, onFrame func(bridge.Frame) error) (bridge.Frame, error) {
 	request, _ := json.Marshal(struct {
 		Protocol    int          `json:"protocol"`
 		OperationID string       `json:"operation_id"`
@@ -179,8 +198,16 @@ func (c *Client) downloadChild(ctx context.Context, root *os.File, id string, bo
 		close(frames)
 	}()
 	defer func() { cancel(); <-joined }()
-	for range frames {
-		return bridge.Frame{}, bridge.ErrProtocol
+	for frame := range frames {
+		if onFrame == nil {
+			return bridge.Frame{}, bridge.ErrProtocol
+		}
+		if err := ctx.Err(); err != nil {
+			return bridge.Frame{}, err
+		}
+		if err := onFrame(frame); err != nil {
+			return bridge.Frame{}, err
+		}
 	}
 	<-joined
 	return terminal, err

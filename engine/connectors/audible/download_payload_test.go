@@ -230,7 +230,7 @@ func TestDownloadChapterSchemaLimitsAndTimeConversion(t *testing.T) {
 	}
 }
 func FuzzDownloadPayload(f *testing.F) {
-	for _, raw := range []string{`{"outcome":` + outcomePayload + `}`, `null`, `{"outcome":{"chapters":[{}]}}`, `{"x":"\ud800"}`} {
+	for _, raw := range []string{`{"outcome":` + outcomePayload + `}`, `null`, `{"outcome":{"chapters":[{}]}}`, `{"x":"\ud800"}`, `{"stage":"licensing"}`, `{"bytes":0,"total":0}`} {
 		f.Add(raw)
 	}
 	f.Fuzz(func(t *testing.T, raw string) {
@@ -241,5 +241,147 @@ func FuzzDownloadPayload(f *testing.F) {
 		if err == nil && model.ValidateChapters(out.chapters) != nil {
 			t.Fatal("invalid public chapters")
 		}
+		for _, kind := range []bridge.Kind{bridge.Stage, bridge.Progress} {
+			tracker := downloadTracker{stageRank: 2, stage: "downloading"}
+			if kind == bridge.Stage {
+				tracker = downloadTracker{}
+			}
+			event, err := tracker.next(bridge.Frame{Type: kind, Raw: []byte(raw)})
+			if err == nil {
+				if kind == bridge.Stage && downloadStageRank(event.Stage) == 0 {
+					t.Fatal("invalid stage accepted")
+				}
+				if kind == bridge.Progress && (event.Bytes == nil || *event.Bytes < 0 || (event.Total != nil && *event.Total < *event.Bytes)) {
+					t.Fatal("invalid progress accepted")
+				}
+			}
+		}
 	})
 }
+
+func TestDownloadStageAndProgressValidation(t *testing.T) {
+	var tracker downloadTracker
+	for _, step := range []struct {
+		kind  bridge.Kind
+		raw   string
+		stage string
+		bytes *int64
+		total *int64
+	}{
+		{bridge.Stage, `{"stage":"licensing","future":true}`, "licensing", nil, nil},
+		{bridge.Stage, `{"stage":"downloading"}`, "downloading", nil, nil},
+		{bridge.Progress, `{"bytes":0,"Total":999}`, "", pointer(int64(0)), nil},
+		{bridge.Progress, `{"bytes":0,"total":0}`, "", pointer(int64(0)), pointer(int64(0))},
+		{bridge.Progress, `{"bytes":1024}`, "", pointer(int64(1024)), nil},
+		{bridge.Stage, `{"stage":"preparing"}`, "preparing", nil, nil},
+		{bridge.Stage, `{"stage":"publishing"}`, "publishing", nil, nil},
+	} {
+		event, err := tracker.next(bridge.Frame{Type: step.kind, Raw: []byte(step.raw)})
+		if err != nil {
+			t.Fatalf("valid frame %s rejected: %v", step.raw, err)
+		}
+		if step.kind == bridge.Stage {
+			if event.Type != model.Stage || event.Stage != step.stage || event.Bytes != nil || event.Total != nil {
+				t.Fatal("wrong stage event", event)
+			}
+		} else {
+			if event.Type != model.Progress || event.Stage != "" || event.Bytes == nil || *event.Bytes != *step.bytes {
+				t.Fatal("wrong progress event", event)
+			}
+			if (event.Total == nil) != (step.total == nil) || (event.Total != nil && *event.Total != *step.total) {
+				t.Fatal("wrong progress total", event.Total, step.total)
+			}
+		}
+	}
+
+	// Unknown total becoming known, equal monotonic bytes, and exact MaxInt64 bounds.
+	var bounded downloadTracker
+	for _, frame := range []bridge.Frame{
+		{Type: bridge.Stage, Raw: []byte(`{"stage":"downloading"}`)},
+		{Type: bridge.Progress, Raw: []byte(`{"bytes":512}`)},
+		{Type: bridge.Progress, Raw: []byte(`{"bytes":512,"total":9223372036854775807}`)},
+		{Type: bridge.Progress, Raw: []byte(`{"bytes":9223372036854775807,"total":9223372036854775807}`)},
+	} {
+		if _, err := bounded.next(frame); err != nil {
+			t.Fatal("bounded progress rejected", string(frame.Raw), err)
+		}
+	}
+
+	// Reject invalid stages, duplicates, backwards transitions, and non-stage/progress frames.
+	for _, bad := range []struct {
+		name   string
+		frames []bridge.Frame
+	}{
+		{"unknown-stage", []bridge.Frame{{Type: bridge.Stage, Raw: []byte(`{"stage":"library_page"}`)}}},
+		{"empty-stage", []bridge.Frame{{Type: bridge.Stage, Raw: []byte(`{"stage":""}`)}}},
+		{"case-stage", []bridge.Frame{{Type: bridge.Stage, Raw: []byte(`{"Stage":"licensing"}`)}}},
+		{"null-stage", []bridge.Frame{{Type: bridge.Stage, Raw: []byte(`{"stage":null}`)}}},
+		{"missing-stage", []bridge.Frame{{Type: bridge.Stage, Raw: []byte(`{}`)}}},
+		{"dup-stage-key", []bridge.Frame{{Type: bridge.Stage, Raw: []byte(`{"stage":"licensing","st\u0061ge":"downloading"}`)}}},
+		{"dup-nested-key", []bridge.Frame{{Type: bridge.Stage, Raw: []byte(`{"stage":"licensing","future":{"x":0,"\u0078":1}}`)}}},
+		{"surrogate-stage", []bridge.Frame{{Type: bridge.Stage, Raw: []byte(`{"stage":"licensing","future":"\ud800"}`)}}},
+		{"depth-stage", []bridge.Frame{{Type: bridge.Stage, Raw: []byte(`{"stage":"licensing","future":` + strings.Repeat(`{"a":`, 65) + `0` + strings.Repeat(`}`, 65) + `}`)}}},
+		{"duplicate-licensing", []bridge.Frame{{Type: bridge.Stage, Raw: []byte(`{"stage":"licensing"}`)}, {Type: bridge.Stage, Raw: []byte(`{"stage":"licensing"}`)}}},
+		{"backwards-downloading-licensing", []bridge.Frame{{Type: bridge.Stage, Raw: []byte(`{"stage":"downloading"}`)}, {Type: bridge.Stage, Raw: []byte(`{"stage":"licensing"}`)}}},
+		{"backwards-preparing-downloading", []bridge.Frame{{Type: bridge.Stage, Raw: []byte(`{"stage":"preparing"}`)}, {Type: bridge.Stage, Raw: []byte(`{"stage":"downloading"}`)}}},
+		{"backwards-publishing-preparing", []bridge.Frame{{Type: bridge.Stage, Raw: []byte(`{"stage":"publishing"}`)}, {Type: bridge.Stage, Raw: []byte(`{"stage":"preparing"}`)}}},
+		{"progress-before-stage", []bridge.Frame{{Type: bridge.Progress, Raw: []byte(`{"bytes":0}`)}}},
+		{"progress-during-licensing", []bridge.Frame{{Type: bridge.Stage, Raw: []byte(`{"stage":"licensing"}`)}, {Type: bridge.Progress, Raw: []byte(`{"bytes":0}`)}}},
+		{"progress-during-preparing", []bridge.Frame{{Type: bridge.Stage, Raw: []byte(`{"stage":"preparing"}`)}, {Type: bridge.Progress, Raw: []byte(`{"bytes":0}`)}}},
+		{"progress-during-publishing", []bridge.Frame{{Type: bridge.Stage, Raw: []byte(`{"stage":"publishing"}`)}, {Type: bridge.Progress, Raw: []byte(`{"bytes":0}`)}}},
+		{"result-frame", []bridge.Frame{{Type: bridge.Result, Raw: []byte(`{}`)}}},
+		{"error-frame", []bridge.Frame{{Type: bridge.Failure, Raw: []byte(`{}`)}}},
+	} {
+		t.Run(bad.name, func(t *testing.T) {
+			var tr downloadTracker
+			var err error
+			for _, frame := range bad.frames {
+				_, err = tr.next(frame)
+				if err != nil {
+					break
+				}
+			}
+			if err != bridge.ErrProtocol {
+				t.Fatalf("accepted invalid sequence %s: %v", bad.name, err)
+			}
+		})
+	}
+
+	// Reject invalid progress payloads during downloading.
+	for _, raw := range []string{
+		`null`, `[]`, `{}`, `{"Bytes":10}`, `{"bytes":null}`, `{"bytes":-1}`,
+		`{"bytes":1.0}`, `{"bytes":1.5}`, `{"bytes":1e2}`, `{"bytes":true}`, `{"bytes":"10"}`,
+		`{"bytes":9223372036854775808}`, `{"bytes":-9223372036854775809}`,
+		`{"bytes":10,"total":null}`, `{"bytes":10,"total":-1}`, `{"bytes":10,"total":9}`,
+		`{"bytes":10,"total":10.0}`, `{"bytes":10,"total":1e2}`, `{"bytes":10,"total":true}`,
+		`{"bytes":10,"total":"10"}`, `{"bytes":10,"total":9223372036854775808}`,
+		`{"bytes":10,"byt\u0065s":20}`, `{"bytes":10,"total":20,"tot\u0061l":20}`,
+		`{"bytes":10,"future":"\ud800"}`, "{\"bytes\":10,\"x\":\"\xff\"}",
+	} {
+		tr := downloadTracker{stageRank: 2, stage: "downloading"}
+		if _, err := tr.next(bridge.Frame{Type: bridge.Progress, Raw: []byte(raw)}); err != bridge.ErrProtocol {
+			t.Fatalf("accepted invalid progress %s: %v", raw, err)
+		}
+	}
+
+	// Reject decreasing bytes and inconsistent totals.
+	for _, seq := range [][]string{
+		{`{"bytes":100}`, `{"bytes":99}`},
+		{`{"bytes":50,"total":100}`, `{"bytes":60,"total":200}`},
+		{`{"bytes":50,"total":100}`, `{"bytes":150}`, `{"bytes":200,"total":200}`},
+	} {
+		tr := downloadTracker{stageRank: 2, stage: "downloading"}
+		var err error
+		for _, raw := range seq {
+			_, err = tr.next(bridge.Frame{Type: bridge.Progress, Raw: []byte(raw)})
+			if err != nil {
+				break
+			}
+		}
+		if err != bridge.ErrProtocol {
+			t.Fatalf("accepted inconsistent progress %v: %v", seq, err)
+		}
+	}
+}
+
+func pointer[T any](value T) *T { return &value }
