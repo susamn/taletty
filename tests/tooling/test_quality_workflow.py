@@ -15,14 +15,21 @@ class QualityWorkflowTests(unittest.TestCase):
         self.assertEqual(workflow.count(".github/scripts/install-ci-media.sh"), 2)
         self.assertEqual(workflow.count("TALETTY_REQUIRE_MEDIA_TOOLS"), 2)
         self.assertNotIn("continue-on-error", workflow)
-        for ffmpeg, ffprobe, apt_status in [(0, 0, 0), (1, 0, 0), (0, 1, 0), (1, 1, 17)]:
-            with self.subTest(ffmpeg=ffmpeg, ffprobe=ffprobe, apt_status=apt_status), tempfile.TemporaryDirectory() as directory:
+        for ffmpeg, ffprobe, mpv, apt_status in [(0, 0, 0, 0), (1, 0, 0, 0), (0, 1, 0, 0), (0, 0, 1, 0), (1, 1, 1, 17)]:
+            with self.subTest(ffmpeg=ffmpeg, ffprobe=ffprobe, mpv=mpv, apt_status=apt_status), tempfile.TemporaryDirectory() as directory:
                 root = Path(directory)
                 log, copy = root / "args", root / "sources"
                 # Shell functions replace only executable discovery and privilege/
                 # network operations. Execute the real setup script and cleanup.
                 prefix = f'''
-command() {{ if [[ "$2" == ffmpeg ]]; then return {ffmpeg}; else return {ffprobe}; fi; }}
+command() {{
+  case "$2" in
+    ffmpeg) return {ffmpeg} ;;
+    ffprobe) return {ffprobe} ;;
+    mpv) return {mpv} ;;
+    *) return 1 ;;
+  esac
+}}
 sudo() {{
   printf '%s\\n' "$*" >> "$LOG"
   cp "${{3#Dir::Etc::sourcelist=}}" "$COPY"
@@ -33,7 +40,7 @@ source "$SCRIPT"
                 env = dict(os.environ, LOG=str(log), COPY=str(copy), SCRIPT=str(ROOT / ".github/scripts/install-ci-media.sh"))
                 result = subprocess.run(["bash", "-c", prefix], env=env, capture_output=True, text=True, timeout=5)
                 self.assertEqual(result.returncode, apt_status, result.stderr)
-                if ffmpeg == ffprobe == 0:
+                if ffmpeg == ffprobe == mpv == 0:
                     self.assertFalse(log.exists())
                     continue
                 calls = log.read_text().splitlines()
@@ -44,7 +51,7 @@ source "$SCRIPT"
                     self.assertFalse(Path(source).exists(), "temporary source list leaked")
                 self.assertTrue(calls[0].endswith(" update"))
                 if not apt_status:
-                    self.assertTrue(calls[1].endswith(" install -y --no-install-recommends ffmpeg"))
+                    self.assertTrue(calls[1].endswith(" install -y --no-install-recommends ffmpeg mpv"))
                 lines = copy.read_text().splitlines()
                 self.assertEqual(len(lines), 3)
                 for line in lines:
@@ -65,6 +72,20 @@ source "$SCRIPT"
         journey = source.split("func TestControllingTerminalJourney", 1)[1].split("type failingTerminalWriter", 1)[0]
         self.assertNotIn("t.Skip", journey)
         self.assertNotIn("os.Getenv", journey)
+
+    def test_real_mpv_playback_journeys_repeat_with_required_real_media(self):
+        workflow = (ROOT / ".github/workflows/quality.yml").read_text()
+        media_step = workflow.split("      - name: Install actual CI media tools\n", 1)[1].split("      - name:", 1)[0]
+        self.assertNotIn("if:", media_step)
+        self.assertIn("bash ../.github/scripts/install-ci-media.sh", media_step)
+        self.assertIn("echo 'TALETTY_REQUIRE_MEDIA_TOOLS=1' >>", media_step)
+        step = workflow.split("      - name: Repeat real null-output mpv playback journeys\n", 1)[1].split("      - name:", 1)[0]
+        self.assertIn("if: matrix.module == 'app'", step)
+        self.assertIn("go test -count=3 -race -timeout=60s -run '^TestRealMPV' -v ./internal/playback", step)
+        self.assertNotIn("continue-on-error", step)
+        source = (ROOT / "app/internal/playback/mpv_integration_linux_test.go").read_text()
+        self.assertIn('os.Getenv("TALETTY_REQUIRE_MEDIA_TOOLS") == "1"', source)
+        self.assertIn('t.Fatalf("mandatory playback media tool %s missing", tool)', source)
 
     def test_private_composition_journeys_repeat_with_required_real_media(self):
         workflow = (ROOT / ".github/workflows/quality.yml").read_text()
