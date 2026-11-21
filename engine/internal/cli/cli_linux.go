@@ -10,16 +10,18 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/susamn/taletty/engine/connectors/audible"
 	"github.com/susamn/taletty/engine/model"
 )
 
-const usage = "Usage: taletty-engine {doctor|login|sync} --python /path/to/venv/bin/python [--marketplace us]\nDoctor and sync accept --json; login requires an owned foreground terminal.\n"
+const usage = "Usage: taletty-engine {doctor|login|sync|download <ASIN>} --python /path/to/venv/bin/python [--marketplace us]\nDoctor, sync and download accept --json; login requires an owned foreground terminal.\n"
 
 type account interface {
 	Login(context.Context, *os.File) error
 	Library(context.Context, string, func(model.OperationEvent)) (model.LibrarySnapshot, error)
+	Download(context.Context, string, model.BookID, func(model.OperationEvent)) (model.DownloadResult, error)
 	Close(context.Context) error
 }
 type dependencies struct {
@@ -47,22 +49,34 @@ func run(ctx context.Context, args []string, out, errOut io.Writer, deps depende
 		}
 		return 0
 	}
-	if len(args) == 0 || (args[0] != "doctor" && args[0] != "login" && args[0] != "sync") {
+	if len(args) == 0 || (args[0] != "doctor" && args[0] != "login" && args[0] != "sync" && args[0] != "download") {
 		io.WriteString(errOut, usage)
 		return 2
 	}
 	command := args[0]
+	flagArgs := args[1:]
+	var asin string
+	if command == "download" && len(flagArgs) > 0 && !strings.HasPrefix(flagArgs[0], "-") {
+		asin, flagArgs = flagArgs[0], flagArgs[1:]
+	}
 	flags := flag.NewFlagSet(command, flag.ContinueOnError)
 	flags.SetOutput(io.Discard)
 	python := flags.String("python", "", "Explicit Python executable")
 	marketplace := flags.String("marketplace", "us", "Supported marketplace")
-	machine := flags.Bool("json", false, "Machine-readable diagnostics or complete library")
-	if err := flags.Parse(args[1:]); errors.Is(err, flag.ErrHelp) {
+	machine := flags.Bool("json", false, "Machine-readable diagnostics, library or download result")
+	err := flags.Parse(flagArgs)
+	if errors.Is(err, flag.ErrHelp) {
 		if _, err := io.WriteString(out, usage); err != nil {
 			return outputFailure(errOut)
 		}
 		return 0
-	} else if err != nil || flags.NArg() != 0 || *python == "" || *marketplace != "us" || (command == "login" && *machine) {
+	}
+	if err == nil && command == "download" && asin == "" && flags.NArg() == 1 {
+		asin = flags.Arg(0)
+	} else if err == nil && flags.NArg() != 0 {
+		err = flag.ErrHelp
+	}
+	if err != nil || *python == "" || *marketplace != "us" || (command == "login" && *machine) || (command == "download" && !validASIN(asin)) {
 		io.WriteString(errOut, usage)
 		return 2 // Never echo arguments or flag parser text.
 	}
@@ -114,10 +128,14 @@ func run(ctx context.Context, args []string, out, errOut io.Writer, deps depende
 		return reportFailure(out, errOut, *machine, err)
 	}
 	var snapshot model.LibrarySnapshot
-	if command == "login" {
+	var download model.DownloadResult
+	switch command {
+	case "login":
 		err = client.Login(ctx, terminal)
-	} else {
+	case "sync":
 		snapshot, err = client.Library(ctx, "cli-sync", nil)
+	default:
+		download, err = client.Download(ctx, "cli-download", model.BookID{Provider: "audible", Namespace: *marketplace, ID: asin}, nil)
 	}
 	closeErr := client.Close(context.Background()) // Operation joined; canceled ctx must not skip release.
 	if closeErr != nil {
@@ -127,9 +145,13 @@ func run(ctx context.Context, args []string, out, errOut io.Writer, deps depende
 		}
 	}
 	if err != nil {
+		if command == "download" {
+			return reportDownloadFailure(out, errOut, *machine, download, err)
+		}
 		return reportFailure(out, errOut, *machine, err)
 	}
-	if command == "sync" {
+	switch command {
+	case "sync":
 		if *machine {
 			err = json.NewEncoder(out).Encode(struct {
 				Snapshot model.LibrarySnapshot `json:"snapshot"`
@@ -137,13 +159,36 @@ func run(ctx context.Context, args []string, out, errOut io.Writer, deps depende
 		} else {
 			_, err = fmt.Fprintf(out, "Library synced: %d books.\n", len(snapshot.Books))
 		}
-	} else {
+	case "download":
+		if *machine {
+			err = json.NewEncoder(out).Encode(struct {
+				Download model.DownloadResult `json:"download"`
+			}{download})
+		} else if download.Reused {
+			_, err = fmt.Fprintf(out, "Media ready (reused): %s\n", download.Media.Path)
+		} else {
+			_, err = fmt.Fprintf(out, "Media downloaded: %s\n", download.Media.Path)
+		}
+	default:
 		_, err = io.WriteString(out, "Signed in. Private credentials saved.\n")
 	}
 	if err != nil {
 		return outputFailure(errOut)
 	}
 	return 0
+}
+
+func validASIN(s string) bool {
+	if len(s) != 10 {
+		return false
+	}
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		if (c < 'A' || c > 'Z') && (c < 'a' || c > 'z') && (c < '0' || c > '9') {
+			return false
+		}
+	}
+	return true
 }
 
 type failure struct {
@@ -183,14 +228,26 @@ func classify(err error) failure {
 	return result
 }
 func reportFailure(out, errOut io.Writer, machine bool, err error) int {
+	return reportDownloadFailure(out, errOut, machine, model.DownloadResult{}, err)
+}
+
+func reportDownloadFailure(out, errOut io.Writer, machine bool, download model.DownloadResult, err error) int {
 	safe := classify(err)
 	if machine {
+		var attached *model.DownloadResult
+		if download.OperationID != "" {
+			attached = &download
+		}
 		if json.NewEncoder(out).Encode(struct {
-			Failure failure `json:"failure"`
-		}{safe}) != nil {
+			Download *model.DownloadResult `json:"download,omitempty"`
+			Failure  failure               `json:"failure"`
+		}{attached, safe}) != nil {
 			return outputFailure(errOut)
 		}
 	} else {
+		if download.Media != nil {
+			fmt.Fprintf(errOut, "Media ready: %s\n", download.Media.Path)
+		}
 		fmt.Fprintln(errOut, safe.Message)
 	}
 	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) || safe.Code == "canceled" {

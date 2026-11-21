@@ -18,7 +18,10 @@ import (
 type fakeAccount struct {
 	loginErr, closeErr error
 	libraryErr         error
+	downloadErr        error
 	snapshot           model.LibrarySnapshot
+	download           model.DownloadResult
+	downloadBook       model.BookID
 	closed             bool
 	cancel             context.CancelFunc
 	tty                *os.File
@@ -41,6 +44,23 @@ func (a *fakeAccount) Library(ctx context.Context, id string, report func(model.
 		return model.LibrarySnapshot{}, ctx.Err()
 	}
 	return a.snapshot, a.libraryErr
+}
+func (a *fakeAccount) Download(ctx context.Context, id string, book model.BookID, report func(model.OperationEvent)) (model.DownloadResult, error) {
+	if id != "cli-download" || report != nil {
+		panic("CLI download must not stream provisional events")
+	}
+	a.downloadBook = book
+	if a.cancel != nil {
+		a.cancel()
+		if a.downloadErr == nil && a.download.State == model.MediaReady {
+			return a.download, nil
+		}
+		if a.downloadErr != nil {
+			return a.download, a.downloadErr
+		}
+		return a.download, ctx.Err()
+	}
+	return a.download, a.downloadErr
 }
 func (a *fakeAccount) Close(ctx context.Context) error {
 	if ctx.Err() != nil {

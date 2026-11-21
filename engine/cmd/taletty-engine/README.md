@@ -1,8 +1,8 @@
 # Headless account/library commands (Linux source development)
 
 This is the first runnable engine CLI, **not the Taletty TUI or an installable
-release**. `doctor`, `login` and `sync` exist; download/playback
-remain later work. Runtime installation/artifacts/full dependency locks remain #26.
+release**. `doctor`, `login`, `sync` and `download <ASIN>` exist; playback
+and app queue persistence remain later work. Runtime installation/artifacts/full dependency locks remain #26.
 
 From `engine/`, with Go and an explicitly prepared CPython 3.12 venv:
 
@@ -13,12 +13,14 @@ go build -o /tmp/taletty-engine ./cmd/taletty-engine
 /tmp/taletty-engine login --python /path/to/venv/bin/python
 /tmp/taletty-engine sync --python /path/to/venv/bin/python
 /tmp/taletty-engine sync --python /path/to/venv/bin/python --json
+/tmp/taletty-engine download B000000001 --python /path/to/venv/bin/python
+/tmp/taletty-engine download B000000001 --python /path/to/venv/bin/python --json
 ```
 
-Use `--help`. Flags follow the command. `--python` is required; no first-run pip,
+Use `--help`. Flags follow the command (`download` accepts `<ASIN>` before or after flags). `--python` is required; no first-run pip,
 runtime discovery, shell or migration. Marketplace defaults to `us`; any other
-`--marketplace` fails before work. JSON is available for doctor and sync, never login.
-Usage errors never echo supplied values. No download placeholder command.
+`--marketplace` fails before work. JSON is available for doctor, sync and download, never login.
+Usage errors never echo supplied values.
 
 Doctor is read-only and takes no auth lock: it never creates the Taletty root.
 JSON is `{ "ready": bool, "diagnostics": { "python": ..., "audible": ...,
@@ -65,6 +67,12 @@ atomic file publication interface. Session cleanup has already run before output
 
 Tests use injected fake accounts, synthetic diagnostic children and actual command
 entrypoint/controlling PTYs/signals, plus the accepted SDK/TTY connector contracts.
-Sync command tests additionally run the real embedded SDK with synthetic auth,
+Sync and download command tests additionally run the real embedded SDK with synthetic auth,
 fake HTTP/refresh, atomic persistence faults/restart and actual SIGINT/TERM reaping.
-No live account evidence, full J01/J14, app cache or schema-upgrade claim.
+Download (`#113`) validates the 10-character ASCII alphanumeric `<ASIN>` before touching
+the root, emits output only after `Client.Close(context.Background())`, preserves
+committed-media `download` facts alongside `failure` in `--json` mode (`{"download":...,"failure":...}`)
+and plain error output (`Media ready: <path>`) when auth persistence, durability, or
+cleanup fails after commit, and exits `0` when committed/reconciled ready media wins
+late cancellation (`130` on precommit cancellation, `1` on operation/output failure, `2` on usage error).
+No live account evidence, full J01/J04/J14, app cache or schema-upgrade claim.
