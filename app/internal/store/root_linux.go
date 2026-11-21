@@ -17,7 +17,8 @@ var (
 
 // WithRoot lends an anchored CLOEXEC directory descriptor for synchronous store
 // work. The caller MUST already hold exclusive cooperative root ownership (the
-// engine's Session.WithRoot gate or its eventual app equivalent) until return.
+// session-lifetime advisory owner, not an authenticated operation gate) until
+// return. A long-lived DB must not monopolize the engine's operation gate.
 // This function never acquires .auth.lock: recursively acquiring it would conflict
 // with the existing owner. No engine dependency or integration is implied here.
 //
@@ -69,7 +70,7 @@ func withRoot(ctx context.Context, borrowed *os.File, operation func(context.Con
 		if err != nil {
 			return ErrIO
 		}
-		if stat.Mode&(unix.S_IFMT|07777) != unix.S_IFREG|0600 || stat.Uid != uint32(os.Geteuid()) || stat.Nlink != 1 {
+		if !privateFile(&stat) {
 			return ErrUnsafeFile
 		}
 	}
@@ -77,4 +78,8 @@ func withRoot(ctx context.Context, borrowed *os.File, operation func(context.Con
 		return err
 	}
 	return operation(ctx, lease)
+}
+
+func privateFile(stat *unix.Stat_t) bool {
+	return stat.Mode&(unix.S_IFMT|07777) == unix.S_IFREG|0600 && stat.Uid == uint32(os.Geteuid()) && stat.Nlink == 1
 }
