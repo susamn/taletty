@@ -65,8 +65,11 @@ belongs to the app, with schema migrations and stable provider-neutral book keys
 (e.g. provider + provider ID, not title or downloaded path). Use SQLite for growing
 relational state: bookmarks, history, completion and persistent jobs. Confirm schema,
 transaction boundaries and Taletty-owned database upgrades in an ADR before coding
-runtime storage. [Proposed ADR 002](adr/002-storage-contract.md) and the app-owned
-v1 SQL artifact are #3's executable approval contract, not #9 runtime storage. All user data lives under `~/.config/taletty/`, with audio in `downloads/`.
+runtime storage. [Accepted ADR 002](adr/002-storage-contract.md) and the app-owned
+v1 SQL artifact were approved through merged PR #104, not #9 runtime acceptance.
+The Linux borrowed-root preflight (`store.WithRoot`, #106) consumes externally held
+cooperative ownership without reacquiring the engine lock; safe SQLite opening
+and runtime validation remain #107, followed by typed repositories in #108. All user data lives under `~/.config/taletty/`, with audio in `downloads/`.
 Start fresh: never discover/import/reuse the prototype's auth, cache, history or media.
 Completed media is engine output; deleting it is an explicit app request, never
 implicit cleanup of user history. Do not force local imports to have Audible ASINs.

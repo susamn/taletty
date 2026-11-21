@@ -1,7 +1,7 @@
 # ADR 002: App-owned SQLite v1 contract
 
-Status: **proposed for #3 approval; not runtime storage acceptance**. Depends on
-accepted ADR 001 / #1. Executable artifact:
+Status: **accepted for #3 via merged PR #104; not runtime storage acceptance**.
+Depends on accepted ADR 001 / #1. Executable artifact:
 [`001_initial.sql`](../../app/internal/store/schema/001_initial.sql).
 
 ## Scope, reuse and tradeoffs
@@ -16,7 +16,7 @@ keys, float seconds, JSON store or broad partial-file cleanup. No source extract
 This slice approves executable SQL, not #9's opener, CRUD, driver, upgrade runner,
 UI integration or release linkage. Python sqlite3 is a **test oracle only**, not a
 production adapter/module. #9 must choose a production Go driver separately. SQLite
->=3.38 is the proposed contract floor (STRICT + built-in JSON); runtime builds must
+>=3.38 is the accepted contract floor (STRICT + built-in JSON); runtime builds must
 verify it. SQL statement-coverage tooling is unavailable/N/A: execute the actual
 artifact and relational/transaction tests instead; existing independent >=95%
 Go/adapter/tooling statement gates remain unchanged.
@@ -88,9 +88,9 @@ acquisition sorting remains unavailable without the corresponding model metadata
 Glyph unicode/plain maps to the actual shell's modes; no automatic font detection
 or currently unimplemented Nerd mode is inferred. Theme selection/palettes stay in
 config.toml/colors.toml per the accepted theming contract, not duplicated in SQL.
-**Review choice:** approve nanoseconds/fixed-point speed representation. Volume
-0–100 (no boost) follows the accepted key map. These storage representations need
-maintainer approval; changes before #3 acceptance should update SQL/tests together.
+**Accepted choice (PR #104):** nanoseconds/fixed-point speed representation. Volume
+0–100 (no boost) follows the accepted key map. Incompatible changes to these
+representations require reviewed contract, SQL and test updates together.
 More SQL settings need reviewed typed columns/migrations, never a
 credential-capable opaque key/value bucket.
 
@@ -160,4 +160,26 @@ workflow regression protect execution. No coverage percentage is manufactured fo
 SQL or this test-only oracle. This is partial service-contract evidence toward
 J02/J09/J14/J17, **not** completed UI journeys, app installation, OS permission tests,
 disk-full/crash proof or production upgrades. #9/#10/#11/#13/#42 keep their native
-blockers and runtime acceptance tests; maintainer approval is required before #9.
+blockers and runtime acceptance tests; #3 approval does not accept runtime storage.
+
+## Borrowed Linux root foundation (#106 under #9)
+
+`store.WithRoot` consumes an already-owned directory descriptor, verifies exact
+same-UID 0700 directory/0600 single-link regular database and journal/WAL/SHM
+leaves using no-follow metadata inspection, and lends a separate CLOEXEC directory
+lease. Missing leaves are allowed; no files are created, repaired or removed.
+Unknown files are not inspected. Descriptor-relative access stays anchored across
+root rename. The caller must retain exclusive cooperative ownership throughout
+and join all users before return. Engine `Session.WithRoot` already lends its root
+inside the operation gate while holding `.auth.lock` for the session lifetime;
+store must not recursively acquire that lock or reenter the engine gate. This
+primitive does not import or integrate the independently unpublished engine.
+The session-lifetime root owner is distinct from the authenticated operation gate:
+#107 must resolve public lease/connection ownership without monopolizing that gate
+for a database lifetime or blocking local checkpoints behind licensed transfers.
+
+This is preflight, not connection safety or schema validation. #107 must consume
+the anchored lease and resolve the driver's SQLite path-reopening, journal/sidecar
+creation and locking semantics before opening anything. A successful metadata
+check alone does not authorize a path-based connection. #108 owns subsequent
+typed repositories; #9 and downstream runtime blockers remain open.
