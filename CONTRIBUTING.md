@@ -16,7 +16,7 @@ implementation approval. Keep unrelated refactors out of feature PRs.
 
 - One coherent issue or vertical slice per PR; split large issues into dependent
   follow-ups before implementation, rather than opening a mega-PR.
-- Aim for **1–4 meaningful commits per PR**. More than 5 requires explanation and
+- Aim for **1–10 meaningful commits per PR**. More than 5 requires explanation and
   usually a split. This is a review guideline, not a reason for artificial commits.
 - Each commit should express one understandable change and be buildable/testable
   once executable code exists. Ship regression tests with the fix; do not split
