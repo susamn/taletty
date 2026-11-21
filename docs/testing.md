@@ -296,6 +296,19 @@ substitute for the existing independent Go/adapter/tooling statement gates. See
 [ADR 002](adr/002-storage-contract.md) for runtime #9/#10 boundaries: no production
 opener/driver, OS permission proof, upgrade runner or completed J14 is claimed.
 
+## Linux borrowed store-root foundation (#106)
+
+[`root_linux_test.go`](../app/internal/store/root_linux_test.go) exercises production
+`store.WithRoot`: real private roots, rename/replacement isolation, all four fixed
+DB/sidecar names with private/public/special-mode/symlink/hardlink/FIFO/socket/directory
+fixtures, unchanged unknown data, cancellation, callback error/panic cleanup and
+retry, independent concurrent read leases and ordinary-exec noninheritance. A real
+child proves an externally held `.auth.lock` remains busy; this models the exact
+engine lock contract, not engine integration. Owner mismatch and inspection I/O
+failures are injected at the stat boundary (no privileged chown). Existing profile
+path tests retain no-XDG/no-old-app evidence. This is partial J14 service evidence,
+not SQLite connection/migration, bootstrap, persistence or a complete UI journey.
+
 ## Release evidence
 
 A release candidate needs an evidence matrix linking each supported journey to
