@@ -28,8 +28,12 @@ var sqliteLeaseID atomic.Uint64
 // Work and all derived statements must finish synchronously; neither connection
 // nor root may escape. Each invocation owns its connection and VFS registration.
 func withSQLite(ctx context.Context, borrowed *os.File, work func(*sqlite3.Conn) error) error {
+	return withSQLiteMode(ctx, borrowed, false, work)
+}
+
+func withSQLiteMode(ctx context.Context, borrowed *os.File, readOnly bool, work func(*sqlite3.Conn) error) error {
 	return WithRoot(ctx, borrowed, func(ctx context.Context, root *os.File) (err error) {
-		fs := &sqliteVFS{root: root, path: fmt.Sprintf("/proc/self/fd/%d/taletty.sqlite3", root.Fd())}
+		fs := &sqliteVFS{root: root, path: fmt.Sprintf("/proc/self/fd/%d/taletty.sqlite3", root.Fd()), readOnly: readOnly}
 		// This transport intentionally has no WAL recovery/checkpoint contract.
 		for _, suffix := range []string{"-wal", "-shm"} {
 			var stat unix.Stat_t
@@ -40,7 +44,14 @@ func withSQLite(ctx context.Context, borrowed *os.File, work func(*sqlite3.Conn)
 		name := fmt.Sprintf("taletty-%d", sqliteLeaseID.Add(1))
 		vfs.Register(name, fs)
 		defer vfs.Unregister(name)
-		conn, e := sqlite3.OpenContext(ctx, "file:"+fs.path+"?vfs="+name)
+		uri := "file:" + fs.path + "?vfs=" + name
+		if readOnly {
+			// SQLite skips CHECK validation in integrity_check when the main DB
+			// is marked readonly. Use mode=rw (never create) but deny ALL writes
+			// in the inspection VFS. No journal may exist or be opened there.
+			uri += "&mode=rw"
+		}
+		conn, e := sqlite3.OpenContext(ctx, uri)
 		if e != nil {
 			return sqliteFailure(ctx)
 		}
@@ -88,8 +99,9 @@ func sqliteFailure(ctx context.Context) error {
 // External cooperative ownership excludes name mutation between preflight and
 // driver reopen; malicious same-UID mutation is outside that ownership contract.
 type sqliteVFS struct {
-	root *os.File
-	path string
+	root     *os.File
+	path     string
+	readOnly bool
 }
 
 func (s *sqliteVFS) leaf(path string) (string, error) {
@@ -121,6 +133,9 @@ func (s *sqliteVFS) OpenFilename(path *vfs.Filename, flags vfs.OpenFlag) (vfs.Fi
 	if path.URIParameter("modeof") != "" {
 		return nil, 0, ErrUnsafeFile
 	}
+	if s.readOnly && (leaf != "taletty.sqlite3" || flags&vfs.OPEN_CREATE != 0) {
+		return nil, 0, ErrUnsafeFile
+	}
 	if flags&vfs.OPEN_CREATE != 0 {
 		fd, e := unix.Openat(int(s.root.Fd()), leaf, unix.O_RDWR|unix.O_CREAT|unix.O_EXCL|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0600)
 		if e != nil && e != unix.EEXIST {
@@ -144,6 +159,17 @@ func (s *sqliteVFS) OpenFilename(path *vfs.Filename, flags vfs.OpenFlag) (vfs.Fi
 	file, out, err := vfs.Find("os").(vfs.VFSFilename).OpenFilename(path, flags&^(vfs.OPEN_CREATE|vfs.OPEN_EXCLUSIVE))
 	if err != nil {
 		return nil, 0, err
+	}
+	if s.readOnly {
+		// Upstream still supplies OFD locks and IO metadata. Read through our
+		// O_NOATIME descriptor so refusing a foreign DB preserves access times
+		// too, without utime-based repair (which would itself change ctime).
+		fd, e := unix.Openat(int(s.root.Fd()), leaf, unix.O_RDONLY|unix.O_NOFOLLOW|unix.O_CLOEXEC|unix.O_NOATIME, 0)
+		if e != nil {
+			file.Close()
+			return nil, 0, ErrIO
+		}
+		return &inspectionFile{File: file, reader: os.NewFile(uintptr(fd), "store-inspection")}, out, nil
 	}
 	return &sqliteFile{File: file, root: s.root, journal: leaf == "taletty.sqlite3-journal"}, out, nil
 }
@@ -173,7 +199,7 @@ func (s *sqliteVFS) Access(path string, _ vfs.AccessFlag) (bool, error) {
 }
 
 func (s *sqliteVFS) Delete(path string, syncDir bool) error {
-	if path != s.path+"-journal" {
+	if s.readOnly || path != s.path+"-journal" {
 		return ErrUnsafeFile
 	}
 	if exists, err := s.Access(path, vfs.ACCESS_EXISTS); err != nil || !exists {
