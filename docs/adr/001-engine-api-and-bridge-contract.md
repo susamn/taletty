@@ -323,6 +323,23 @@ Response and fresh transport close on success, body/consumer failure or cancella
 No transfer file, publication, launcher, public Download or CLI is added. #93/#94
 remain downstream; inherited ffmpeg key-in-argv exposure remains unsolved.
 
+#100 composes the accepted private boundaries in `composition.run`: production
+packet-validated ready reuse precedes license/auth work; otherwise an ephemeral
+entitled plan (including optional prototype chapter metadata fallback) feeds a fresh
+signed stream, owned full-write staging, accepted chapter preparation, actual
+copy-remux, production validation and no-clobber publication. It borrows the existing
+RunRoot/root/gate owner; no new action, process framework, public API or CLI is added.
+Its private safe Outcome keeps verified ready/reuse facts and the exact store
+published False/True/unknown state separate from media failure/durability and auth
+persistence failure/durability. SDK ordinary finally close/persistence remains
+mandatory, but an auth failure cannot erase committed media or imply rollback.
+Before-publication cancellation cleans only owned inodes on ordinary unwind;
+publication/late cancellation retains ready media. Abrupt child death still requires
+caller reconciliation before retry, never a hard-kill cleanup/durability guarantee.
+Redirect refusal, no credential propagation, capability-only media exec and inherited
+key-in-argv limitations are unchanged. #94 remains blocked on maintainer acceptance
+of the composition/parent scope; private results are not public Download completion.
+
 ## Progress and failures
 
 Stages: `licensing`, `downloading`, `preparing`, `publishing`. Download byte samples

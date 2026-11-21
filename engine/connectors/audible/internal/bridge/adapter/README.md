@@ -335,3 +335,54 @@ and repeated real ffmpeg progress-barrier cancellation. Local missing tools skip
 explicitly, not in required CI. No issued tokens/accounts/provider HTTP/protected
 media, live download, public Download or full J04/J05/J06 claim. #100/#94 remain
 separate downstream work; maintainer acceptance is required before composition.
+
+## Private licensed composition (#100)
+
+`composition.run(root_fd, asin, cancel_fd=None)` is a private dedicated-child
+consumer of the accepted capabilities, not an executable download action or public
+Go API. The caller retains the serialized authenticated root and RunRoot process
+group until every user exits. No root discovery, auth locks, new sessions, retries,
+public progress protocol or application jobs are introduced.
+
+A safe existing ready file is packet-scanned with the production validator before
+any license/auth session is opened. Invalid/unsafe existing output fails closed;
+it is never overwritten, repaired or removed. Otherwise the existing entitled SDK
+session supplies an ephemeral license plan, a fresh unauthenticated signed stream
+is fully written to an owned partial, accepted chapter preparation drives actual
+audio-copy remux, and the production validator is used again for atomic no-clobber
+publication. The optional private `prepare_chapters=True` license-plan mode keeps
+the prototype's license metadata then optional SDK metadata endpoint fallback;
+unavailable optional metadata retains embedded chapters. Supplied malformed
+chapter metadata is not silently repaired. Plans clear chapter references along
+with URL/key/IV before SDK close/finally persistence. All redirects remain refused.
+
+The private `Outcome` carries only safe facts/codes:
+
+- `ready`: verified prior/concurrent media or this operation's committed valid media.
+- `reused`: prior verified ready or byte-identical concurrent publication.
+- `published`: **False**, **True**, or **None** for this operation's exact store commit;
+  None means unknown, never rollback. Reuse can be ready with published=False.
+- `media_code`: fixed media/provider/preparation/cancellation error, including
+  `storage_failed`, `storage_uncertain` or `conflict`.
+- `auth_code`: independent auth `storage_failed` or `storage_uncertain`.
+
+Ordinary SDK persistence still takes precedence as an operation failure, but it
+cannot erase ready/published media facts or be confused with media durability.
+An SDK close failure also stays visible even after media commit. Media fsync
+uncertainty remains explicit, not a claimed durable success. A future #94 typed
+outcome must consume both domains and validate clean process completion; it must
+not infer rollback or offer a blind re-download from an auth error. Interrupts
+before commit clean only exact owned inodes on ordinary unwind. Cancellation after
+commit cannot delete final media; the store reconciles syscall/flag races and the
+composition retains its commit facts through cleanup and SDK persistence. A
+borrowed cancel pipe/socket is polled between transfer chunks and before publish,
+and passed to bounded remux/probe execution, never inherited by media tools.
+Blocking HTTP reads remain subject to transport timeouts and the existing owner's
+process-group cancellation, not a new threaded cancellation mechanism.
+
+Hard kill can prevent any finally, persistence, cleanup or result delivery. A
+killed/malformed/nonzero child requires caller-side ready reconciliation before
+retry. Only intended media FDs enter ffmpeg/ffprobe; no root/auth lock/control FD.
+Existing same-UID cooperative trust, plaintext-at-rest and inherited key/IV process
+argv risks remain unsolved. No protected media, account, live-provider, public
+Download/CLI, full J04/J05/J06 or working-release claim follows from these tests.

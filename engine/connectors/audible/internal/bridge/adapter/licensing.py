@@ -23,10 +23,11 @@ class LicenseError(Exception):
 
 
 class _Plan:
-    __slots__ = ("_url", "_key", "_iv")
+    __slots__ = ("_url", "_key", "_iv", "_chapter_info")
 
     def __init__(self, url, key, iv):
         self._url, self._key, self._iv = url, key, iv
+        self._chapter_info = None
 
     def __repr__(self):
         return "<private media plan>"
@@ -36,7 +37,7 @@ class _Plan:
 
     def clear(self):
         # Drop references, not a promise of zeroizing Python/SDK immutable strings.
-        self._url = self._key = self._iv = None
+        self._url = self._key = self._iv = self._chapter_info = None
 
 
 def _url(value):
@@ -56,7 +57,7 @@ def _url(value):
     raise ValueError()
 
 
-def _request(client, asin):
+def _request(client, asin, prepare_chapters=False):
     from audible.aescipher import decrypt_voucher_from_licenserequest
     response = client.post("content/" + asin + "/licenserequest", body={
         "supported_drm_types": ["Mpeg", "Adrm"], "quality": "High",
@@ -78,18 +79,31 @@ def _request(client, asin):
         key, iv = voucher["key"], voucher["iv"]
         if not all(isinstance(v, str) and re.fullmatch(r"[a-fA-F0-9]{32}", v) for v in (key, iv)):
             raise ValueError()
-    return _Plan(url, key, iv)
+    info = None
+    if prepare_chapters:
+        info = license_["content_metadata"].get("chapter_info")
+        if not info:
+            try:
+                extra = client.get("content/" + asin + "/metadata", response_groups="chapter_info",
+                                   quality="High", drm_type="Adrm", chapter_titles_type="Tree")
+                info = extra.get("content_metadata", {}).get("chapter_info")
+            except Exception:
+                # Prototype policy: unavailable optional endpoint retains embedded chapters.
+                info = None
+    plan = _Plan(url, key, iv)
+    plan._chapter_info = info
+    return plan
 
 
 @contextmanager
-def entitled(root_fd, asin):
+def entitled(root_fd, asin, *, prepare_chapters=False):
     """Borrow one SDK session and erase plan references before finally persistence."""
     if not isinstance(asin, str) or re.fullmatch(r"[A-Za-z0-9]{10}", asin) is None:
         raise LicenseError("invalid_input")
     with sdk_session.authenticated(root_fd) as client:
         plan, code = None, None
         try:
-            plan = _request(client, asin)
+            plan = _request(client, asin, prepare_chapters)
         except LicenseError as error:
             code = error.code
         except Exception as error:

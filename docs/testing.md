@@ -255,6 +255,29 @@ This is a production filesystem primitive, not yet production remux/validation,
 licensed composition, embedded download, public Go/CLI or complete J04/J05/J06.
 Those remain dependency-linked #99/#100/#94 after maintainer acceptance.
 
+#100's [private composition tests](../tests/adapter/test_composition.py) combine
+real pinned SDK fake HTTP/refresh, a never-issued synthetic voucher, fresh signed
+stream header isolation, real owned store writes/rename and production composition.
+Fault tests use an explicit copy/validator seam (not media validation evidence) to
+exercise ordinary refusals/throttling/redirect/body/write/remux failures, optional
+chapter metadata fallback, unsafe-ready refusal, identical reuse/conflict, exact
+precommit/postcommit/unknown publication, independent auth pre-replace/post-replace
+uncertainty, close failure, cancellation and recovery. A separate mandatory actual
+ffmpeg/ffprobe generated-clear-audio test uses the production remux and validator,
+checks audio packet hashes, then proves verified ready reuse without authentication.
+
+[Actual composition process tests](../engine/connectors/audible/composition_process_linux_test.go)
+run the real private consumer under existing WithRoot/RunRoot, not a public action.
+Socket barriers prove queued cancellation never starts another child and active
+controlled pre-persistence cancellation reaps the direct child and releases ownership.
+Required-media execution runs real copy/probe children with a further-exec inspector
+proving same process group and only intended media descriptor inheritance (no root,
+auth lock or control). SDK refresh/refusal/recovery and ready-before-license reuse
+cross the actual isolated process boundary. Neither test promises cleanup/finally
+or durability after hard kill, containment of escaped children, real provider media,
+public Download/CLI, persistent queue/UI journeys or a working release. Media and
+auth uncertainties remain separate for downstream #94 reconciliation.
+
 ## Executable storage contract (#3)
 
 `python tests/storage/test_schema.py` uses stdlib sqlite3 as a test-only oracle
