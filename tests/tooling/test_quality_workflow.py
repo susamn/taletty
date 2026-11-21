@@ -66,6 +66,17 @@ source "$SCRIPT"
         self.assertNotIn("t.Skip", journey)
         self.assertNotIn("os.Getenv", journey)
 
+    def test_private_composition_journeys_repeat_with_required_real_media(self):
+        workflow = (ROOT / ".github/workflows/quality.yml").read_text()
+        step = workflow.split("      - name: Repeat private licensed composition process journeys\n", 1)[1].split("      - name:", 1)[0]
+        self.assertIn("if: matrix.module == 'engine'", step)
+        self.assertIn("go test -count=3 -race -timeout=60s -run '^TestComposition' -v ./connectors/audible", step)
+        self.assertNotIn("continue-on-error", step)
+        self.assertIn("echo 'TALETTY_REQUIRE_MEDIA_TOOLS=1' >>", workflow)
+        source = (ROOT / "engine/connectors/audible/composition_process_linux_test.go").read_text()
+        self.assertIn('os.Getenv("TALETTY_REQUIRE_MEDIA_TOOLS") == "1"', source)
+        self.assertIn('t.Fatal("mandatory composition process media tool missing")', source)
+
     def test_sql_contract_is_mandatory_in_tooling_dependency(self):
         workflow = (ROOT / ".github/workflows/quality.yml").read_text()
         tooling = workflow.split("  coverage-tooling:\n", 1)[1].split("  python-adapter:\n", 1)[0]

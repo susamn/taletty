@@ -270,6 +270,11 @@ checks audio packet hashes, then proves verified ready reuse without authenticat
 run the real private consumer under existing WithRoot/RunRoot, not a public action.
 Socket barriers prove queued cancellation never starts another child and active
 controlled pre-persistence cancellation reaps the direct child and releases ownership.
+A separate real post-media-commit/pre-auth-save barrier proves cancel/join retains
+the final valid artifact and prior auth at that controlled window; the next isolated
+operation verifies and reuses it without another license or transfer. The engine
+matrix repeats these actual composition journeys three times with named verbose
+logs, required media tools and bounded deadlines on both Go versions.
 Required-media execution runs real copy/probe children with a further-exec inspector
 proving same process group and only intended media descriptor inheritance (no root,
 auth lock or control). SDK refresh/refusal/recovery and ready-before-license reuse

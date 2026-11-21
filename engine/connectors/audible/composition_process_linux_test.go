@@ -97,6 +97,19 @@ def popen(argv,**kwargs):
     marker("fixture-tools")
     return real_popen(argv,**kwargs)
 subprocess.Popen=popen
+if mode=="postcommit":
+    original_save=package.auth_store.save
+    def save(root_fd,payload):
+        # This is deliberately AFTER the actual media commit/validator and BEFORE
+        # auth persistence. Killing at this barrier is not a general crash promise.
+        with package.media_store.opened(root_fd) as retained:
+            assert retained.ready("B000000001",package.remux.validator())
+        with socket.socket(socket.AF_UNIX) as barrier:
+            barrier.settimeout(8);barrier.connect(request["barrier"])
+            barrier.sendall((str(os.getpid())+"\n").encode())
+            assert barrier.recv(1)==b"G"
+        original_save(root_fd,payload)
+    package.auth_store.save=save
 outcome=package.composition.run(3,"B000000001")
 frame=dict(protocol=1,operation_id=request["operation_id"],seq=1,type="result",outcome=dataclasses.asdict(outcome))
 control.write(json.dumps(frame)+"\n");control.close()
@@ -182,7 +195,13 @@ func TestCompositionRunRootRefusalRecoveryAndQueuedCancellation(t *testing.T) {
 			active, stop := context.WithCancel(ctx)
 			done := make(chan error, 1)
 			go func() { _, err := runComposition(active, client, source, mode, barrier); done <- err }()
-			defer stop()
+			joined := false
+			defer func() {
+				stop()
+				if !joined {
+					<-done
+				}
+			}()
 			connection, err := listener.AcceptUnix()
 			if err != nil {
 				t.Fatal("composition never reached actual SDK barrier", err)
@@ -208,7 +227,9 @@ func TestCompositionRunRootRefusalRecoveryAndQueuedCancellation(t *testing.T) {
 				t.Fatal("queued canceled operation started", err)
 			}
 			stop()
-			if err := <-done; !errors.Is(err, context.Canceled) {
+			err = <-done
+			joined = true
+			if !errors.Is(err, context.Canceled) {
 				t.Fatal("active operation did not cancel/join", err)
 			}
 			if err := unix.Kill(pid, 0); !errors.Is(err, unix.ESRCH) {
@@ -227,7 +248,8 @@ func TestCompositionRunRootRefusalRecoveryAndQueuedCancellation(t *testing.T) {
 	}
 }
 
-func TestCompositionRunRootGeneratedMediaAndReadyReuse(t *testing.T) {
+func compositionClearSource(t *testing.T) []byte {
+	t.Helper()
 	for _, tool := range []string{"ffmpeg", "ffprobe"} {
 		if _, err := exec.LookPath(tool); err != nil {
 			if os.Getenv("TALETTY_REQUIRE_MEDIA_TOOLS") == "1" {
@@ -248,6 +270,13 @@ func TestCompositionRunRootGeneratedMediaAndReadyReuse(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	return clear
+}
+
+func TestCompositionRunRootGeneratedMediaAndReadyReuse(t *testing.T) {
+	clear := compositionClearSource(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 25*time.Second)
+	defer cancel()
 	client, root, _ := librarySDK(t)
 	source := compositionSource(t, clear)
 	frame, err := runComposition(ctx, client, source, "success", "")
@@ -277,5 +306,75 @@ func TestCompositionRunRootGeneratedMediaAndReadyReuse(t *testing.T) {
 	after, err := os.ReadFile(filepath.Join(root, "downloads", "B000000001.m4b"))
 	if err != nil || string(after) != string(before) {
 		t.Fatal("reuse mutated completed artifact", err)
+	}
+}
+
+func TestCompositionRunRootPostcommitCancelReconcilesReady(t *testing.T) {
+	clear := compositionClearSource(t)
+	client, root, _ := librarySDK(t)
+	source := compositionSource(t, clear)
+	ctx, cancel := context.WithTimeout(context.Background(), 25*time.Second)
+	defer cancel()
+	barrier := filepath.Join(t.TempDir(), "postcommit")
+	listener, err := net.ListenUnix("unix", &net.UnixAddr{Name: barrier, Net: "unix"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer listener.Close()
+	listener.SetDeadline(time.Now().Add(10 * time.Second))
+	active, stop := context.WithCancel(ctx)
+	done := make(chan error, 1)
+	go func() { _, err := runComposition(active, client, source, "postcommit", barrier); done <- err }()
+	joined := false
+	defer func() {
+		stop()
+		if !joined {
+			<-done
+		}
+	}()
+	connection, err := listener.AcceptUnix()
+	if err != nil {
+		t.Fatal("composition did not reach verified postcommit auth-save barrier", err)
+	}
+	defer connection.Close()
+	connection.SetDeadline(time.Now().Add(8 * time.Second))
+	line, err := bufio.NewReader(connection).ReadString('\n')
+	if err != nil {
+		t.Fatal(err)
+	}
+	pid, err := strconv.Atoi(strings.TrimSpace(line))
+	if err != nil || pid <= 1 {
+		t.Fatal("invalid postcommit process barrier")
+	}
+	target := filepath.Join(root, "downloads", "B000000001.m4b")
+	before, err := os.ReadFile(target)
+	if err != nil || len(before) == 0 {
+		t.Fatal("barrier preceded actual media publication", err)
+	}
+	stop()
+	err = <-done
+	joined = true
+	if !errors.Is(err, context.Canceled) {
+		t.Fatal("postcommit process did not cancel/join", err)
+	}
+	if err := unix.Kill(pid, 0); !errors.Is(err, unix.ESRCH) {
+		t.Fatal("postcommit child not reaped", err)
+	}
+	after, err := os.ReadFile(target)
+	if err != nil || string(after) != string(before) {
+		t.Fatal("cancellation deleted/changed committed media", err)
+	}
+	saved, err := os.ReadFile(filepath.Join(root, "auth.json"))
+	if err != nil || string(saved) != initialLibraryAuth {
+		t.Fatal("controlled auth-save kill crossed persistence barrier", err)
+	}
+	frame, err := runComposition(ctx, client, source, "reuse", "")
+	outcome := decodeComposition(t, frame, err)
+	if !outcome.Ready || !outcome.Reused || outcome.Published == nil || *outcome.Published || outcome.MediaCode != nil || outcome.AuthCode != nil {
+		t.Fatal("next operation failed to reconcile committed ready media", outcome)
+	}
+	licenses, err := os.ReadFile(filepath.Join(root, "fixture-license"))
+	if err != nil || string(licenses) != "S" {
+		t.Fatal("reconciliation unexpectedly relicensed media", err)
 	}
 }
