@@ -53,15 +53,34 @@ zero snapshot; no app cache is written. #86 exposes this API through CLI sync;
 
 ## Private download producer and reconciliation (#111)
 
-The embedded, fileless download entrypoint now consumes accepted `composition.run`
-through the same noninteractive loader/stdio and `RunRoot` owner. This is **not**
-public `Client.Download` or CLI download: consumed neutral contracts and public
-lifecycle are dependency-linked #112; CLI is #113, under #110/#94.
-
-A separate root-only `reconcile` entrypoint performs read-only, provider-free
-packet validation with a five-second probe bound. The future public caller must
-join the original failed/canceled child, retain the SAME borrowed root/gate and
-use a fresh bounded context for this child, without recursively entering WithRoot.
-Tests exercise that sequence through real RunRoot. Ready proves validated existence,
-not this attempt's commit, auth persistence, media durability or provider hierarchy.
+The embedded, fileless download entrypoint consumes accepted `composition.run`
+through the same noninteractive loader/stdio and `RunRoot` owner. A separate
+root-only `reconcile` entrypoint performs read-only, provider-free packet
+validation with a five-second probe bound. Ready proves validated existence, not
+this attempt's commit, auth persistence, media durability or provider hierarchy.
 See the [private adapter contract](internal/bridge/adapter/README.md#fileless-download-producer-and-read-only-reconciliation-111).
+
+## Typed Linux Download API (#112)
+
+`client.Download(ctx, operationID, bookID, report)` exposes the public US-only
+download lifecycle using the shared `Client` session, root lock, cancel-aware
+gate and live operation ID namespace shared with `Library`. See the
+[download API contract](download.md) and [neutral model contracts](../../model/README.md).
+
+`DownloadResult` keeps `State` (`ready`/`absent`/`invalid`/`unsafe`/`unknown`),
+owned `Media` (with rename-safe root-inode path derivation and nil hierarchy on
+reuse/restart/recovery), `Reused`, nullable `Published`, `MediaDurability`,
+`AuthPersistence`, `MediaFailure` and `AuthFailure` independent even on error.
+Auth persistence errors take operation-error precedence without erasing committed
+media. Failed, canceled, killed, nonzero or truncated children are joined before
+running bounded provider-free `reconcile` under the same `WithRoot` loan; ready
+media wins media cancellation, while killed/nonzero/malformed transport retains
+`protocol_error` alongside ready media.
+
+Deterministic copy/probe fixtures exercise local failure/recovery without media
+tools and are not real-media proof. `TestActualPublicDownloadGeneratedMediaAndRestart`
+(and #111's `TestDownloadProducerActualGeneratedMedia`) run the actual production
+ffmpeg/ffprobe path, skip locally only when media tools are absent, and fail in
+mandatory CI (`TALETTY_REQUIRE_MEDIA_TOOLS=1`) if tools are missing. CLI download
+(#113), #110, #94, #6, progress (#7), app queue/storage, UI J04/J05/J06, live
+accounts, protected media and a working release remain open.

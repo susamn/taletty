@@ -18,7 +18,7 @@ A valid snapshot may be empty (non-nil `Books`); every error returns the zero
 snapshot, even after earlier valid pages. Public native duration is `duration_ns`;
 private integer `duration_ms` is range-checked before conversion.
 
-Operation IDs: ASCII `[A-Za-z0-9_-]{1,64}`, unique among live Library calls on this
+Operation IDs: ASCII `[A-Za-z0-9_-]{1,64}`, unique among live Library **and Download** calls on this
 Client, including queued work and terminal notification. Rejected invalid/duplicate
 IDs start no child and emit no events. Invalid input is not echoed. IDs become
 reusable only after return/panic cleanup. Do not copy a Client after first use.

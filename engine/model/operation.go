@@ -38,4 +38,6 @@ type OperationEvent struct {
 	Stage       string    `json:"stage,omitempty"`
 	Count       int       `json:"count"`
 	Failure     *Failure  `json:"failure,omitempty"`
+	// Download is an owned terminal result, including media facts on failure.
+	Download *DownloadResult `json:"download,omitempty"`
 }

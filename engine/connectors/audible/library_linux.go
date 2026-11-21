@@ -42,17 +42,10 @@ func (c *Client) Library(ctx context.Context, id string, report func(model.Opera
 	if !operationPattern.MatchString(id) {
 		return model.LibrarySnapshot{}, libraryFailure("invalid_input", "")
 	}
-	c.operationsMu.Lock()
-	if c.operations[id] {
-		c.operationsMu.Unlock()
+	if !c.reserveOperation(id) {
 		return model.LibrarySnapshot{}, libraryFailure("busy", id)
 	}
-	if c.operations == nil {
-		c.operations = make(map[string]bool)
-	}
-	c.operations[id] = true
-	c.operationsMu.Unlock()
-	defer func() { c.operationsMu.Lock(); delete(c.operations, id); c.operationsMu.Unlock() }()
+	defer c.releaseOperation(id)
 	var sequence uint64
 	emit := func(kind model.EventType, stage string, count int, failure *model.Failure) {
 		sequence++
@@ -117,7 +110,29 @@ func (c *Client) readLibrary(ctx context.Context, root *os.File, id string, cand
 	return candidate.finish(terminal)
 }
 
+// Library and Download share identity ownership, including queued calls and
+// terminal callbacks. Neither operation may release another call's reservation.
+func (c *Client) reserveOperation(id string) bool {
+	c.operationsMu.Lock()
+	defer c.operationsMu.Unlock()
+	if c.operations[id] {
+		return false
+	}
+	if c.operations == nil {
+		c.operations = make(map[string]bool)
+	}
+	c.operations[id] = true
+	return true
+}
+func (c *Client) releaseOperation(id string) {
+	c.operationsMu.Lock()
+	defer c.operationsMu.Unlock()
+	delete(c.operations, id)
+}
 func libraryError(err error, id string) error {
+	return operationError(err, id, libraryFailure)
+}
+func operationError(err error, id string, failureFor func(string, string) *model.Failure) error {
 	code := "protocol_error"
 	var failure *model.Failure
 	switch {
@@ -130,7 +145,7 @@ func libraryError(err error, id string) error {
 	case errors.As(err, &failure):
 		code = failure.Code
 	}
-	safe := libraryFailure(code, id)
+	safe := failureFor(code, id)
 	if errors.Is(err, context.DeadlineExceeded) {
 		return errors.Join(safe, context.DeadlineExceeded)
 	}

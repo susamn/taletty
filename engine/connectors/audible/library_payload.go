@@ -115,17 +115,26 @@ func libraryBook(raw json.RawMessage) (model.Book, error) {
 		}
 	}
 	if _, ok := fields["duration_ms"]; ok {
-		var milliseconds int64
-		if required(fields, "duration_ms", &milliseconds) != nil || milliseconds < 0 || milliseconds > int64((1<<63-1)/time.Millisecond) {
-			return book, bridge.ErrProtocol
+		duration, err := millisecondsDuration(fields, "duration_ms")
+		if err != nil {
+			return book, err
 		}
-		duration := time.Duration(milliseconds) * time.Millisecond
 		book.Duration = &duration
 	}
 	if book.Validate() != nil {
 		return book, bridge.ErrProtocol
 	}
 	return book, nil
+}
+
+// millisecondsDuration is shared by library and chapter DTOs. Validate the
+// private integer unit before multiplying into native nanoseconds.
+func millisecondsDuration(fields map[string]json.RawMessage, key string) (time.Duration, error) {
+	var value int64
+	if required(fields, key, &value) != nil || value < 0 || value > int64((1<<63-1)/time.Millisecond) {
+		return 0, bridge.ErrProtocol
+	}
+	return time.Duration(value) * time.Millisecond, nil
 }
 
 // Exact key lookup avoids encoding/json's case-insensitive struct aliases. Null
@@ -148,18 +157,24 @@ func object(raw []byte) (map[string]json.RawMessage, error) {
 // Validate even ignored optional subtrees: ambiguity/lossy Unicode must not
 // override known schema. Bounded depth keeps attacker-supplied nesting off-stack.
 func strictFields(raw []byte) (map[string]json.RawMessage, error) {
+	return strictFieldsBound(raw, 64)
+}
+func strictFieldsBound(raw []byte, maxDepth int) (map[string]json.RawMessage, error) {
 	if !utf8.Valid(raw) || !json.Valid(raw) || !validSurrogates(raw) {
 		return nil, bridge.ErrProtocol
 	}
 	decoder := json.NewDecoder(bytes.NewReader(raw))
 	decoder.UseNumber()
-	if uniqueValue(decoder, 0) != nil {
+	if uniqueValueBound(decoder, 0, maxDepth) != nil {
 		return nil, bridge.ErrProtocol
 	}
 	return object(raw)
 }
 func uniqueValue(decoder *json.Decoder, depth int) error {
-	if depth > 64 {
+	return uniqueValueBound(decoder, depth, 64)
+}
+func uniqueValueBound(decoder *json.Decoder, depth, maxDepth int) error {
+	if depth > maxDepth {
 		return bridge.ErrProtocol
 	}
 	token, err := decoder.Token()
@@ -179,13 +194,13 @@ func uniqueValue(decoder *json.Decoder, depth int) error {
 				return bridge.ErrProtocol
 			}
 			seen[name] = true
-			if uniqueValue(decoder, depth+1) != nil {
+			if uniqueValueBound(decoder, depth+1, maxDepth) != nil {
 				return bridge.ErrProtocol
 			}
 		}
 	case json.Delim('['):
 		for decoder.More() {
-			if uniqueValue(decoder, depth+1) != nil {
+			if uniqueValueBound(decoder, depth+1, maxDepth) != nil {
 				return bridge.ErrProtocol
 			}
 		}

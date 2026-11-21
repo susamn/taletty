@@ -59,11 +59,12 @@ func (e *LoginError) Error() string {
 // no runtime installation, legacy discovery or credentials are accepted here.
 // Do not copy a Client; its gate, operation IDs and root have shared ownership.
 type Client struct {
-	session        *auth.Session
-	python, script string
-	librarySource  string
-	operationsMu   sync.Mutex
-	operations     map[string]bool
+	session                         *auth.Session
+	python, script                  string
+	librarySource                   string
+	downloadSource, reconcileSource string
+	operationsMu                    sync.Mutex
+	operations                      map[string]bool
 }
 
 // Open requires an existing effective-UID-owned 0700 root. It creates only the
@@ -73,7 +74,7 @@ func Open(ctx context.Context, root, python string) (*Client, error) {
 	if err != nil {
 		return nil, authError(err)
 	}
-	return &Client{session: session, python: python, script: loginScript(browserLoginSource), librarySource: libraryScript()}, nil
+	return &Client{session: session, python: python, script: loginScript(browserLoginSource), librarySource: libraryScript(), downloadSource: downloadScript(false), reconcileSource: downloadScript(true)}, nil
 }
 
 // Close waits for active authenticated work. A canceled Close can be retried.
