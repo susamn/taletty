@@ -364,6 +364,49 @@ strict typed decoding, public result-plus-error/events/ID/callback/Close contrac
 and the authoritative media-cancel race; neither public API nor CLI lands in111.
 Actual-media evidence remains separate from deterministic copy/probe fixtures.
 
+#112 implements the [public Download lifecycle](../../engine/connectors/audible/download.md)
+and consumed neutral Chapter/Media/DownloadResult contracts together, not a model-only
+slice. IDs now share one live Client namespace across Library/Download. Accepted
+Download emits started and one owned terminal result (no invented #7 progress);
+return is authoritative. The optional synchronous caller reporter has Library's
+panic/blocked-callback ownership; Close waits root/process/recovery users, not
+arbitrary caller notification code. Source/tests remain one cohesive vertical
+slice; CLI #113, app storage/queue and full UI journeys remain separate.
+
+DownloadResult keeps ready/absent/invalid/unsafe/unknown, Media, Reused, nullable
+Published, MediaDurability, AuthPersistence, MediaFailure and AuthFailure independent.
+Auth persistence error has operation-error precedence, never media rollback.
+Confirmed durability/auth require a clean fresh publication without the respective
+failure; absent auth fault on reuse/failure is conservatively unknown, not proof
+of an attempted save. Strict exact-key/duplicate/Unicode decoding reuses Library's
+validators and integer-ms converter. Neutral chapter validation bounds32 levels,
+10,000 nodes, unique <=256-byte IDs, <=4096-byte safe titles and nonnegative native
+absolute start/end, preserving unknown vs known zero end and hierarchy/order.
+Download JSON-depth bound accounts for each node's object AND children array;
+Library's existing depth64 contract is unchanged. Result/terminal media, chapters,
+end pointers, commit and failures have independent ownership. Nil hierarchy is
+explicit unknown for reuse/restart/recovery, never reconstructed from ffprobe.
+
+Canceled/killed/nonzero/truncated/malformed children are joined before root-anchored
+provider-free reconciliation under the SAME WithRoot loan, fresh8-second whole-child
+context and existing5-second probe, then joined before gate release. No recursive
+WithRoot, new process owner, licensing, auth, fsync, deletion or automatic retry.
+Recovered ready wins media cancellation but cannot reconstruct this attempt's
+commit/auth/durability/hierarchy. Killed/nonzero/malformed transport retains a safe
+protocol error alongside ready media; auth/publication failures also remain visible.
+Do not override this result with ctx.Err as Library does for snapshots. Final path
+is derived from the borrowed root inode after completion (rename-safe); deleted or
+unsafe-to-display roots fail closed without erasing publication. The path is not a
+permanent filesystem capability against subsequent caller/same-UID mutation.
+
+Public embedded Python/pinned SDK/fake-HTTP tests exercise refresh/refusal, fresh
+publication, auth/media uncertainty, reuse without auth across Client restart,
+strict malformed/nonzero/truncated recovery, shared IDs, queued cancel, callback
+panic/blocking, Close and deterministic actual pre/postcommit cancel/kill barriers.
+A separate generated clear-media public API path uses production tools in mandatory
+CI; deterministic copy/probe tests do not establish real-media readiness. No live
+provider/protected-media, full J04/J05/J06 or working-release evidence is claimed.
+
 ## Progress and failures
 
 Stages: `licensing`, `downloading`, `preparing`, `publishing`. Download byte samples

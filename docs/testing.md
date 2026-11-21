@@ -283,6 +283,40 @@ or durability after hard kill, containment of escaped children, real provider me
 public Download/CLI, persistent queue/UI journeys or a working release. Media and
 auth uncertainties remain separate for downstream #94 reconciliation.
 
+#111's [private download producer and reconciliation tests](../tests/adapter/test_download_producer.py)
+and [Go producer process tests](../engine/connectors/audible/download_producer_linux_test.go)
+exercise the embedded fileless `download` and read-only `reconcile` entrypoints
+under `RunRoot`/`WithRoot`: structured Audible/US request validation, independent
+media/auth outcome facts, ready reuse without auth, joined pre/postcommit cancel
+followed by provider-free reconciliation under the same root loan, seeded
+`ready`/`absent`/`invalid`/`unsafe`/`unknown` states and nonzero/truncated child
+recovery. Deterministic copy/probe fixtures are not real-media proof;
+`TestDownloadProducerActualGeneratedMedia` runs the actual production ffmpeg/ffprobe
+path, skips locally only when media tools are absent, and fails in mandatory CI
+(`TALETTY_REQUIRE_MEDIA_TOOLS=1`) if tools are missing.
+
+#112 adds [neutral download model tests](../engine/model/download_test.go),
+[strict download payload tests](../engine/connectors/audible/download_payload_test.go),
+[public Download lifecycle tests](../engine/connectors/audible/download_linux_test.go)
+and [embedded SDK/process download tests](../engine/connectors/audible/download_sdk_linux_test.go).
+Neutral tests cover bounded `Chapter` hierarchy/IDs/text/native times, optional
+unknown vs known-empty/zero JSON, safe rooted `Media` paths and independent
+`DownloadResult.Clone` ownership. Strict decoder tests and `FuzzDownloadPayload`
+cover exact keys, nested duplicates, lone surrogates, depth bounds, integer-ms
+conversion, outcome contradictions and `reconcile` states. Public lifecycle and
+embedded SDK/fake-HTTP tests run unconditionally locally: shared live IDs across
+`Library` and `Download`, nil/panic/blocked caller callbacks, `Close` joining,
+rename-safe root-inode path derivation, refusal/refresh persistence, auth/media
+durability uncertainty, ready reuse across `Client` restart without auth, seeded
+recovery without auth, canceled-outcome recovery with/without auth failure, and
+pre/postcommit cancel/SIGKILL socket barriers joining original users before
+bounded provider-free reconciliation under the same gate. Deterministic copy/probe
+fixtures do not prove real-media readiness; `TestActualPublicDownloadGeneratedMediaAndRestart`
+exercises the actual production ffmpeg/ffprobe path, skips locally only when media
+tools are absent, and fails in mandatory CI (`TALETTY_REQUIRE_MEDIA_TOOLS=1`) if
+tools are missing. #110, #113, #94, #6 (and #7 progress, app storage/queue, UI
+J04/J05/J06, live accounts, protected media and working release) remain open.
+
 ## Executable storage contract (#3)
 
 `python tests/storage/test_schema.py` uses stdlib sqlite3 as a test-only oracle
