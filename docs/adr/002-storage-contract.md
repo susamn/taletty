@@ -183,3 +183,38 @@ the anchored lease and resolve the driver's SQLite path-reopening, journal/sidec
 creation and locking semantics before opening anything. A successful metadata
 check alone does not authorize a path-based connection. #108 owns subsequent
 typed repositories; #9 and downstream runtime blockers remain open.
+
+## Private Linux SQLite transport (#114 under #107)
+
+#107 was split before implementation into native dependency-linked children #114
+(transport) → #115 (validated opener and public owner lifetime). This first slice
+pins `github.com/ncruces/go-sqlite3 v0.32.0`, a supported CGO-free SQLite/wazero
+wrapper with public writable Go VFS hooks and default Linux OFD locks. The cached
+`modernc.org/sqlite v1.56.0` was also inspected: its public fs.FS VFS is read-only;
+its ordinary Unix VFS canonicalizes paths. The ncruces default VFS also cannot be
+used unwrapped: it canonicalizes symlinks, creates at 0666 and separately opens SHM.
+See [the transport review](../../app/internal/store/README.md) for the inspected
+source behavior, licensing, build/filesystem constraints and real-test evidence.
+
+The package-private adapter retains the borrowed directory lease, preserves a
+fixed-leaf path through `/proc/self/fd/<directory-fd>/` (never a DB-file fd path),
+precreates at 0600 with openat/exclusive/no-follow, validates before driver reopen,
+removes driver CREATE flags and restricts every path to the DB/rollback journal.
+It reuses upstream IO/OFD locks and root validation; directory sync covers private
+creation/journal publication/deletion. Only version-1 file IO is exposed: WAL is
+not supported and any existing WAL/SHM is refused/preserved. Temp storage is memory
+only. Every connection enables/verifies foreign_keys, uses caller cancellation and
+a 100ms busy timeout, then joins synchronous work, finalizes statements and closes
+before unregistering the VFS/releasing the directory. No unknown-file sweep,
+chmod repair, recursive .auth.lock, engine import or authenticated-gate ownership.
+Cooperative ownership excludes name mutation, not a hostile same-UID attacker.
+
+**Not a validated app opener:** SQLite can recover a hot journal on access. #115
+must authorize existing headers/markers/sidecars before this transport can modify
+anything, embed/dispatch exact v1 SQL, validate exact schema/integrity/FK rows,
+refuse/preserve foreign/unversioned/nonempty/corrupt/too-new/forged state, and define
+a public engine-compatible owner/lease/Close contract independent of auth work.
+One-time Wasm initialization also needs an explicit startup policy. The new
+transport is deliberately unexported and unused by app startup. Tests embed the
+merged schema without redefining it; they are transport evidence, not acceptance
+of that deferred dispatcher, public engine integration, #107/#9 or a full J14.
