@@ -255,6 +255,19 @@ This is a production filesystem primitive, not yet production remux/validation,
 licensed composition, embedded download, public Go/CLI or complete J04/J05/J06.
 Those remain dependency-linked #99/#100/#94 after maintainer acceptance.
 
+## Executable storage contract (#3)
+
+`python tests/storage/test_schema.py` uses stdlib sqlite3 as a test-only oracle
+against the app-owned v1 SQL artifact, printing the actual SQLite/Python versions.
+Coverage tooling runs it as a mandatory standalone step; workflow regression also
+executes that entry point and rejects missing execution, zero tests or skips. Real
+temporary databases exercise identity/optionality, FKs/checks, independent local
+state, complete-snapshot commit/rollback, migration rollback, markers and reopen.
+SQL statement coverage is N/A (no SQL coverage instrument); execution is not a
+substitute for the existing independent Go/adapter/tooling statement gates. See
+[ADR 002](adr/002-storage-contract.md) for runtime #9/#10 boundaries: no production
+opener/driver, OS permission proof, upgrade runner or completed J14 is claimed.
+
 ## Release evidence
 
 A release candidate needs an evidence matrix linking each supported journey to
