@@ -407,6 +407,14 @@ A separate generated clear-media public API path uses production tools in mandat
 CI; deterministic copy/probe tests do not establish real-media readiness. No live
 provider/protected-media, full J04/J05/J06 or working-release evidence is claimed.
 
+#113 wires `download <ASIN>` into `engine/internal/cli` and `engine/cmd/taletty-engine`,
+validating the 10-character ASCII alphanumeric ASIN before root creation, closing the
+session before writing output, preserving authoritative `download` facts alongside
+`failure` (`{"download":...,"failure":...}` in `--json` mode and `Media ready: <path>`
+in plain error output) when auth persistence/durability/cleanup fails after commit,
+and returning exit `0` when committed/reconciled ready media wins cancellation (`130`
+on precommit cancellation, `1` on operational/output failure, `2` on usage error).
+
 ## Progress and failures
 
 Stages: `licensing`, `downloading`, `preparing`, `publishing`. Download byte samples
