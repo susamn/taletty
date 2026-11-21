@@ -260,7 +260,7 @@ inspection, I/O errors or SIGKILL can leave private partials; retry never sweeps
 `store.ready(asin, validate)` requires a nonempty safe file and a caller-supplied
 complete-media validator returning exactly True. Validators borrow an FD, must not
 mutate/retain/close it, and must not use untrusted paths. **This store does not
-implement ffprobe validation**: production copy-remux/validation is blocked #99.
+implement ffprobe validation**: #99 supplies the separate callback below.
 
 `store.publish(partial, asin, validate)` validates and fsyncs the file, then Linux
 `renameat2(RENAME_NOREPLACE)` commits without overwriting any destination. No unsafe
@@ -285,5 +285,53 @@ unsafe paths, rename anchoring, validation/mutation faults, precommit preservati
 postcommit durability/close uncertainty and owned-only cleanup/restart. Mandatory
 media CI additionally publishes/probes generated silence through an explicit test
 validator. No provider HTTP, protected audio or real account is used. This source
-is private and not loaded by any current action; #99/#100 must wait for acceptance,
+is private and not loaded by any current action; #100 must wait for #99 acceptance,
 and #94 remains the later public API/CLI slice.
+
+## Private copy-remux and validation (#99)
+
+`remux.copy(source, output, store, chapter_info=None, plan=None, cancel_fd=None)`
+borrows two distinct unpublished partials from the same retained store. It uses
+`chapters.prepare`, a private owned metadata partial and the prototype's exact
+first-audio `-map 0:a:0 -map_metadata 0 -map_chapters 1/0 -c:a copy -f mp4`
+behavior. No positive supplied leaves means retain embedded chapters. No encoding,
+transfer, license acquisition, publication, source discovery, public result or
+preparation percentage is added. `plan` is the existing private ephemeral license
+capability; URLs are never consumed here. Key/IV argv exposure remains the inherited
+**documented local process-inspection risk**, never logged or included in errors.
+Only intended media FDs enter exec, with stdin/stderr nulled, bounded stdout and
+no shell/new session/process group. Format/protocol whitelists exclude playlists
+and network discovery. Trusted local ffmpeg/ffprobe are codec parsers, not a sandbox
+against same-UID mutation, malicious executables or escaped/privileged children.
+
+`remux.validator(tree=None, cancel_fd=None)` is the store callback for publication
+and ready reuse: bounded ffprobe JSON plus a full packet count scan must establish
+an MP4-family container, exactly one supported audio stream (AAC/MP3/ALAC/AC3/EAC3),
+positive finite duration/packet count, no video, sane optional chapters and supplied
+positive leaf title/start/end agreement (1ms tolerance). A successful probe launch
+alone is never validation. Prepared trees are private owned inputs, not raw JSON.
+Malformed/incompatible media fails closed; no decode/re-encode or arbitrary-file
+readiness claim. File identity/mutation checks, no-clobber commit, conflicts and
+publication uncertainty remain **store-owned**, unchanged. #100 must pass the same
+prepared-tree validator on publish/reuse and reconcile cancellation/commit facts;
+this private primitive does not claim licensed composition is complete.
+
+Execution limits: 3600s copy, 60s probe, 4MiB stdout/JSON. A borrowed cancellation
+pipe/socket is polled but never inherited. Missing/incompatible executables,
+conversion/probe failure, unsupported media and cancellation have fixed code-only
+errors with no raw exception context, commands or stderr. Direct children are
+killed/waited and pipes closed before return; RunRoot remains the owner of the
+existing process group and residual descendants. As with RunRoot, kernel
+uninterruptible tasks are not a bounded-kill guarantee. Callers must retain the
+root/gate and capabilities until all users join; abrupt kill cannot guarantee
+Python finally/partial cleanup or auth durability.
+
+`tests/adapter/test_remux.py` covers real child timeout/output bounds, malformed
+executable/probe/media, fixed failures, same-group/only-explicit-FD exec, repeated
+socket-barrier cancellation and reaping, exact copy maps and owned cleanup.
+Mandatory CI installs/requires real tools: generated silence and chaptered M4B,
+packet hashes, absent/retained chapters, production validator publication/reuse,
+and repeated real ffmpeg progress-barrier cancellation. Local missing tools skip
+explicitly, not in required CI. No issued tokens/accounts/provider HTTP/protected
+media, live download, public Download or full J04/J05/J06 claim. #100/#94 remain
+separate downstream work; maintainer acceptance is required before composition.
