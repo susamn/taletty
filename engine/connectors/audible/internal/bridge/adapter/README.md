@@ -238,5 +238,52 @@ packet bytes with actual ffmpeg/ffprobe. Local absent tools are explicitly skipp
 CI sets TALETTY_REQUIRE_MEDIA_TOOLS=1 and absence fails, never silently skips.
 This callable is not embedded in the current library/login runtime; #93 consumes
 it only after acceptance. #92 license planning, #93 private transfer/remux/publication
-and #94 public Download/API/CLI remain unimplemented. No live/protected-media,
-working download/release/full J04/J06 claim; key-in-ffmpeg-argv limitation remains.
+and #94 public Download/API/CLI remain downstream; #98 adds only the store below.
+No live/protected-media, working download/release/full J04/J06 claim;
+key-in-ffmpeg-argv limitation remains.
+
+## Private media capabilities (#98 under #93)
+
+`with media_store.opened(root_fd) as store` borrows the accepted gate-owned root,
+opens/creates only descriptor-relative `downloads`, and retains that directory FD
+across root/directory renames. Reuses `auth_store` safety predicates. Directories
+must be effective-UID-owned 0700; regular files 0600/single-link. No-follow opens
+reject unsafe leaves (including FIFOs without hanging); no chmod repair. A
+restrictive umask fails closed, rather than repairing even a newly created file.
+The caller must join all FD users before exiting; these are borrowed capabilities,
+not paths or public Media objects. All new descriptors are noninheritable.
+
+`store.partial()` exclusively creates one random `.media-<32 hex>.part` and lends
+its read/write FD. `partial.write(bytes)` handles short writes. Cleanup checks the
+created inode, never sweeps unrelated/replaced names. Failed initial inode
+inspection, I/O errors or SIGKILL can leave private partials; retry never sweeps them.
+`store.ready(asin, validate)` requires a nonempty safe file and a caller-supplied
+complete-media validator returning exactly True. Validators borrow an FD, must not
+mutate/retain/close it, and must not use untrusted paths. **This store does not
+implement ffprobe validation**: production copy-remux/validation is blocked #99.
+
+`store.publish(partial, asin, validate)` validates and fsyncs the file, then Linux
+`renameat2(RENAME_NOREPLACE)` commits without overwriting any destination. No unsafe
+replace/link-unlink fallback. Existing destinations are independently validated
+and SHA-256 compared: byte-identical concurrent output returns False (reuse),
+different output raises fixed `MediaStoreError(conflict=True)`. New commit returns
+True and marks both partial/store `published=True`, then fsyncs the directory.
+Postcommit fsync/close failure carries `published=True`; final media is never
+removed. A SIGINT between syscall commit and Python flag assignment reconciles the
+actual inode; committed complete media wins over that interrupt. If inode inspection
+itself fails, `published=None` explicitly means **unknown**, not False/rollback;
+the partial cannot be republished and later composition must reconcile before retry.
+Known True is retained even if later inspection is unavailable. Precommit
+interrupts propagate and owned cleanup runs on ordinary stack unwinding only.
+Later cancellation/auth persistence failure still requires operation-level
+reconciliation in #100; this primitive does not change SDK error precedence or
+promise whole-operation cancellation behavior. Errors retain no private cause/text.
+
+Tests cover real syscall races (barriers, repeated identical/conflicting outputs),
+SIGINT at the commit window, SIGKILL before publication, short/failed writes,
+unsafe paths, rename anchoring, validation/mutation faults, precommit preservation,
+postcommit durability/close uncertainty and owned-only cleanup/restart. Mandatory
+media CI additionally publishes/probes generated silence through an explicit test
+validator. No provider HTTP, protected audio or real account is used. This source
+is private and not loaded by any current action; #99/#100 must wait for acceptance,
+and #94 remains the later public API/CLI slice.
