@@ -1,20 +1,54 @@
-# Linux SQLite transport: #114, first slice of #107
+# Linux validated SQLite store: #114 transport + #115 opener/owner
 
-This is **not an application-facing validated opener**. `withSQLite` is package
-private, not used by startup, and must remain behind the future #115 dispatcher.
-SQLite may recover a hot journal on access. Consequently this transport alone
-cannot promise preservation of foreign/corrupt/unversioned/too-new state. #115
-must authorize markers/header/sidecars **before** recovery, embed the actual schema,
-validate exact v1 schema/integrity/FK rows, and define public owner/join/Close.
-#107 remains open; typed repositories remain #108. No bootstrap, upgrades, backup,
-engine integration, UI persistence or full J14 acceptance is claimed.
+`Open(ctx, RootOwner)` is the application-facing v1 dispatcher; `Store.Check`
+validates without writing, and `Store.Close` cancels/joins local work. Raw SQLite
+handles remain package-private for future typed repositories (#108), never UI.
+Startup is not wired here. #107 remains open for maintainer acceptance. No root
+bootstrap, upgrades, backup/restore, engine integration, UI persistence or full
+J14 acceptance is claimed.
+
+Before SQLite access the dispatcher preflights private anchored files, refuses
+**every existing journal/WAL/SHM**, then reads the DB header with O_NOATIME. It
+checks rollback-mode header layout, complete file/page counts and markers. Missing
+and zero-length databases may initialize; unversioned SQLite databases must have
+no schema objects. Foreign/nonempty unversioned/corrupt/too-new/forged state is
+refused without byte, inode, permission, link, atime, mtime or ctime repair.
+Unknown files are untouched. No automatic cleanup/reset or old-app discovery.
+
+An inspection VFS denies every write/truncate, creation, sidecar open and delete;
+all byte reads use O_NOATIME while upstream OFD locks remain intact. SQLite is
+opened with `mode=rw` (no create), NOT `mode=ro`: real regression tests found
+SQLite 3.51.3's integrity_check skips CHECK constraints on a readonly connection.
+The VFS enforces the write ban, rather than relying on that SQLite flag. Failed
+O_NOATIME access fails closed; there is no fallback that changes access times.
+Full sqlite_schema rows (type/name/table/SQL, including autoindexes) must exactly
+match an in-memory execution of the embedded source artifact. Semantically similar
+but rewritten schemas, extra triggers/indexes/tables and changed FKs/CHECKs are
+rejected. Full integrity_check and foreign_key_check follow schema comparison,
+so unknown schema expressions are not evaluated. Runtime SQLite >=3.38 and both
+markers are verified; foreign_keys is enabled/verified on every connection.
+Fresh initialization executes the exact embedded SQL and explicitly rolls back
+any script failure, including after cancellation. No generic migration runner.
+
+## Recovery policy
+
+Markers cannot authenticate a crash journal's provenance. v1 therefore refuses
+all journals, including empty/cold ones, **before SQLite can recover, delete or
+mutate anything**. A real abruptly exited child produces a hot journal in tests;
+the public opener preserves it byte-for-byte and metadata-for-metadata. Only the
+test explicitly authorizes the private transport to prove rollback recovery of
+that fixture. Production offers no recovery/reset command yet. Preserve root and
+seek explicit recovery tooling; do not manually delete journals to force startup.
+This trades crash availability for preservation, not a claim of general crash,
+disk-full, backup or durability recovery. Low-level `withSQLite` alone is unsafe
+for untrusted existing state and must never bypass the public dispatcher.
 
 ## Reviewed driver and filesystem boundary
 
 Pinned `github.com/ncruces/go-sqlite3 v0.32.0` is a CGO-free Go/wazero wrapper of
 embedded SQLite. The actual artifact reports **SQLite 3.51.3** in tests (its embed
-README still says 3.51.2); tests execute the exact merged `schema/001_initial.sql`
-via `go:embed`. No v1 DDL was copied into Go. Runtime schema dispatch is deferred.
+README still says 3.51.2); production embeds the exact merged
+`schema/001_initial.sql` via `go:embed`. No v1 DDL was copied into Go.
 The dependency is MIT (Nuno Cruces); wazero v1.11.0 is Apache-2.0. Dependencies
 remain modules with their upstream licenses, not copied/relicensed source.
 
@@ -56,11 +90,24 @@ The adapter therefore:
 ## Ownership, cancellation and recovery
 
 The caller must already retain the **session-lifetime advisory root owner**.
-This code does not take `.auth.lock` recursively, discover paths or import engine
-internals. That owner is distinct from the authenticated per-operation gate;
-never call a DB-lifetime callback from inside that gate, or block checkpoints
-behind a licensed transfer. Obtaining a public engine-compatible lifetime lease
-without holding its operation gate is **still #115 work**, not solved here.
+`NewOwner(ctx, borrowedRoot, release)` transfers cleanup responsibility only on
+success, retains its own anchored CLOEXEC directory, and implements `RootOwner`.
+ALL external/auth users must take `Owner.Lease` and honor its Context, independently
+of the caller's separate auth-operation gate. RootLease.Close is idempotent;
+join every derived user first. Owner.Close permanently stops admission, cancels
+leases and waits context-aware for them to join, then closes its directory and
+calls the nonblocking external release exactly once. A canceled wait retains
+ownership; retry Close. Release must not block/reenter: joining belongs to leases.
+Store.Close cancels/joins only local work and never waits for an unrelated auth
+lease. Close Store before Owner; no reentrant Close inside its own work/lease.
+
+No `.auth.lock` acquisition, engine import or root discovery occurs. Integration
+can wrap its lifetime owner with this capability; the currently merged engine
+Client does NOT expose a public root lifetime lease and its private WithRoot is
+inside the auth gate. Thus this is a usable external owner/handoff contract,
+**not current engine integration**. Never retain a root from that private callback
+or hold the auth gate for DB lifetime. Future public engine wiring must arrange
+all auth users under lifetime leases, or provide an equivalent RootOwner adapter.
 
 Each invocation owns its connection and unique VFS registration. All operations
 and statements finish synchronously before return; no handle/root escape,
@@ -69,21 +116,31 @@ are finalized (reported as failure), then Close rolls back unfinished transactio
 releases locks, unregisters the VFS and releases only our root lease, including on
 panic. Callback errors retain their meaning; setup/OS errors are sanitized.
 Every connection enables and verifies `foreign_keys=ON`, sets temp storage to
-memory, installs caller cancellation and a 100ms busy timeout. The future public
-API must sanitize operation errors and enforce serialized access. Initial Wasm
-compilation is upstream one-time process setup, not context-interruptible query
-work; #115 must account for that startup boundary explicitly.
+memory, installs caller cancellation and a 100ms busy timeout. The public Store sanitizes
+operation errors and serializes access with a cancellation-aware local gate.
+`Initialize()` is explicit one-time synchronous process startup, before interactive
+work: upstream Wasm compilation cannot be canceled. Open initializes implicitly
+if needed; do not promise a cold Open deadline interrupts the compiler. SQLite
+queries/busy waits and lease/store shutdown are cancelable after that boundary.
 
 ## Evidence and running tests on constrained hosts
 
 Real SQLite tests cover source SQL, create/reopen/root rename, private journal,
 WAL refusal, foreign-key enforcement, active transaction rollback on error/panic/
-cancel/forgotten statements, partial fresh migration rollback/retry, independent
-connections and real-process busy waits, cancellation at the contention barrier,
-late journal planting, unknown-file preservation, and external advisory ownership.
-The existing `WithRoot` adversarial matrix supplies all fixed-leaf mode/owner/link/
-nonregular checks; owner mismatch uses the existing stat-boundary injection.
-None of this demonstrates the still-deferred version/refusal dispatcher.
+cancel/forgotten statements, partial/canceled fresh migration rollback/retry,
+independent connections and real-process busy waits, cancellation at the
+contention barrier, late journal planting, unknown-file preservation, and
+external advisory ownership. #115 adds [`validated_linux_test.go`](validated_linux_test.go)
+and [`validation_faults_linux_test.go`](validation_faults_linux_test.go): fresh/zero-byte/
+empty-unversioned initialization, 65536-byte page headers, byte-and-metadata
+(`O_NOATIME` atime/ctime/inode/link) refusal of foreign/nonempty-unversioned/
+corrupt/too-new/forged-schema/FK/CHECK-violating databases, SQLite 3.51.3
+`mode=rw` + VFS write-ban enforcement, abrupt-exit hot-journal refusal and
+preservation, `Store.Check`/`Close` races, and `Owner`/`RootLease` independence
+from `.auth.lock`. The existing `WithRoot` adversarial matrix supplies all
+fixed-leaf mode/owner/link/nonregular checks; owner mismatch uses the existing
+stat-boundary injection. No #108 repositories, #10 bootstrap, engine integration,
+or full J14 acceptance is claimed.
 
 Tests use the real default JIT runtime, including under `-race`, and a private
 compilation cache shared with owned child fixtures. On a one-core ~1GiB host,

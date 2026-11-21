@@ -2,7 +2,6 @@ package store
 
 import (
 	"context"
-	_ "embed"
 	"errors"
 	"fmt"
 	"os"
@@ -16,9 +15,6 @@ import (
 	"github.com/ncruces/go-sqlite3/vfs"
 	"golang.org/x/sys/unix"
 )
-
-//go:embed schema/001_initial.sql
-var initialSQL string
 
 func scalar(t *testing.T, conn *sqlite3.Conn, query string) string {
 	t.Helper()
@@ -348,6 +344,8 @@ func TestSQLiteVFSRejectsUnexpectedPaths(t *testing.T) {
 		}
 	}
 	must(t, fs.Delete(fs.path+"-journal", false))
+	must(t, os.WriteFile(filepath.Join(path, "taletty.sqlite3-journal"), []byte("private"), 0600))
+	must(t, fs.Delete(fs.path+"-journal", true))
 	must(t, os.Chmod(filepath.Join(path, "taletty.sqlite3"), 0644))
 	if _, err := fs.Access(fs.path, vfs.ACCESS_EXISTS); err != ErrUnsafeFile {
 		t.Fatal(err)
