@@ -386,3 +386,52 @@ retry. Only intended media FDs enter ffmpeg/ffprobe; no root/auth lock/control F
 Existing same-UID cooperative trust, plaintext-at-rest and inherited key/IV process
 argv risks remain unsolved. No protected media, account, live-provider, public
 Download/CLI, full J04/J05/J06 or working-release claim follows from these tests.
+
+## Fileless download producer and read-only reconciliation (#111)
+
+Before code, #94 was split into #110 (public track), #111 (this private executable
+producer/recovery slice), #112 (consumed public contracts/Client.Download after111)
+and #113 (CLI after110/112), with native subissue/blocked-by links. Public API and
+CLI remain unimplemented; this slice is not declarations-only or a new owner.
+
+`noninteractive.main(..., action="download")` is an engine-trusted entrypoint;
+request protocol/action/operation ID and structured Audible/US/ASCII-ASIN book ID
+must match before composition or SDK access. Existing library defaults remain.
+A clean result carries `outcome` with ready/reused/published/media_code/auth_code
+unchanged, including result-plus-failure facts after committed media/auth failure.
+It does **not** equate a result envelope with operation success. The caller must
+validate all typed fields and clean EOF/exit before deciding public terminal state.
+`chapters` is an owned normalized provider tree only after a fresh validated
+publication; nil means unknown, including disk/concurrent reuse, missing metadata,
+or an interruption before the tree assignment. Structural IDs are never rebuilt
+from flattened ffprobe chapters. No hierarchy sidecar is persisted.
+
+`action="reconcile"` uses the same loader/stdio/root-only transport, never the
+composition producer. After joining all original failed/canceled child users,
+the caller must retain the same root/gate, run this child with a fresh bounded
+context and join it before releasing the root (no recursive WithRoot acquisition).
+`reconciliation.inspect` opens only existing descriptor-relative downloads/media:
+no mkdir, fsync, auth read/save, license, provider call, partial sweep or final-file
+mutation. Root/directory/leaf ownership, modes, no-follow/single-link regular-file
+and before/after identity/size/mtime checks reuse store predicates. Probing inherits
+only the media FD and is bounded to five seconds; the parent must independently
+bound the whole child. Its result `state` is one of:
+
+- `ready`: safe nonempty file passed production packet/container/audio validation;
+- `absent`: expected directory/leaf absent, not a failed probe;
+- `invalid`: safe empty file or completed validation rejected contents;
+- `unsafe`: path/permissions/ownership/link/type rejected without repair;
+- `unknown`: I/O, changed file, missing tool, execution failure or timeout prevented
+  validation. A nonzero probe is conservative unknown, not proof of invalidity.
+
+Ready alone proves neither this attempt's commit/durability nor auth persistence;
+no result reconstructs lost provider hierarchy. #112 must preserve these unknowns,
+separate media and auth failures, and implement the public media/cancel commit race.
+
+Python tests retain deterministic SDK/store faults and all seeded states locally;
+Go tests run the actual embedded launcher/SDK/fake HTTP and joined pre/postcommit
+cancellation followed by provider-free recovery under one root loan. Deterministic
+copy/probe seams are explicitly not real-media proof. A separate generated-media
+producer/reconciler test uses actual tools, skips only when absent locally and
+fails on missing tools in mandatory CI. No public callback/Close lifecycle, UI,
+protected media, live account or release acceptance is claimed by this slice.
