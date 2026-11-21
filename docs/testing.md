@@ -314,8 +314,29 @@ bounded provider-free reconciliation under the same gate. Deterministic copy/pro
 fixtures do not prove real-media readiness; `TestActualPublicDownloadGeneratedMediaAndRestart`
 exercises the actual production ffmpeg/ffprobe path, skips locally only when media
 tools are absent, and fails in mandatory CI (`TALETTY_REQUIRE_MEDIA_TOOLS=1`) if
-tools are missing. #110, #113, #94, #6 (and #7 progress, app storage/queue, UI
-J04/J05/J06, live accounts, protected media and working release) remain open.
+tools are missing.
+
+#7 adds structured download stage/progress streaming tests across the Python
+adapter ([`test_licensing.py`](../tests/adapter/test_licensing.py),
+[`test_composition.py`](../tests/adapter/test_composition.py),
+[`test_noninteractive.py`](../tests/adapter/test_noninteractive.py),
+[`test_download_producer.py`](../tests/adapter/test_download_producer.py)) and
+Go engine ([`download_test.go`](../engine/model/download_test.go),
+[`download_payload_test.go`](../engine/connectors/audible/download_payload_test.go),
+[`download_linux_test.go`](../engine/connectors/audible/download_linux_test.go),
+[`download_sdk_linux_test.go`](../engine/connectors/audible/download_sdk_linux_test.go),
+[`composition_process_linux_test.go`](../engine/connectors/audible/composition_process_linux_test.go)):
+strict `Content-Length` parsing (known, zero, absent, malformed, negative,
+smaller, overflow), stage ordering, verified ready reuse skipping stages, closed
+control pipe during progress without manufacturing success, `SIGTERM`/`SIGINT`
+killing the `ffmpeg` process group and cleaning partials, strict Go
+stage/progress validation and `FuzzDownloadPayload`, unknown vs known-zero
+`Total`, monotonic public `Sequence`, independent pointer copies, stalled
+consumer backpressure + cancellation, killed `ffmpeg` process group +
+reconciliation, and mandatory CI generated-media verification of
+`licensing -> downloading -> progress -> preparing -> publishing -> completed`.
+App storage/queue (#16), UI J04/J05/J06 (#17), engine packaging (#8), live
+accounts, protected media and working release remain open.
 
 ## Executable storage contract (#3)
 

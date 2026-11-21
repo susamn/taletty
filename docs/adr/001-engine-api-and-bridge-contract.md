@@ -417,6 +417,26 @@ on precommit cancellation, `1` on operational/output failure, `2` on usage error
 
 ## Progress and failures
 
+#7 implements structured download stage/progress streaming across the Python
+adapter and Go engine using bridge-v1 `"bytes"` and optional `"total"` fields:
+`licensing.signed_stream` parses 200 `Content-Length` strictly (nonnegative ASCII
+digits bounded to signed 64-bit integers, else `None`); `composition.run` skips
+stages on verified ready reuse and otherwise emits `stage="licensing"`,
+`stage="downloading"`, monotonic `progress` (`bytes`, omitting `total` when
+`None` or `< bytes`), `stage="preparing"` (no fake byte progress), and
+`stage="publishing"`; `noninteractive.py` wires `emit` for `action="download"`
+and handles closed control pipes (`OSError`) cleanly without manufacturing
+success. `model.OperationEvent` adds `Progress` (`"progress"`), `Bytes *int64`,
+and `Total *int64` with independent pointer copies; `download_payload.go`
+validates every nonterminal frame strictly via `strictFields` (exact keys,
+duplicate keys, valid stage enum/order without duplicates/backwards, progress
+only during `downloading`, monotonic `bytes >= 0`, optional `total >= bytes`
+consistent if previously reported), while `reconcile` continues rejecting any
+nonterminal frame. `download_linux.go` streams validated events synchronously on
+the caller goroutine with bounded channel backpressure selecting on
+cancellation and joins all child/ffmpeg process-group users before
+reconciliation; CLI `download` passes a `nil` reporter so stdout stays clean.
+
 Stages: `licensing`, `downloading`, `preparing`, `publishing`. Download byte samples
 are monotonic within that transfer; unknown total is omitted. Do not derive preparation
 percentage from bytes. If ffmpeg offers no verified progress, preparation is indeterminate.
@@ -493,8 +513,10 @@ Successful download; unknown total omitted until known:
 {"protocol":1,"operation_id":"op-demo","seq":4,"type":"progress","bytes":2048,"total":2048}
 {"protocol":1,"operation_id":"op-demo","seq":5,"type":"stage","stage":"preparing"}
 {"protocol":1,"operation_id":"op-demo","seq":6,"type":"stage","stage":"publishing"}
-{"protocol":1,"operation_id":"op-demo","seq":7,"type":"result","media":{"book_id":{"provider":"audible","namespace":"us","id":"B000000001"},"path":"/tmp/taletty-fixture/downloads/B000000001.m4b","format":"m4b","chapters":[]}}
+{"protocol":1,"operation_id":"op-demo","seq":7,"type":"result","outcome":{"ready":true,"reused":false,"published":true,"media_code":null,"auth_code":null,"chapters":[]}}
 ```
+
+(Go derives the public `Media.Path` from the borrowed root inode rather than trusting a path string from Python.)
 
 Alternative terminal error after licensing, not appended to the success transcript:
 

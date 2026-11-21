@@ -64,7 +64,10 @@ See the [private adapter contract](internal/bridge/adapter/README.md#fileless-do
 
 `client.Download(ctx, operationID, bookID, report)` exposes the public US-only
 download lifecycle using the shared `Client` session, root lock, cancel-aware
-gate and live operation ID namespace shared with `Library`. See the
+gate and live operation ID namespace shared with `Library`, streaming validated
+`Stage` (`licensing`, `downloading`, `preparing`, `publishing`) and monotonic
+`Progress` (`Bytes`, optional `Total`) events (#7) while skipping stages on
+verified ready reuse. See the
 [download API contract](download.md) and [neutral model contracts](../../model/README.md).
 
 `DownloadResult` keeps `State` (`ready`/`absent`/`invalid`/`unsafe`/`unknown`),
@@ -81,6 +84,6 @@ Deterministic copy/probe fixtures exercise local failure/recovery without media
 tools and are not real-media proof. `TestActualPublicDownloadGeneratedMediaAndRestart`
 (and #111's `TestDownloadProducerActualGeneratedMedia`) run the actual production
 ffmpeg/ffprobe path, skip locally only when media tools are absent, and fail in
-mandatory CI (`TALETTY_REQUIRE_MEDIA_TOOLS=1`) if tools are missing. CLI download
-(#113), #110, #94, #6, progress (#7), app queue/storage, UI J04/J05/J06, live
-accounts, protected media and a working release remain open.
+mandatory CI (`TALETTY_REQUIRE_MEDIA_TOOLS=1`) if tools are missing. App
+queue/storage, UI J04/J05/J06, live accounts, protected media and a working
+release remain open.

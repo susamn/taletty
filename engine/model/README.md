@@ -24,8 +24,13 @@ concurrent mutation. Validate is read-only; ownership/defensive copies at event/
 boundaries belong to that implementation, not a generic clone framework.
 
 `LibrarySnapshot`, `Failure` and `OperationEvent` are engine-created result/lifecycle
-records used by [Client.Library](../connectors/audible/library.md). A stage count is
-provisional, not a snapshot; the successful API return owns complete Books. Fixed
+records used by [Client.Library](../connectors/audible/library.md) and
+[Client.Download](../connectors/audible/download.md). A stage count is
+provisional, not a snapshot; the successful API return owns complete Books.
+`OperationEvent` also carries `Progress` (`"progress"`) with `Bytes *int64`
+(`bytes,omitempty`) and optional `Total *int64` (`total,omitempty`): `nil` `Total`
+is unknown (omitted in JSON), while `&0` preserves known zero (`"total":0`), and
+callbacks receive independent pointer copies. Fixed
 safe Failure values implement error; context identity may also be joined. Callers
 must not substitute remote exception text in these records.
 
