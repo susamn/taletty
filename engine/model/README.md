@@ -29,6 +29,15 @@ provisional, not a snapshot; the successful API return owns complete Books. Fixe
 safe Failure values implement error; context identity may also be joined. Callers
 must not substitute remote exception text in these records.
 
+`Chapter`, `Media` and `DownloadResult` are consumed by the actual public
+[Download lifecycle](../connectors/audible/download.md). ValidateChapters bounds
+hierarchy/IDs/text/native times without flattening or inventing unknown ends;
+Media.Validate checks safe absolute final M4B paths, not on-disk readiness.
+DownloadResult keeps ready state/owned media, tri-state commit, media durability
+and auth persistence/failures separate even on error. Its Clone gives terminal
+callbacks independent pointers/slices. Nil provider hierarchy is explicitly unknown
+on reuse/restart/reconciliation, not reconstructed from container leaf chapters.
+
 Tests cover native/JSON optionality and invalid boundaries. The declarations alone
 do not prove provider sync/cache persistence/full UI journeys; #85 adds the actual
 owned transport/completion tests. CLI sync remains #86.
