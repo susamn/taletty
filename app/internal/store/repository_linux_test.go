@@ -339,3 +339,233 @@ func TestRepositoryTransactionRollbackCancelClosedAndHelpers(t *testing.T) {
 		t.Fatalf("expected ErrDatabase for missing book_identity row, got %v", err)
 	}
 }
+
+func TestListeningStateSettingsViewStateFavoritesAndBookmarks(t *testing.T) {
+	path, _, owner := ownerFixture(t)
+	s := storeFixture(t, owner)
+	ctx := context.Background()
+
+	k1 := BookKey{Provider: "audible", Namespace: "us", ID: "B000000001"}
+	k2 := BookKey{Provider: "local", Namespace: "user", ID: "book-2"}
+
+	// Defaults when singleton rows are absent.
+	defSettings, err := s.Settings(ctx)
+	must(t, err)
+	if defSettings != (Settings{GlyphMode: GlyphUnicode, VolumePercent: 100}) {
+		t.Fatalf("unexpected default settings: %+v", defSettings)
+	}
+	defView, err := s.ViewState(ctx)
+	must(t, err)
+	if defView != (ViewState{Destination: DestinationAll, Focus: FocusBooks, SortOrder: SortTitle}) {
+		t.Fatalf("unexpected default view state: %+v", defView)
+	}
+	if _, found, err := s.ListeningState(ctx, k1); err != nil || found {
+		t.Fatalf("expected absent listening state, got (%v, %v)", found, err)
+	}
+
+	// ListeningState roundtrip and update.
+	wantLS := ListeningState{
+		Key:         k1,
+		PositionNS:  123456789,
+		SpeedMilli:  1250000,
+		Completion:  CompletionUnfinished,
+		UpdatedAtMS: 500,
+	}
+	must(t, s.PutListeningState(ctx, wantLS))
+	wantLS.Completion = CompletionFinished
+	wantLS.UpdatedAtMS = 600
+	must(t, s.PutListeningState(ctx, wantLS))
+	gotLS, found, err := s.ListeningState(ctx, k1)
+	must(t, err)
+	if !found || gotLS != wantLS {
+		t.Fatalf("unexpected listening state: (%+v, %v)", gotLS, found)
+	}
+
+	// Settings roundtrip.
+	wantSettings := Settings{GlyphMode: GlyphPlain, VolumePercent: 72}
+	must(t, s.PutSettings(ctx, wantSettings))
+	gotSettings, err := s.Settings(ctx)
+	must(t, err)
+	if gotSettings != wantSettings {
+		t.Fatalf("unexpected settings: %+v", gotSettings)
+	}
+
+	// ViewState roundtrip without and with Selected.
+	must(t, s.PutViewState(ctx, ViewState{
+		Destination: DestinationContinue,
+		Focus:       FocusChapters,
+		FilterText:  "chapter",
+		SortOrder:   SortRecent,
+	}))
+	gotView, err := s.ViewState(ctx)
+	must(t, err)
+	if gotView.Selected != nil || gotView.Destination != DestinationContinue || gotView.Focus != FocusChapters {
+		t.Fatalf("unexpected view state without selection: %+v", gotView)
+	}
+	wantView := ViewState{
+		Destination: DestinationFavorites,
+		Selected:    &k1,
+		Focus:       FocusDetails,
+		FilterText:  "query",
+		SortOrder:   SortAcquisition,
+	}
+	must(t, s.PutViewState(ctx, wantView))
+	gotView, err = s.ViewState(ctx)
+	must(t, err)
+	if gotView.Selected == nil || *gotView.Selected != k1 || gotView.SortOrder != SortAcquisition {
+		t.Fatalf("unexpected view state with selection: %+v", gotView)
+	}
+
+	// Favorites roundtrip, ordering and removal.
+	must(t, s.SetFavorite(ctx, k2, false, 0)) // absent un-favorite is a no-op
+	must(t, s.SetFavorite(ctx, k2, true, 200))
+	must(t, s.SetFavorite(ctx, k1, true, 100))
+	favs, err := s.Favorites(ctx)
+	must(t, err)
+	if !reflect.DeepEqual(favs, []BookKey{k1, k2}) {
+		t.Fatalf("unexpected favorites order: %+v", favs)
+	}
+	must(t, s.SetFavorite(ctx, k1, false, 0))
+	favs, err = s.Favorites(ctx)
+	must(t, err)
+	if !reflect.DeepEqual(favs, []BookKey{k2}) {
+		t.Fatalf("unexpected favorites after delete: %+v", favs)
+	}
+
+	// Bookmarks CRUD, ordering, multiline note, and cross-book ID protection.
+	bLate := Bookmark{
+		ID:           "bm-2",
+		Key:          k1,
+		PositionNS:   900,
+		Note:         "Second\n\tnote",
+		ChapterID:    strPtr("ch-2"),
+		ChapterTitle: strPtr("Chapter Two"),
+		CreatedAtMS:  10,
+		UpdatedAtMS:  20,
+	}
+	bEarly := Bookmark{
+		ID:           "bm-1",
+		Key:          k1,
+		PositionNS:   200,
+		Note:         "First note",
+		ChapterTitle: strPtr(""),
+		CreatedAtMS:  5,
+		UpdatedAtMS:  5,
+	}
+	must(t, s.PutBookmark(ctx, bLate))
+	must(t, s.PutBookmark(ctx, bEarly))
+	bEarly.Note = "First note updated"
+	bEarly.UpdatedAtMS = 30
+	must(t, s.PutBookmark(ctx, bEarly))
+
+	// Reject stealing an existing bookmark ID for another book.
+	if err := s.PutBookmark(ctx, Bookmark{
+		ID:          "bm-1",
+		Key:         k2,
+		PositionNS:  100,
+		Note:        "Steal",
+		CreatedAtMS: 1,
+		UpdatedAtMS: 1,
+	}); !errors.Is(err, ErrInvalidInput) {
+		t.Fatalf("expected ErrInvalidInput for cross-book bookmark ID, got %v", err)
+	}
+
+	bms, err := s.Bookmarks(ctx, k1)
+	must(t, err)
+	if !reflect.DeepEqual(bms, []Bookmark{bEarly, bLate}) {
+		t.Fatalf("unexpected bookmarks: %+v", bms)
+	}
+	must(t, s.DeleteBookmark(ctx, k1, "bm-2"))
+	bms, err = s.Bookmarks(ctx, k1)
+	must(t, err)
+	if !reflect.DeepEqual(bms, []Bookmark{bEarly}) {
+		t.Fatalf("unexpected bookmarks after delete: %+v", bms)
+	}
+
+	// Input validation matrix before transaction.
+	for _, err := range []error{
+		s.PutListeningState(ctx, ListeningState{Key: BookKey{}, PositionNS: 0, SpeedMilli: 1000000, Completion: CompletionUnfinished}),
+		s.PutListeningState(ctx, ListeningState{Key: k1, PositionNS: -1, SpeedMilli: 1000000, Completion: CompletionUnfinished}),
+		s.PutListeningState(ctx, ListeningState{Key: k1, PositionNS: 0, SpeedMilli: 0, Completion: CompletionUnfinished}),
+		s.PutListeningState(ctx, ListeningState{Key: k1, PositionNS: 0, SpeedMilli: 1000000, Completion: "done"}),
+		s.PutListeningState(ctx, ListeningState{Key: k1, PositionNS: 0, SpeedMilli: 1000000, Completion: CompletionUnfinished, UpdatedAtMS: -1}),
+		s.PutSettings(ctx, Settings{GlyphMode: "nerd", VolumePercent: 50}),
+		s.PutSettings(ctx, Settings{GlyphMode: GlyphUnicode, VolumePercent: 101}),
+		s.PutViewState(ctx, ViewState{Destination: "bad", Focus: FocusBooks, SortOrder: SortTitle}),
+		s.PutViewState(ctx, ViewState{Destination: DestinationAll, Focus: "bad", SortOrder: SortTitle}),
+		s.PutViewState(ctx, ViewState{Destination: DestinationAll, Focus: FocusBooks, SortOrder: "bad"}),
+		s.PutViewState(ctx, ViewState{Destination: DestinationAll, Focus: FocusBooks, SortOrder: SortTitle, FilterText: "bad\n"}),
+		s.PutViewState(ctx, ViewState{Destination: DestinationAll, Focus: FocusBooks, SortOrder: SortTitle, Selected: &BookKey{}}),
+		s.SetFavorite(ctx, BookKey{}, true, 0),
+		s.SetFavorite(ctx, k1, true, -1),
+		s.PutBookmark(ctx, Bookmark{ID: "", Key: k1, Note: "x"}),
+		s.PutBookmark(ctx, Bookmark{ID: "id", Key: BookKey{}, Note: "x"}),
+		s.PutBookmark(ctx, Bookmark{ID: "id", Key: k1, PositionNS: -1, Note: "x"}),
+		s.PutBookmark(ctx, Bookmark{ID: "id", Key: k1, Note: " \u00a0 "}),
+		s.PutBookmark(ctx, Bookmark{ID: "id", Key: k1, Note: "x", CreatedAtMS: 10, UpdatedAtMS: 9}),
+		s.PutBookmark(ctx, Bookmark{ID: "id", Key: k1, Note: "x", ChapterID: strPtr("bad\n")}),
+		s.PutBookmark(ctx, Bookmark{ID: "id", Key: k1, Note: "x", ChapterTitle: strPtr("bad\x00")}),
+		s.DeleteBookmark(ctx, BookKey{}, "id"),
+		s.DeleteBookmark(ctx, k1, ""),
+	} {
+		if !errors.Is(err, ErrInvalidInput) {
+			t.Fatalf("expected ErrInvalidInput, got %v", err)
+		}
+	}
+	if _, _, err := s.ListeningState(ctx, BookKey{}); !errors.Is(err, ErrInvalidInput) {
+		t.Fatal(err)
+	}
+	if _, err := s.Bookmarks(ctx, BookKey{}); !errors.Is(err, ErrInvalidInput) {
+		t.Fatal(err)
+	}
+
+	// Canceled context before queries.
+	canceled, cancel := context.WithCancel(ctx)
+	cancel()
+	if _, _, err := s.ListeningState(canceled, k1); err != context.Canceled {
+		t.Fatal(err)
+	}
+	if _, err := s.Settings(canceled); err != context.Canceled {
+		t.Fatal(err)
+	}
+	if _, err := s.ViewState(canceled); err != context.Canceled {
+		t.Fatal(err)
+	}
+	if _, err := s.Favorites(canceled); err != context.Canceled {
+		t.Fatal(err)
+	}
+	if _, err := s.Bookmarks(canceled, k1); err != context.Canceled {
+		t.Fatal(err)
+	}
+
+	// Reopen durability check.
+	must(t, s.Close(ctx))
+	must(t, owner.Close(ctx))
+	_, reopened := reopenStoreFixture(t, path)
+
+	lsAfter, found, err := reopened.ListeningState(ctx, k1)
+	must(t, err)
+	if !found || lsAfter != wantLS {
+		t.Fatalf("listening state lost across reopen: (%+v, %v)", lsAfter, found)
+	}
+	settingsAfter, err := reopened.Settings(ctx)
+	must(t, err)
+	if settingsAfter != wantSettings {
+		t.Fatalf("settings lost across reopen: %+v", settingsAfter)
+	}
+	viewAfter, err := reopened.ViewState(ctx)
+	must(t, err)
+	if viewAfter.Selected == nil || *viewAfter.Selected != k1 || viewAfter.FilterText != "query" {
+		t.Fatalf("view state lost across reopen: %+v", viewAfter)
+	}
+	favsAfter, err := reopened.Favorites(ctx)
+	must(t, err)
+	if !reflect.DeepEqual(favsAfter, []BookKey{k2}) {
+		t.Fatalf("favorites lost across reopen: %+v", favsAfter)
+	}
+	bmsAfter, err := reopened.Bookmarks(ctx, k1)
+	must(t, err)
+	if !reflect.DeepEqual(bmsAfter, []Bookmark{bEarly}) {
+		t.Fatalf("bookmarks lost across reopen: %+v", bmsAfter)
+	}
+}
