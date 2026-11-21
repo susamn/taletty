@@ -50,3 +50,18 @@ contract](library.md) for fixed safe failures, ordered provisional-count events,
 strict schema/bounds, cancellation and callback ownership. Every error returns a
 zero snapshot; no app cache is written. #86 exposes this API through CLI sync;
 #80/#59/#5 remain open for downstream implementation/acceptance.
+
+## Private download producer and reconciliation (#111)
+
+The embedded, fileless download entrypoint now consumes accepted `composition.run`
+through the same noninteractive loader/stdio and `RunRoot` owner. This is **not**
+public `Client.Download` or CLI download: consumed neutral contracts and public
+lifecycle are dependency-linked #112; CLI is #113, under #110/#94.
+
+A separate root-only `reconcile` entrypoint performs read-only, provider-free
+packet validation with a five-second probe bound. The future public caller must
+join the original failed/canceled child, retain the SAME borrowed root/gate and
+use a fresh bounded context for this child, without recursively entering WithRoot.
+Tests exercise that sequence through real RunRoot. Ready proves validated existence,
+not this attempt's commit, auth persistence, media durability or provider hierarchy.
+See the [private adapter contract](internal/bridge/adapter/README.md#fileless-download-producer-and-read-only-reconciliation-111).

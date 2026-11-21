@@ -340,6 +340,30 @@ Redirect refusal, no credential propagation, capability-only media exec and inhe
 key-in-argv limitations are unchanged. #94 remains blocked on maintainer acceptance
 of the composition/parent scope; private results are not public Download completion.
 
+### Reviewable public-download split (#110–#113)
+
+Before implementation, #94 was split natively into #110 (Child 1 track), #111
+(private executable producer/reconciliation), #112 (consumed neutral contracts and
+real public Client.Download, blocked by111), and #113 (Child 2 CLI, blocked by110/112).
+#93 is accepted/closed. #111 embeds the accepted composition in the existing
+fileless noninteractive launcher with a structured Audible/US book request. Its
+result carries independent media/auth facts, not an unconditional public success.
+Fresh validated publication may retain the owned provider chapter tree; reuse and
+restart explicitly report unknown hierarchy rather than inventing structural IDs
+from flattened ffprobe chapters or persisting a new sidecar.
+
+The separate `reconcile` entrypoint opens only existing root-FD-relative private
+media and runs the production packet validator with a five-second probe bound.
+It returns ready/absent/invalid/unsafe/unknown, without auth, licensing, mkdir,
+fsync or deleting any file. Execution/I/O/timeouts are unknown, never absence or
+claimed durable completion. The caller must join the original child first, retain
+the SAME root/gate loan and independently bound/join reconciliation using a fresh
+context, never recursively reacquiring WithRoot. Ready establishes media existence,
+not this attempt's commit, media durability or auth persistence. #112 still owns
+strict typed decoding, public result-plus-error/events/ID/callback/Close contracts
+and the authoritative media-cancel race; neither public API nor CLI lands in111.
+Actual-media evidence remains separate from deterministic copy/probe fixtures.
+
 ## Progress and failures
 
 Stages: `licensing`, `downloading`, `preparing`, `publishing`. Download byte samples

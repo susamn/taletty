@@ -81,11 +81,11 @@ def _path(fd):
     return "/proc/self/fd/" + str(fd)
 
 
-def _probe(fd, cancel_fd=None):
+def _probe(fd, cancel_fd=None, seconds=PROBE_SECONDS):
     payload = _run(["ffprobe", "-v", "error", "-protocol_whitelist", "file",
                     "-format_whitelist", "mov,mp3,aac", "-count_packets",
                     "-show_entries", "format=format_name,duration:stream=codec_type,codec_name,nb_read_packets:chapter=start_time,end_time:chapter_tags=title",
-                    "-of", "json", _path(fd)], (fd,), PROBE_SECONDS, cancel_fd)
+                    "-of", "json", _path(fd)], (fd,), seconds, cancel_fd)
     result = None
     try:
         result = json.loads(payload)
@@ -109,7 +109,7 @@ def _probe(fd, cancel_fd=None):
     return result
 
 
-def validator(tree=None, cancel_fd=None):
+def validator(tree=None, cancel_fd=None, seconds=PROBE_SECONDS):
     """Store callback: full bounded packet scan, audio/container and leaf checks.
 
     tree must be an owned chapters.prepare result, not untrusted provider JSON.
@@ -127,7 +127,7 @@ def validator(tree=None, cancel_fd=None):
     leaves.sort(key=lambda node: node["start_ms"])
 
     def validate(fd):
-        result = _probe(fd, cancel_fd)
+        result = _probe(fd, cancel_fd, seconds)
         if leaves:
             actual = result.get("chapters", [])
             if len(actual) != len(leaves):

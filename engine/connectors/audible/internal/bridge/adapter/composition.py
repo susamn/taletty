@@ -17,6 +17,9 @@ class Outcome:
     published: bool | None = False
     media_code: str | None = None
     auth_code: str | None = None
+    # Only a fresh, validated publication can retain provider structural IDs.
+    # Reuse/restart cannot recover hierarchy from flattened container chapters.
+    chapters: list | None = None
 
 
 def _canceled(cancel_fd):
@@ -62,6 +65,8 @@ def _compose(store, plan, asin, outcome, cancel_fd):
         outcome.reused = not store.publish(output, asin, remux.validator(tree, cancel_fd))
         # No cancellation check after the commit point. Publication wins.
         outcome.ready = True
+        if not outcome.reused:
+            outcome.chapters = tree or None
 
 
 def run(root_fd, asin, cancel_fd=None):
