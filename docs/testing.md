@@ -366,6 +366,27 @@ independent of `.auth.lock` and any external auth gate. See
 explicit limits: no #108 typed repositories, #10 root bootstrap, engine
 integration, general crash/disk-full proof or full J14 acceptance is claimed.
 
+## Serialized mpv playback adapter (#11)
+
+[`playback_linux_test.go`](../app/internal/playback/playback_linux_test.go) and
+[`mpv_integration_linux_test.go`](../app/internal/playback/mpv_integration_linux_test.go)
+exercise `Controller` and `MPVProcess` over a `CLOEXEC` Unix `socketpair`
+(`--input-ipc-client=fd://3`, `--idle=yes --keep-open=yes`, named `loadfile`)
+and `waitid(WNOWAIT)` + `SIGKILL` process-group reaping against real `*store.Store`
+SQLite checkpoints. Fake JSON-IPC child tests cover saved `ListeningState`
+restore, `Play`/`Pause`/`Toggle`, paused exact seek, speed `[500000, 3000000]`
+and volume `[0, 100]` bounds, book switching, `Poll` + EOF checkpointing, stale
+`Session` rejection, store/backend faults, queued cancellation, malformed/oversized
+IPC lines, process-group reaping, and killed-parent `fd://3` EOF exit. Real
+generated chaptered `.m4b` (`ffmpeg`) + `mpv --ao=null` integration tests cover
+load, pause, paused exact seek, speed, volume, book switch, EOF, orderly `Close`,
+killed child recovery, and `SIGKILL` parent subprocess non-orphan verification;
+they skip locally only when `mpv`/`ffmpeg` are absent, fail when
+`TALETTY_REQUIRE_MEDIA_TOOLS=1` in CI, and repeat three times under `-race` in
+the `app` matrix. See [the playback README](../app/internal/playback/README.md);
+`#15` coordinator/UI wiring, `#18` bookmarks, `#20` completion/smart-rewind, and
+`#21` sleep timer remain open.
+
 ## Release evidence
 
 A release candidate needs an evidence matrix linking each supported journey to
