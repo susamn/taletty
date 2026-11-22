@@ -9,6 +9,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/susamn/taletty/app/internal/downloads"
 	"github.com/susamn/taletty/app/internal/terminal"
+	"github.com/susamn/taletty/app/internal/theme"
 	"github.com/susamn/taletty/app/internal/ui"
 )
 
@@ -21,10 +22,29 @@ type downloadWatchMsg struct {
 	ch   <-chan downloads.Snapshot
 }
 
+type themeSignalMsg struct {
+	gen uint64
+	ch  <-chan uint64
+}
+
 type sessionModel struct {
-	inner tea.Model
-	ctx   context.Context
-	coord *Coordinator
+	inner      tea.Model
+	ctx        context.Context
+	coord      *Coordinator
+	themeSigCh <-chan uint64
+}
+
+func waitThemeSignalCmd(ch <-chan uint64) tea.Cmd {
+	if ch == nil {
+		return nil
+	}
+	return func() tea.Msg {
+		gen, ok := <-ch
+		if !ok {
+			return nil
+		}
+		return themeSignalMsg{gen: gen, ch: ch}
+	}
 }
 
 func waitDownloadCmd(ch <-chan downloads.Snapshot) tea.Cmd {
@@ -66,11 +86,30 @@ func (m sessionModel) Init() tea.Cmd {
 				return playbackTickMsg{}
 			}))
 		}
+		if m.themeSigCh != nil {
+			cmds = append(cmds, waitThemeSignalCmd(m.themeSigCh))
+		}
 	}
 	return tea.Batch(cmds...)
 }
 
 func (m sessionModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	if ts, ok := msg.(themeSignalMsg); ok {
+		var cmds []tea.Cmd
+		if m.coord != nil {
+			if res := m.coord.HandleThemeSignal(m.ctx, ts.gen); res != nil {
+				next, cmd := m.applyDispatchedMsg(res)
+				m.inner = next
+				if cmd != nil {
+					cmds = append(cmds, cmd)
+				}
+			}
+		}
+		if nextSig := waitThemeSignalCmd(ts.ch); nextSig != nil {
+			cmds = append(cmds, nextSig)
+		}
+		return m, tea.Batch(cmds...)
+	}
 	if dw, ok := msg.(downloadWatchMsg); ok {
 		var cmds []tea.Cmd
 		if m.coord != nil {
@@ -126,6 +165,29 @@ func (m sessionModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
+func (m sessionModel) applyDispatchedMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
+	if batch, ok := msg.(tea.BatchMsg); ok {
+		var cmds []tea.Cmd
+		cur := m.inner
+		for _, fn := range batch {
+			if fn == nil {
+				continue
+			}
+			sub := fn()
+			if sub == nil {
+				continue
+			}
+			next, cmd := cur.Update(sub)
+			cur = next
+			if cmd != nil {
+				cmds = append(cmds, cmd)
+			}
+		}
+		return cur, tea.Batch(cmds...)
+	}
+	return m.inner.Update(msg)
+}
+
 func (m sessionModel) View() tea.View {
 	return m.inner.View()
 }
@@ -145,7 +207,6 @@ func RunSession(ctx context.Context, coord *Coordinator, tty *os.File, output io
 	}
 
 	restore := coord.InitialRestore()
-	appearance := coord.InitialAppearance()
 	focus := ui.Books
 	if restore.Focus != nil {
 		focus = *restore.Focus
@@ -171,7 +232,8 @@ func RunSession(ctx context.Context, coord *Coordinator, tty *os.File, output io
 		}
 		acct := coord.AccountState()
 		model := ui.NewModel(coord.Snapshot(), coord.Dispatch)
-		updated, _ := model.Update(appearance)
+		updated, _ := model.Update(coord.InitialAppearance())
+		updated, _ = updated.Update(coord.InitialSettings())
 		updated, _ = updated.Update(ui.RestoreSessionMsg{
 			Focus:       &focus,
 			View:        &view,
@@ -182,8 +244,32 @@ func RunSession(ctx context.Context, coord *Coordinator, tty *os.File, output io
 			Account:     &acct,
 		})
 
-		wrapped := sessionModel{inner: updated, ctx: ctx, coord: coord}
+		sigCtx, sigCancel := context.WithCancel(ctx)
+		var sigCh chan uint64
+		sigDone := make(chan struct{})
+		if coord.themeMgr != nil {
+			sigCh = make(chan uint64, 1)
+			go func() {
+				defer close(sigDone)
+				theme.WatchSIGUSR1(sigCtx, func() {
+					gen := coord.ThemeGeneration()
+					select {
+					case sigCh <- gen:
+					default:
+					}
+				})
+			}()
+		} else {
+			close(sigDone)
+		}
+
+		wrapped := sessionModel{inner: updated, ctx: ctx, coord: coord, themeSigCh: sigCh}
 		finalModel, runErr := runner(ctx, wrapped, tty, output)
+		sigCancel()
+		<-sigDone
+		if sigCh != nil {
+			close(sigCh)
+		}
 		if sm, ok := finalModel.(sessionModel); ok {
 			finalModel = sm.inner
 		}
