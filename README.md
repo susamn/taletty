@@ -40,6 +40,7 @@ and small focused commits with a sensible count per PR.
 - [Quality and user journeys](docs/testing.md)
 - [Dependency-based delivery plan](docs/roadmap.md)
 - [OS/architecture and packaging plan](docs/distribution.md)
+- [Runtime and platform matrix (ADR 003)](docs/adr/003-runtime-and-platform-matrix.md)
 - [Audible/player feature stories](docs/player-features.md)
 - [Contribution and PR policy](CONTRIBUTING.md)
 - [Security](SECURITY.md)
