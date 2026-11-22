@@ -386,6 +386,25 @@ they skip locally only when `mpv`/`ffmpeg` are absent, fail when
 the `app` matrix. See [the playback README](../app/internal/playback/README.md);
 `#15` coordinator/UI wiring, `#18` bookmarks, `#20` completion/smart-rewind, and
 `#21` sleep timer remain open.
+## Fresh private profile root bootstrap (#10)
+
+[`paths_test.go`](../app/internal/profile/paths_test.go) and
+[`bootstrap_linux_test.go`](../app/internal/profile/bootstrap_linux_test.go)
+exercise `profile.DefaultRoot`, `profile.Open`, and `Workspace.Close` against
+real temporary home directories and subprocesses: fresh first launch creating
+`~/.config/taletty/` (`0700`), `downloads/` (`0700`), `.auth.lock` (`0600`),
+and `taletty.sqlite3` (`0600`); untouched seeded `~/.config/audible-tui/` and
+`XDG_CONFIG_HOME` (`O_NOATIME` stat/byte preservation); untouched `auth.json`
+(`0600`); full Taletty-owned repository persistence across restart and startup
+reconciliation of interrupted active download jobs (`JobReady` vs
+`JobFailed`/`FailureInterrupted`); real subprocess `ErrBusy` exclusion,
+post-`Close` reopen, `Close` cancel/retry without unlocking underneath active
+leases, and `/proc/self/fd` noninheritance across `exec`; adversarial no-repair
+refusal of unsafe `~/.config`, `taletty`, `downloads`, `.auth.lock`, foreign/
+corrupt/too-new DBs, and sidecars; and injected `sysOps` I/O faults and path
+confinement checks. See [the profile README](../app/internal/profile/README.md)
+and [ADR 002](adr/002-storage-contract.md). Full `cmd/taletty` CLI/UI startup
+wiring, live sign-in, and Taletty v2 schema upgrades remain future work.
 
 ## Release evidence
 
