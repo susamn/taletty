@@ -79,7 +79,8 @@ func ready() audible.Diagnostics {
 func fixture(t *testing.T, client *fakeAccount) dependencies {
 	t.Helper()
 	return dependencies{
-		doctor: func(context.Context, string) (audible.Diagnostics, error) { return ready(), nil },
+		resolvePython: audible.DiscoverPython,
+		doctor:        func(context.Context, string) (audible.Diagnostics, error) { return ready(), nil },
 		open: func(_ context.Context, root, python string) (account, error) {
 			if root != filepath.Join(os.Getenv("HOME"), ".config", "taletty") || python != "fixture-python" {
 				t.Fatal("wrong explicit root/runtime")
@@ -99,7 +100,8 @@ func TestUsageAndDoctorReadOnly(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	deps := fixture(t, &fakeAccount{})
-	for _, args := range [][]string{nil, {"sync"}, {"doctor"}, {"login", "--python", "fixture-python", "--json"},
+	for _, args := range [][]string{nil, {"doctor", "--python", ""}, {"doctor", "--python", "   "}, {"doctor", "--python", "bad\x00secret"},
+		{"sync", "--python", ""}, {"login", "--python", "   "}, {"login", "--python", "fixture-python", "--json"},
 		{"doctor", "--python", "fixture-python", "--marketplace", "de"}, {"doctor", "--python", "fixture-python", "extra"},
 		{"doctor", "--fixture-private=secret"}} {
 		code, out, errOut := invoke(args, deps)
@@ -273,5 +275,106 @@ func TestSafeFailuresAndOutputErrors(t *testing.T) {
 	}
 	if code := run(context.Background(), []string{"doctor", "--python", "fixture-python", "--json"}, brokenWriter{}, sink, deps); code != 1 {
 		t.Fatal(code)
+	}
+}
+
+func TestOptionalPythonDiscoveryAndMissingRuntime(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	legacyBin := filepath.Join(home, ".config", "audible-tui", "venv", "bin")
+	if err := os.MkdirAll(legacyBin, 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(legacyBin, "python3.12"), []byte("#!/bin/sh\nexit 1\n"), 0700); err != nil {
+		t.Fatal(err)
+	}
+
+	pathDir := t.TempDir()
+	py3 := filepath.Join(pathDir, "python3")
+	py312 := filepath.Join(pathDir, "python3.12")
+	for _, p := range []string{py3, py312} {
+		if err := os.WriteFile(p, []byte("#!/bin/sh\nexit 0\n"), 0700); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	var seenPython string
+	deps := dependencies{
+		resolvePython: audible.DiscoverPython,
+		doctor: func(_ context.Context, python string) (audible.Diagnostics, error) {
+			seenPython = python
+			return ready(), nil
+		},
+		open: func(_ context.Context, _ string, python string) (account, error) {
+			seenPython = python
+			return &fakeAccount{}, nil
+		},
+		terminal: func() (*os.File, error) { return os.Open(os.DevNull) },
+	}
+
+	// 1. Explicit --python overrides TALETTY_PYTHON and PATH.
+	t.Setenv("TALETTY_PYTHON", "/env/python")
+	t.Setenv("PATH", pathDir)
+	if code, _, errOut := invoke([]string{"doctor", "--python", "/explicit/python"}, deps); code != 0 || errOut != "" || seenPython != "/explicit/python" {
+		t.Fatalf("explicit override failed: code=%d seen=%q err=%q", code, seenPython, errOut)
+	}
+
+	// 2. Invalid explicit --python never falls back to TALETTY_PYTHON or PATH and never echoes.
+	for _, bad := range []string{"", "   ", "bad\x00secret"} {
+		if code, out, errOut := invoke([]string{"doctor", "--python", bad}, deps); code != 2 || out != "" || !strings.Contains(errOut, "Usage:") || strings.Contains(errOut, "secret") {
+			t.Fatalf("invalid explicit %q: code=%d out=%q err=%q", bad, code, out, errOut)
+		}
+	}
+
+	// 3. TALETTY_PYTHON overrides PATH when --python is omitted.
+	if code, _, errOut := invoke([]string{"doctor"}, deps); code != 0 || errOut != "" || seenPython != "/env/python" {
+		t.Fatalf("TALETTY_PYTHON failed: code=%d seen=%q err=%q", code, seenPython, errOut)
+	}
+
+	// 4. PATH python3.12 wins over python3 when TALETTY_PYTHON is unset.
+	t.Setenv("TALETTY_PYTHON", "")
+	if code, _, errOut := invoke([]string{"doctor"}, deps); code != 0 || errOut != "" || seenPython != py312 {
+		t.Fatalf("PATH python3.12 failed: code=%d seen=%q err=%q", code, seenPython, errOut)
+	}
+
+	// 5. PATH python3 fallback when python3.12 is absent.
+	if err := os.Remove(py312); err != nil {
+		t.Fatal(err)
+	}
+	if code, _, errOut := invoke([]string{"sync"}, deps); code != 0 || errOut != "" || seenPython != py3 {
+		t.Fatalf("PATH python3 fallback failed: code=%d seen=%q err=%q", code, seenPython, errOut)
+	}
+
+	// 6. Missing runtime fails safely with runtime_missing exit 1 across all commands without creating root.
+	freshHome := t.TempDir()
+	t.Setenv("HOME", freshHome)
+	t.Setenv("PATH", t.TempDir())
+	for _, args := range [][]string{
+		{"doctor"},
+		{"doctor", "--json"},
+		{"login"},
+		{"sync"},
+		{"sync", "--json"},
+		{"download", "B000000001"},
+		{"download", "B000000001", "--json"},
+	} {
+		machine := len(args) > 1 && args[len(args)-1] == "--json"
+		code, out, errOut := invoke(args, deps)
+		if code != 1 {
+			t.Fatalf("%v: got exit %d, want 1 (out=%q err=%q)", args, code, out, errOut)
+		}
+		if machine {
+			var payload struct {
+				Failure failure `json:"failure"`
+			}
+			if json.Unmarshal([]byte(out), &payload) != nil || payload.Failure.Code != "runtime_missing" {
+				t.Fatalf("%v: unexpected JSON failure %q", args, out)
+			}
+		} else if !strings.Contains(errOut, "Python runtime could not start.") {
+			t.Fatalf("%v: unexpected plain failure %q", args, errOut)
+		}
+	}
+	if entries, err := os.ReadDir(freshHome); err != nil || len(entries) != 0 {
+		t.Fatalf("missing runtime created state in HOME: %v %v", entries, err)
 	}
 }

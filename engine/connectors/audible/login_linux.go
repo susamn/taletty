@@ -74,7 +74,25 @@ func Open(ctx context.Context, root, python string) (*Client, error) {
 	if err != nil {
 		return nil, authError(err)
 	}
-	return &Client{session: session, python: python, script: loginScript(browserLoginSource), librarySource: libraryScript(), downloadSource: downloadScript(false), reconcileSource: downloadScript(true)}, nil
+	return newClient(session, python), nil
+}
+
+// OpenBorrowed duplicates a caller-owned effective-UID-owned 0700 directory
+// descriptor via openat(".", O_RDONLY|O_DIRECTORY|O_NOFOLLOW|O_CLOEXEC) and
+// verifies 0700 + euid without acquiring or unlocking .auth.lock. The caller
+// must hold exclusive cooperative root ownership (for example, store.Owner /
+// RootLease) until Client.Close returns. Close closes only its duplicated root
+// descriptor. US marketplace only in this extraction.
+func OpenBorrowed(ctx context.Context, root *os.File, python string) (*Client, error) {
+	session, err := auth.OpenBorrowed(ctx, root)
+	if err != nil {
+		return nil, authError(err)
+	}
+	return newClient(session, python), nil
+}
+
+func newClient(session *auth.Session, python string) *Client {
+	return &Client{session: session, python: python, script: loginScript(browserLoginSource), librarySource: libraryScript(), downloadSource: downloadScript(false), reconcileSource: downloadScript(true)}
 }
 
 // Close waits for active authenticated work. A canceled Close can be retried.

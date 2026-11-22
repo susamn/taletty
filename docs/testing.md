@@ -335,8 +335,39 @@ stage/progress validation and `FuzzDownloadPayload`, unknown vs known-zero
 consumer backpressure + cancellation, killed `ffmpeg` process group +
 reconciliation, and mandatory CI generated-media verification of
 `licensing -> downloading -> progress -> preparing -> publishing -> completed`.
-App storage/queue (#16), UI J04/J05/J06 (#17), engine packaging (#8), live
-accounts, protected media and working release remain open.
+App storage/queue (#16), UI J04/J05/J06 (#17), live
+accounts, protected media and full app release remain open.
+
+## Engine release preparation (#8)
+
+[`runtime_linux_test.go`](../engine/connectors/audible/runtime_linux_test.go),
+[`session_linux_test.go`](../engine/connectors/audible/internal/auth/session_linux_test.go),
+[`login_linux_test.go`](../engine/connectors/audible/login_linux_test.go),
+[`cli_linux_test.go`](../engine/internal/cli/cli_linux_test.go),
+[`main_linux_test.go`](../engine/cmd/taletty-engine/main_linux_test.go), and
+[`release_linux_test.go`](../engine/release_linux_test.go) verify:
+
+- Contract and runtime pinning constants (`ContractVersion = "v0.1.0"`,
+  `BridgeProtocolVersion = 1`, `PinnedPythonVersion = "3.12"`,
+  `PinnedAudibleVersion = "0.13.1"`) matching `requirements.txt` and `doctor.py`.
+- `ResolvePython` / `DiscoverPython` strict precedence (`explicit` >
+  `TALETTY_PYTHON` > `python3.12` > `python3`), clean rejection of invalid
+  explicit/env overrides without fallback, `ErrRuntimeMissing` when absent, and
+  no scanning of `~/.config/audible-tui` or legacy paths.
+- Optional `--python` CLI wiring across `doctor`, `login`, `sync`, and
+  `download` (flag override, `TALETTY_PYTHON`, `PATH` fallback, exit `2` without
+  echoing invalid explicit `--python`, and `runtime_missing` exit `1` without
+  creating `~/.config/taletty`).
+- `auth.OpenBorrowed` and `audible.OpenBorrowed`: borrowing an externally locked
+  `0700` root without `ErrAuthBusy`, `Session.token` serialization across
+  operations, `Close` closing only the duplicated root descriptor without
+  unlocking `.auth.lock`, rejection of nil/closed/regular/symlink/non-0700/
+  foreign-UID roots, and real `Doctor`/`Login`/`Library`/`Download` fixtures.
+- Clean temp-dir `go install ./cmd/taletty-engine` executing `taletty-engine
+  doctor --json` against prepared and missing runtimes, plus an ephemeral
+  external consumer Go module created dynamically in `t.TempDir()` (`GOWORK=off`,
+  local `replace` only inside the temp `go.mod`, never committed in the repo)
+  compiling and running against `engine/model` and `engine/connectors/audible`.
 
 ## Executable storage contract (#3)
 
@@ -453,6 +484,28 @@ stage/terminal `Watch(ctx)` delivery and stalled-watcher overflow safety; and
 idempotent `Close(ctx)` cancellation/join. See
 [the downloads README](../app/internal/downloads/README.md); terminal UI
 views/actions (`#17`, J04–J06) and `engine` integration (`#13`) remain open.
+## Persistent timestamped bookmarks and targeting policy (#18)
+
+[`service_linux_test.go`](../app/internal/bookmarks/service_linux_test.go)
+exercises `bookmarks.Service` against real `*store.Store` on temporary SQLite,
+real `*playback.Controller` (with a fake `playback.Backend`), real `*store.Owner`
+private roots, and a deterministic fake clock: playing and paused capture,
+`ErrNoLoadedAudio` rejection when idle/stopped/failed/nil-book, highlighted-vs-loaded
+book separation, pre-roll zero clamping and chapter-boundary distinction, delayed
+save after playback advances or switches books, multiline note validation
+(rejecting whitespace-only, control characters, Unicode `Cf`, and invalid UTF-8),
+duplicate positions with distinct stable IDs, `EditNote` without recapturing
+position or reapplying pre-roll (plus missing/wrong-book rejection), single-bookmark
+`Delete` preserving audio/history/favorites, offline `List` ordering, same-book
+paused jump without double rewind, stale session rejection, cross-book jump
+(preserving prior checkpoint via `Controller`, loading target, seeking exact
+position, including root rename and unknown catalog duration), missing/unsafe/
+symlink/hardlink/mode-mismatch local audio returning `ErrMediaMissing` without
+touching current audio, mid-check stale confirmation rejection, store/checkpoint
+faults retaining drafts/state, and `-race` concurrency. See
+[the bookmarks README](../app/internal/bookmarks/README.md); UI modal/key wiring
+(`#19`), full J09 UI journeys, and global bookmark search/export (`#23`) remain
+open.
 
 ## Release evidence
 

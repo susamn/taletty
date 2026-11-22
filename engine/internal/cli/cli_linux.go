@@ -16,7 +16,7 @@ import (
 	"github.com/susamn/taletty/engine/model"
 )
 
-const usage = "Usage: taletty-engine {doctor|login|sync|download <ASIN>} --python /path/to/venv/bin/python [--marketplace us]\nDoctor, sync and download accept --json; login requires an owned foreground terminal.\n"
+const usage = "Usage: taletty-engine {doctor|login|sync|download <ASIN>} [--python /path/to/venv/bin/python] [--marketplace us]\nDoctor, sync and download accept --json; login requires an owned foreground terminal.\n"
 
 type account interface {
 	Login(context.Context, *os.File) error
@@ -25,16 +25,18 @@ type account interface {
 	Close(context.Context) error
 }
 type dependencies struct {
-	doctor   func(context.Context, string) (audible.Diagnostics, error)
-	open     func(context.Context, string, string) (account, error)
-	terminal func() (*os.File, error)
+	resolvePython func(string) (string, error)
+	doctor        func(context.Context, string) (audible.Diagnostics, error)
+	open          func(context.Context, string, string) (account, error)
+	terminal      func() (*os.File, error)
 }
 
 // Run is synchronous: return only after the connector has joined its child users
 // and closed its session. Caller owns context/shutdown signals and output streams.
 func Run(ctx context.Context, args []string, out, errOut io.Writer) int {
 	return run(ctx, args, out, errOut, dependencies{
-		doctor: audible.Doctor,
+		resolvePython: audible.DiscoverPython,
+		doctor:        audible.Doctor,
 		open: func(ctx context.Context, root, python string) (account, error) {
 			return audible.Open(ctx, root, python)
 		},
@@ -61,7 +63,7 @@ func run(ctx context.Context, args []string, out, errOut io.Writer, deps depende
 	}
 	flags := flag.NewFlagSet(command, flag.ContinueOnError)
 	flags.SetOutput(io.Discard)
-	python := flags.String("python", "", "Explicit Python executable")
+	python := flags.String("python", "", "Python executable override")
 	marketplace := flags.String("marketplace", "us", "Supported marketplace")
 	machine := flags.Bool("json", false, "Machine-readable diagnostics, library or download result")
 	err := flags.Parse(flagArgs)
@@ -71,20 +73,32 @@ func run(ctx context.Context, args []string, out, errOut io.Writer, deps depende
 		}
 		return 0
 	}
+	pythonSet := false
+	if err == nil {
+		flags.Visit(func(f *flag.Flag) {
+			if f.Name == "python" {
+				pythonSet = true
+			}
+		})
+	}
 	if err == nil && command == "download" && asin == "" && flags.NArg() == 1 {
 		asin = flags.Arg(0)
 	} else if err == nil && flags.NArg() != 0 {
 		err = flag.ErrHelp
 	}
-	if err != nil || *python == "" || *marketplace != "us" || (command == "login" && *machine) || (command == "download" && !validASIN(asin)) {
+	if err != nil || (pythonSet && !validExplicitPython(*python)) || *marketplace != "us" || (command == "login" && *machine) || (command == "download" && !validASIN(asin)) {
 		io.WriteString(errOut, usage)
 		return 2 // Never echo arguments or flag parser text.
 	}
 	if err := ctx.Err(); err != nil {
 		return reportFailure(out, errOut, *machine, err)
 	}
+	resolvedPython, err := deps.resolvePython(*python)
+	if err != nil {
+		return reportFailure(out, errOut, *machine, err)
+	}
 	if command == "doctor" {
-		result, err := deps.doctor(ctx, *python)
+		result, err := deps.doctor(ctx, resolvedPython)
 		if err != nil {
 			return reportFailure(out, errOut, *machine, err)
 		}
@@ -123,7 +137,7 @@ func run(ctx context.Context, args []string, out, errOut io.Writer, deps depende
 	if err := os.MkdirAll(root, 0700); err != nil {
 		return reportFailure(out, errOut, *machine, audible.ErrAuthStorage)
 	}
-	client, err := deps.open(ctx, root, *python)
+	client, err := deps.open(ctx, root, resolvedPython)
 	if err != nil {
 		return reportFailure(out, errOut, *machine, err)
 	}
@@ -176,6 +190,10 @@ func run(ctx context.Context, args []string, out, errOut io.Writer, deps depende
 		return outputFailure(errOut)
 	}
 	return 0
+}
+
+func validExplicitPython(s string) bool {
+	return strings.TrimSpace(s) != "" && !strings.ContainsRune(s, 0)
 }
 
 func validASIN(s string) bool {

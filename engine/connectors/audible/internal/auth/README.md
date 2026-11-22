@@ -6,6 +6,13 @@ Python bridge, login UI or headless command is implemented by this package.
 - `Open(ctx, root)` takes exclusive nonblocking process ownership of an **existing**
   absolute, lexically cleaned, effective-user-owned 0700 directory. Root initialization is a separate
   explicit operation; there is no discovery or import of old app data.
+- `OpenBorrowed(ctx, root *os.File)` (#8) duplicates a caller-owned `0700`
+  effective-UID directory descriptor via `openat(".", O_RDONLY|O_DIRECTORY|O_NOFOLLOW|O_CLOEXEC)`
+  and verifies `0700` + `euid` without acquiring or unlocking `.auth.lock` (`fd: -1`).
+  It shares `Session.token` serialization across `Run`/`WithRoot`, and `Close`
+  closes only the duplicated root descriptor. Callers must retain exclusive
+  cooperative root ownership (such as `store.Owner` / `RootLease`) until `Close`
+  returns.
 - Descriptor-relative `.auth.lock` creation/open uses no-follow and close-on-exec.
   Require an effective-user-owned, single-link regular 0600 file. Reject unsafe
   roots/files; never silently chmod existing user paths or follow a final symlink

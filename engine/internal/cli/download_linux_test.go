@@ -38,7 +38,9 @@ func TestDownloadUsageAndRedaction(t *testing.T) {
 	for _, args := range [][]string{
 		{"download"},
 		{"download", "--python", "fixture-python"},
-		{"download", "B000000001"},
+		{"download", "B000000001", "--python", ""},
+		{"download", "B000000001", "--python", "   "},
+		{"download", "B000000001", "--python", "bad\x00secret"},
 		{"download", "SHORT", "--python", "fixture-python"},
 		{"download", "bad_asin12", "--python", "fixture-python"},
 		{"download", "../secret1", "--python", "fixture-python"},
@@ -63,6 +65,14 @@ func TestDownloadUsageAndRedaction(t *testing.T) {
 	entries, err := os.ReadDir(home)
 	if err != nil || len(entries) != 0 {
 		t.Fatal("invalid download invocation created root state", entries, err)
+	}
+
+	// Omitted --python resolves via TALETTY_PYTHON.
+	t.Setenv("TALETTY_PYTHON", "fixture-python")
+	client := &fakeAccount{download: readyDownloadResult(false, true)}
+	code, out, errOut := invoke([]string{"download", "B000000001", "--json"}, fixture(t, client))
+	if code != 0 || errOut != "" || !strings.Contains(out, `"state":"ready"`) {
+		t.Fatalf("download without --python failed: code=%d out=%q err=%q", code, out, errOut)
 	}
 }
 

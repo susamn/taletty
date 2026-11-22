@@ -122,6 +122,71 @@ func TestActualEntrypointDoctorUsageAndNonTTY(t *testing.T) {
 	}
 }
 
+func TestActualEntrypointOptionalPythonDiscoveryAndMissingRuntime(t *testing.T) {
+	fake := fakePython(t)
+
+	// 1. TALETTY_PYTHON resolves when --python is omitted.
+	home := t.TempDir()
+	cmd := command(t, home, "doctor", "--json")
+	cmd.Env = append(cmd.Env, "TALETTY_PYTHON="+fake, "PATH="+t.TempDir())
+	if out, err := cmd.CombinedOutput(); exitCode(err) != 0 || !strings.Contains(string(out), `"ready":true`) {
+		t.Fatalf("TALETTY_PYTHON doctor failed: %v %s", err, out)
+	}
+
+	// 2. PATH python3.12 resolves when --python and TALETTY_PYTHON are omitted.
+	pathDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(pathDir, "python3.12"), []byte("#!/bin/sh\nexec "+fake+" \"$@\"\n"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	cmd = command(t, home, "doctor", "--json")
+	cmd.Env = append(cmd.Env, "TALETTY_PYTHON=", "PATH="+pathDir)
+	if out, err := cmd.CombinedOutput(); exitCode(err) != 0 || !strings.Contains(string(out), `"ready":true`) {
+		t.Fatalf("PATH python3.12 doctor failed: %v %s", err, out)
+	}
+
+	// 3. Invalid explicit --python returns usage exit 2 without falling back or echoing.
+	for _, bad := range []string{"", "   "} {
+		cmd = command(t, home, "doctor", "--python", bad)
+		cmd.Env = append(cmd.Env, "TALETTY_PYTHON="+fake, "PATH="+pathDir)
+		if out, err := cmd.CombinedOutput(); exitCode(err) != 2 || !strings.Contains(string(out), "Usage:") {
+			t.Fatalf("invalid explicit --python %q: %v %s", bad, err, out)
+		}
+	}
+
+	// 4. Missing runtime fails safely with runtime_missing exit 1 across commands and ignores legacy paths.
+	legacyBin := filepath.Join(home, ".config", "audible-tui", "venv", "bin")
+	if err := os.MkdirAll(legacyBin, 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(legacyBin, "python3.12"), []byte("#!/bin/sh\nexit 1\n"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	emptyPath := t.TempDir()
+	for _, args := range [][]string{
+		{"doctor", "--json"},
+		{"login"},
+		{"sync", "--json"},
+		{"download", "B000000001", "--json"},
+	} {
+		cmd = command(t, home, args...)
+		cmd.Env = append(cmd.Env, "TALETTY_PYTHON=", "PATH="+emptyPath)
+		out, err := cmd.CombinedOutput()
+		if exitCode(err) != 1 {
+			t.Fatalf("%v: got exit %d, want 1: %s", args, exitCode(err), out)
+		}
+		if args[0] == "login" {
+			if !strings.Contains(string(out), "Python runtime could not start.") {
+				t.Fatalf("login missing runtime output: %s", out)
+			}
+		} else if !strings.Contains(string(out), `"code":"runtime_missing"`) {
+			t.Fatalf("%v missing runtime output: %s", args, out)
+		}
+	}
+	if _, err := os.Stat(filepath.Join(home, ".config", "taletty")); !os.IsNotExist(err) {
+		t.Fatalf("missing runtime created taletty root: %v", err)
+	}
+}
+
 func TestEntrypointSignalsJoinDoctorChild(t *testing.T) {
 	for _, signal := range []os.Signal{os.Interrupt, syscall.SIGTERM} {
 		t.Run(signal.String(), func(t *testing.T) {

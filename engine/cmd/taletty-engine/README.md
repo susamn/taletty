@@ -1,26 +1,36 @@
-# Headless account/library commands (Linux source development)
+# Headless account/library/download CLI (`taletty-engine`)
 
-This is the first runnable engine CLI, **not the Taletty TUI or an installable
-release**. `doctor`, `login`, `sync` and `download <ASIN>` exist; playback
-and app queue persistence remain later work. Runtime installation/artifacts/full dependency locks remain #26.
+This is the engine CLI (`doctor`, `login`, `sync`, and `download <ASIN>`), **not
+the Taletty TUI**. Playback and app queue persistence remain in the `app` module.
+See [the engine module README](../../README.md) for prerequisites, source
+installation (`go install ./cmd/taletty-engine`), and post-merge `engine/v0.1.0`
+release tagging.
 
-From `engine/`, with Go and an explicitly prepared CPython 3.12 venv:
+From `engine/`, with Go `1.26.0+` and an explicitly prepared CPython 3.12 venv:
 
 ```sh
 /path/to/venv/bin/python -m pip install -r connectors/audible/internal/bridge/adapter/requirements.txt
-go build -o /tmp/taletty-engine ./cmd/taletty-engine
-/tmp/taletty-engine doctor --python /path/to/venv/bin/python --json
-/tmp/taletty-engine login --python /path/to/venv/bin/python
-/tmp/taletty-engine sync --python /path/to/venv/bin/python
-/tmp/taletty-engine sync --python /path/to/venv/bin/python --json
-/tmp/taletty-engine download B000000001 --python /path/to/venv/bin/python
-/tmp/taletty-engine download B000000001 --python /path/to/venv/bin/python --json
+go install ./cmd/taletty-engine
+taletty-engine doctor --python /path/to/venv/bin/python --json
+TALETTY_PYTHON=/path/to/venv/bin/python taletty-engine doctor --json
+taletty-engine login --python /path/to/venv/bin/python
+taletty-engine sync --python /path/to/venv/bin/python
+taletty-engine sync --python /path/to/venv/bin/python --json
+taletty-engine download B000000001 --python /path/to/venv/bin/python
+taletty-engine download B000000001 --python /path/to/venv/bin/python --json
 ```
 
-Use `--help`. Flags follow the command (`download` accepts `<ASIN>` before or after flags). `--python` is required; no first-run pip,
-runtime discovery, shell or migration. Marketplace defaults to `us`; any other
-`--marketplace` fails before work. JSON is available for doctor, sync and download, never login.
-Usage errors never echo supplied values.
+Use `--help`. Flags follow the command (`download` accepts `<ASIN>` before or
+after flags). `--python` is optional and resolved via `audible.ResolvePython`
+with strict precedence: `--python` flag -> `TALETTY_PYTHON` -> `python3.12` on
+`PATH` -> `python3` on `PATH`. Explicit empty, whitespace-only, or NUL-containing
+`--python` values fail with usage exit `2` without falling back or echoing
+supplied values; missing runtimes fail safely with `runtime_missing` (exit `1`)
+across `doctor`, `login`, `sync`, and `download`. There is no first-run `pip`,
+system Python mutation, legacy `~/.config/audible-tui` scanning, or migration.
+Marketplace defaults to `us`; any other `--marketplace` fails before work. JSON
+is available for `doctor`, `sync`, and `download`, never `login`. Usage errors
+never echo supplied values.
 
 Doctor is read-only and takes no auth lock: it never creates the Taletty root.
 JSON is `{ "ready": bool, "diagnostics": { "python": ..., "audible": ...,
