@@ -153,9 +153,10 @@ local buttons, default-safe/nested confirmations, frozen submissions, pending an
 stale replies, failed-submit/retry, one-layer close, theme/snapshot preservation,
 long Unicode scrolling, cell bounds and two-step tiny-terminal quit recovery.
 [`bookmarks_test.go`](bookmarks_test.go) exercises `b`/`B` explicit targeting,
-the dedicated Bookmarks Manager view, multiline note scrolling, local `/`
-filtering, row action menus with frozen IDs and stale-target invalidation,
-query-failure retry, and `Tab`/`1-5`/`Esc` focus restoration.
+the dedicated Bookmarks Manager view, global bookmark search across books,
+`e` Markdown export trigger, multiline note scrolling, local `/` filtering, row
+action menus with frozen IDs and stale-target invalidation, query-failure retry,
+and `Tab`/`1-5`/`Esc` focus restoration.
 [`favorites_test.go`](favorites_test.go) exercises the `Favorites` library
 destination, `f` highlighted-book targeting (unavailable in `PlayerPane`),
 accent-tinted `★` / `[Fav]` indicators in `Books` and `Details`, empty

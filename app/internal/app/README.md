@@ -103,6 +103,13 @@ module.
     `Player.ChapterEnd` projection for speed-adjusted book and chapter remaining
     time.
 
+- **Global bookmark search and safe Markdown export (`#23`)**:
+  - Wires `RootOwner` into `bookmarks.NewService` and handles
+    `OpenGlobalBookmarks` (`All bookmarks (search & export)` sidebar entry) and
+    `ExportBookmarks` (`e` inside Bookmarks Manager) with overwrite confirmation
+    (`Keep existing file` / `Overwrite export`) and sanitized write-failure
+    recovery.
+
 - **Sleep timer by duration and chapter end (`#21`)**:
   - Implements in-memory `sleepTimerState` (`15/30/45/60 min`, `End of current
     chapter`, `Turn off`) driven by `Coordinator.clock` in `PollPlayback`:
@@ -114,6 +121,5 @@ module.
 
 ## Scope boundaries
 
-- Global bookmark search/export (`#23`), local audiobook import (`#22`),
-  Settings/themes (`#34`), and Linux MPRIS (`#30`) remain separate downstream
-  issues.
+- Local audiobook import (`#22`), Settings/themes (`#34`), and Linux MPRIS
+  (`#30`) remain separate downstream issues.

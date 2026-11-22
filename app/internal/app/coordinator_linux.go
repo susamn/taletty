@@ -218,6 +218,9 @@ func OpenWorkspace(ctx context.Context, home string, opts Options) (*Coordinator
 		return nil, err
 	}
 	opts.Clock = clock
+	if opts.RootOwner == nil {
+		opts.RootOwner = ws.Owner()
+	}
 	opts.WorkspaceCloser = ws.Close
 	coord, err := NewCoordinator(ctx, ws.Store(), opts)
 	if err != nil {
@@ -274,9 +277,14 @@ func NewCoordinator(ctx context.Context, st CatalogStore, opts Options) (*Coordi
 	bmSvc := opts.Bookmarks
 	if bmSvc == nil && opts.Player != nil {
 		if bmStore, ok := st.(bookmarks.BookmarkStore); ok {
+			var rootOwner bookmarks.RootOwner
+			if opts.RootOwner != nil {
+				rootOwner = opts.RootOwner
+			}
 			svc, svcErr := bookmarks.NewService(bookmarks.Options{
 				Store:        bmStore,
 				Player:       opts.Player,
+				RootOwner:    rootOwner,
 				MediaChecker: opts.MediaChecker,
 			})
 			if svcErr != nil {
@@ -752,8 +760,8 @@ func (c *Coordinator) Dispatch(action ui.Action) tea.Cmd {
 		return func() tea.Msg {
 			return c.handleDownloadAction(action)
 		}
-	case ui.CaptureBookmark, ui.SaveNote, ui.OpenBookmarks,
-		ui.DeleteBookmark, ui.JumpBookmark, ui.ConfirmSwitchBookmark:
+	case ui.CaptureBookmark, ui.SaveNote, ui.OpenBookmarks, ui.OpenGlobalBookmarks,
+		ui.ExportBookmarks, ui.DeleteBookmark, ui.JumpBookmark, ui.ConfirmSwitchBookmark:
 		return func() tea.Msg {
 			return c.handleBookmarkAction(action)
 		}

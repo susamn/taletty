@@ -28,6 +28,8 @@ type BookmarkManager interface {
 	EditNote(ctx context.Context, key store.BookKey, bookmarkID, note string, nowMS int64) (store.Bookmark, error)
 	Delete(ctx context.Context, key store.BookKey, bookmarkID string) error
 	List(ctx context.Context, key store.BookKey) ([]store.Bookmark, error)
+	ListAll(ctx context.Context) ([]store.Bookmark, error)
+	ExportMarkdown(ctx context.Context, opts bookmarks.ExportOptions) (bookmarks.ExportResult, error)
 	Jump(ctx context.Context, bookmark store.Bookmark, expectedSession uint64, targetTitle string, targetDuration time.Duration) (playback.Snapshot, error)
 }
 
@@ -41,6 +43,10 @@ func (c *Coordinator) handleBookmarkAction(action ui.Action) tea.Msg {
 		return c.saveNote(action)
 	case ui.OpenBookmarks:
 		return c.openBookmarks(action.Key)
+	case ui.OpenGlobalBookmarks:
+		return c.openGlobalBookmarks()
+	case ui.ExportBookmarks:
+		return c.exportBookmarks(action)
 	case ui.DeleteBookmark:
 		return c.deleteBookmark(action)
 	case ui.JumpBookmark:
@@ -217,14 +223,21 @@ func (c *Coordinator) saveNote(action ui.Action) tea.Msg {
 func (c *Coordinator) bookmarkMutationSuccess(ctx context.Context, action ui.Action, key store.BookKey, activity string) tea.Msg {
 	encodedKey, _ := EncodeBookKey(key)
 	items, listErr := c.bookmarks.List(ctx, key)
+	allItems, allErr := c.bookmarks.ListAll(ctx)
 	cmds := []tea.Cmd{
 		func() tea.Msg { return ui.ModalResultMsg{ID: action.RequestID, Attempt: action.Attempt} },
 		func() tea.Msg { return ui.NoticeMsg{Activity: activity} },
 	}
 	if listErr == nil && encodedKey != "" {
-		uiItems := projectBookmarks(items)
+		uiItems := c.projectBookmarks(items)
 		cmds = append(cmds, func() tea.Msg {
 			return ui.BookmarksMsg{Key: encodedKey, Bookmarks: uiItems}
+		})
+	}
+	if allErr == nil {
+		allUI := c.projectBookmarks(allItems)
+		cmds = append(cmds, func() tea.Msg {
+			return ui.BookmarksMsg{Global: true, Bookmarks: allUI}
 		})
 	}
 	return tea.BatchMsg(cmds)
@@ -252,8 +265,138 @@ func (c *Coordinator) openBookmarks(encodedKey string) tea.Msg {
 	return ui.OpenBookmarksMsg{
 		Key:       encodedKey,
 		Title:     title,
-		Bookmarks: projectBookmarks(items),
+		Bookmarks: c.projectBookmarks(items),
 	}
+}
+
+func (c *Coordinator) openGlobalBookmarks() tea.Msg {
+	ctx, ok := c.beginWorker()
+	if !ok {
+		return ui.OpenBookmarksMsg{Global: true, Title: "All Books (Search)", Error: SanitizeError(ErrClosed)}
+	}
+	defer c.wg.Done()
+
+	if c.bookmarks == nil {
+		return ui.OpenBookmarksMsg{Global: true, Title: "All Books (Search)", Error: "Bookmarks unavailable."}
+	}
+	items, err := c.bookmarks.ListAll(ctx)
+	if err != nil {
+		return ui.OpenBookmarksMsg{Global: true, Title: "All Books (Search)", Error: sanitizeBookmarkError(err)}
+	}
+	return ui.OpenBookmarksMsg{
+		Global:    true,
+		Title:     "All Books (Search)",
+		Bookmarks: c.projectBookmarks(items),
+	}
+}
+
+func (c *Coordinator) exportBookmarks(action ui.Action) tea.Msg {
+	ctx, ok := c.beginWorker()
+	if !ok {
+		if action.Overwrite {
+			return ui.ModalResultMsg{ID: action.RequestID, Attempt: action.Attempt, Error: SanitizeError(ErrClosed)}
+		}
+		return ui.NoticeMsg{Error: SanitizeError(ErrClosed)}
+	}
+	defer c.wg.Done()
+
+	exportErrMsg := func(err error) tea.Msg {
+		msg := sanitizeBookmarkError(err)
+		if action.Overwrite {
+			return ui.ModalResultMsg{ID: action.RequestID, Attempt: action.Attempt, Error: msg}
+		}
+		return ui.NoticeMsg{Error: msg}
+	}
+
+	if c.bookmarks == nil {
+		return exportErrMsg(errors.New("bookmarks unavailable"))
+	}
+
+	var items []store.Bookmark
+	var err error
+	heading := "Taletty Bookmarks"
+	filename := action.BookmarkID
+	if action.Key != "" {
+		key, decErr := DecodeBookKey(action.Key)
+		if decErr != nil {
+			return exportErrMsg(ErrInvalidInput)
+		}
+		title := c.bookTitle(key)
+		heading = title + " Bookmarks"
+		if filename == "" {
+			filename = bookmarks.SafeExportFilename(title)
+		}
+		items, err = c.bookmarks.List(ctx, key)
+	} else {
+		if filename == "" {
+			filename = "bookmarks-all.md"
+		}
+		items, err = c.bookmarks.ListAll(ctx)
+	}
+	if err != nil {
+		return exportErrMsg(err)
+	}
+
+	q := strings.ToLower(strings.TrimSpace(action.Text))
+	entries := make([]bookmarks.ExportEntry, 0, len(items))
+	for _, item := range items {
+		bookTitle := c.bookTitle(item.Key)
+		if q != "" {
+			chTitle := ""
+			if item.ChapterTitle != nil {
+				chTitle = *item.ChapterTitle
+			}
+			if !strings.Contains(strings.ToLower(item.Note), q) &&
+				!strings.Contains(strings.ToLower(chTitle), q) &&
+				!strings.Contains(strings.ToLower(bookTitle), q) {
+				continue
+			}
+		}
+		entries = append(entries, bookmarks.ExportEntry{
+			Bookmark:  item,
+			BookTitle: bookTitle,
+			Author:    c.bookAuthor(item.Key),
+		})
+	}
+
+	res, err := c.bookmarks.ExportMarkdown(ctx, bookmarks.ExportOptions{
+		Filename:  filename,
+		Heading:   heading,
+		Entries:   entries,
+		Overwrite: action.Overwrite,
+	})
+	if errors.Is(err, bookmarks.ErrExportExists) && !action.Overwrite {
+		c.mu.Lock()
+		c.dialogSeq++
+		id := fmt.Sprintf("bm-export-%d", c.dialogSeq)
+		c.mu.Unlock()
+		return ui.OpenConfirmationMsg{
+			ID:      id,
+			Title:   "Overwrite export",
+			Prompt:  fmt.Sprintf("Export file %q already exists in ~/.config/taletty/exports/. Overwrite it?", filename),
+			Keep:    "Keep existing file",
+			Confirm: "Overwrite export",
+			Action: ui.Action{
+				Kind:       ui.ExportBookmarks,
+				Key:        action.Key,
+				BookmarkID: filename,
+				Text:       action.Text,
+				Overwrite:  true,
+			},
+		}
+	}
+	if err != nil {
+		return exportErrMsg(err)
+	}
+
+	activity := fmt.Sprintf("Exported %d bookmarks to %s", res.Count, res.RelativePath)
+	if action.Overwrite {
+		return tea.BatchMsg{
+			func() tea.Msg { return ui.ModalResultMsg{ID: action.RequestID, Attempt: action.Attempt} },
+			func() tea.Msg { return ui.NoticeMsg{Activity: activity} },
+		}
+	}
+	return ui.NoticeMsg{Activity: activity}
 }
 
 func (c *Coordinator) deleteBookmark(action ui.Action) tea.Msg {
@@ -272,6 +415,7 @@ func (c *Coordinator) deleteBookmark(action ui.Action) tea.Msg {
 	}
 	delErr := c.bookmarks.Delete(ctx, key, action.BookmarkID)
 	items, listErr := c.bookmarks.List(ctx, key)
+	allItems, allErr := c.bookmarks.ListAll(ctx)
 	if delErr != nil {
 		cmds := []tea.Cmd{
 			func() tea.Msg {
@@ -279,9 +423,15 @@ func (c *Coordinator) deleteBookmark(action ui.Action) tea.Msg {
 			},
 		}
 		if listErr == nil {
-			uiItems := projectBookmarks(items)
+			uiItems := c.projectBookmarks(items)
 			cmds = append(cmds, func() tea.Msg {
 				return ui.BookmarksMsg{Key: action.Key, Bookmarks: uiItems}
+			})
+		}
+		if allErr == nil {
+			allUI := c.projectBookmarks(allItems)
+			cmds = append(cmds, func() tea.Msg {
+				return ui.BookmarksMsg{Global: true, Bookmarks: allUI}
 			})
 		}
 		return tea.BatchMsg(cmds)
@@ -425,7 +575,22 @@ func (c *Coordinator) confirmSwitchBookmark(action ui.Action) tea.Msg {
 	}
 }
 
-func projectBookmarks(items []store.Bookmark) []ui.Bookmark {
+func (c *Coordinator) bookAuthor(key store.BookKey) string {
+	encoded, err := EncodeBookKey(key)
+	if err != nil {
+		return ""
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	for _, b := range c.snapshot.Books {
+		if b.Key == encoded {
+			return b.Author
+		}
+	}
+	return ""
+}
+
+func (c *Coordinator) projectBookmarks(items []store.Bookmark) []ui.Bookmark {
 	if len(items) == 0 {
 		return nil
 	}
@@ -446,6 +611,7 @@ func projectBookmarks(items []store.Bookmark) []ui.Bookmark {
 		out = append(out, ui.Bookmark{
 			ID:           item.ID,
 			Key:          encoded,
+			BookTitle:    c.bookTitle(item.Key),
 			Position:     time.Duration(item.PositionNS),
 			ChapterID:    chID,
 			ChapterTitle: chTitle,
@@ -487,6 +653,10 @@ func sanitizeBookmarkError(err error) string {
 		return "Bookmark no longer exists."
 	case errors.Is(err, bookmarks.ErrMediaMissing):
 		return "Local audio file is missing or unsafe."
+	case errors.Is(err, bookmarks.ErrExportExists):
+		return "Export file already exists."
+	case errors.Is(err, bookmarks.ErrUnsafeExportTarget):
+		return "Export directory or target file is unsafe."
 	case errors.Is(err, bookmarks.ErrInvalidInput):
 		return "Invalid bookmark note or target."
 	default:

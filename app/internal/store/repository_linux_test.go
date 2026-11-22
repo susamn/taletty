@@ -485,6 +485,21 @@ func TestListeningStateSettingsViewStateFavoritesAndBookmarks(t *testing.T) {
 	if !reflect.DeepEqual(bms, []Bookmark{bEarly, bLate}) {
 		t.Fatalf("unexpected bookmarks: %+v", bms)
 	}
+	bOther := Bookmark{
+		ID:          "bm-other",
+		Key:         k2,
+		PositionNS:  50,
+		Note:        "Other book note",
+		CreatedAtMS: 10,
+		UpdatedAtMS: 10,
+	}
+	must(t, s.PutBookmark(ctx, bOther))
+	allBms, err := s.AllBookmarks(ctx)
+	must(t, err)
+	if len(allBms) != 3 {
+		t.Fatalf("expected 3 bookmarks across books, got %+v", allBms)
+	}
+	must(t, s.DeleteBookmark(ctx, k2, "bm-other"))
 	must(t, s.DeleteBookmark(ctx, k1, "bm-2"))
 	bms, err = s.Bookmarks(ctx, k1)
 	must(t, err)
@@ -545,6 +560,9 @@ func TestListeningStateSettingsViewStateFavoritesAndBookmarks(t *testing.T) {
 		t.Fatal(err)
 	}
 	if _, err := s.Bookmarks(canceled, k1); err != context.Canceled {
+		t.Fatal(err)
+	}
+	if _, err := s.AllBookmarks(canceled); err != context.Canceled {
 		t.Fatal(err)
 	}
 

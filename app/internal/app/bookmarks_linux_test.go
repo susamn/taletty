@@ -584,10 +584,18 @@ func TestBookmarkCoordinatorEdgeCasesAndErrors(t *testing.T) {
 		bookmarks.ErrStaleSession,
 		bookmarks.ErrBookmarkNotFound,
 		bookmarks.ErrMediaMissing,
+		bookmarks.ErrExportExists,
+		bookmarks.ErrUnsafeExportTarget,
 		bookmarks.ErrInvalidInput,
 		playback.ErrIPC,
 	} {
 		_ = sanitizeBookmarkError(errCase)
+	}
+	if got := coord.bookAuthor(store.BookKey{}); got != "" {
+		t.Fatalf("expected empty author for invalid key, got %q", got)
+	}
+	if got := coord.bookAuthor(store.BookKey{Provider: "audible", Namespace: "us", ID: "B00UNKNOWN"}); got != "" {
+		t.Fatalf("expected empty author for unknown key, got %q", got)
 	}
 
 	// Coordinator without Player/Bookmarks handles bookmark actions gracefully.
@@ -679,9 +687,182 @@ func TestBookmarkCoordinatorEdgeCasesAndErrors(t *testing.T) {
 	if err := coord.Close(context.Background()); err != nil {
 		t.Fatal(err)
 	}
-	for _, kind := range []ui.ActionKind{ui.CaptureBookmark, ui.SaveNote, ui.OpenBookmarks, ui.DeleteBookmark, ui.JumpBookmark, ui.ConfirmSwitchBookmark} {
+	for _, kind := range []ui.ActionKind{ui.CaptureBookmark, ui.SaveNote, ui.OpenBookmarks, ui.OpenGlobalBookmarks, ui.ExportBookmarks, ui.DeleteBookmark, ui.JumpBookmark, ui.ConfirmSwitchBookmark} {
 		if msg := coord.Dispatch(ui.Action{Kind: kind, Key: encB})(); msg == nil {
 			t.Fatalf("expected closed response for %v", kind)
 		}
+	}
+}
+
+func TestJ16GlobalBookmarkSearchAndSafeMarkdownExport(t *testing.T) {
+	ctx, ws, st, _, player, kA, kB, kC := setupBookmarkWorkspace(t)
+	// Seed auth.json to verify export NEVER leaks auth/tokens/paths.
+	if err := os.WriteFile(filepath.Join(ws.RootPath(), "auth.json"), []byte(`{"access_token":"Atna|SECRET-TOKEN"}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	// Update catalog with malicious title to verify Markdown/HTML escaping.
+	dur := int64((30 * time.Minute).Nanoseconds())
+	if err := st.ReplaceCatalog(ctx, "audible", "us", []store.CatalogBook{
+		{Key: kA, Title: "The Glass Orchard", Authors: []store.Contributor{{Name: "Mara Vale"}}, DurationNS: &dur},
+		{Key: kB, Title: "# Malicious <script>Rivers</script>", Authors: []store.Contributor{{Name: "Ilan [x](y)"}}, DurationNS: &dur},
+		{Key: kC, Title: "Missing Audio Book", Authors: []store.Contributor{{Name: "No Media"}}, DurationNS: &dur},
+	}, 1000); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.PutBookmark(ctx, store.Bookmark{
+		ID: "bm-a1", Key: kA, PositionNS: int64(2 * time.Minute),
+		Note: "Orchard note", CreatedAtMS: 100, UpdatedAtMS: 100,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.PutBookmark(ctx, store.Bookmark{
+		ID: "bm-b1", Key: kB, PositionNS: int64(5 * time.Minute),
+		Note: "# Heading\n<img src=x onerror=alert(1)>\n[click](javascript:alert(1))", CreatedAtMS: 100, UpdatedAtMS: 100,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.PutBookmark(ctx, store.Bookmark{
+		ID: "bm-c1", Key: kC, PositionNS: int64(time.Minute),
+		Note: "Missing audio note", CreatedAtMS: 100, UpdatedAtMS: 100,
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	coord, err := NewCoordinator(ctx, st, Options{
+		Player:       player,
+		MediaChecker: NewRootMediaChecker(ws.Owner()),
+		RootOwner:    ws.Owner(),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer coord.Close(context.Background())
+
+	r, err := testkit.New(ctx, ui.NewModel(coord.InitialSnapshot(), coord.Dispatch), 1000)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, msg := range coord.InitialMessages() {
+		if err := r.Send(msg); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := r.Send(tea.WindowSizeMsg{Width: 144, Height: 42}); err != nil {
+		t.Fatal(err)
+	}
+
+	// 1. Play Orchard (kA), then open All bookmarks (search & export) from Library sidebar (1 -> G -> Enter).
+	sendUIKeys(t, r, "G", "enter")
+	if err := r.Drain(); err != nil {
+		t.Fatal(err)
+	}
+	sendUIKeys(t, r, "1", "G", "enter")
+	if err := r.Drain(); err != nil {
+		t.Fatal(err)
+	}
+	if !r.Model.(ui.Model).BookmarksGlobal() {
+		t.Fatal("expected global bookmark search open")
+	}
+
+	// 2. Filter for "Missing" -> jump offers Queue download without touching Orchard.
+	sendUIKeys(t, r, "/", "m", "i", "s", "s", "i", "n", "g", "enter", "enter")
+	if err := r.Drain(); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(r.Model.View().Content, "Audio not downloaded") {
+		t.Fatalf("missing audio jump in global search did not offer Queue download:\n%s", r.Model.View().Content)
+	}
+	sendUIKeys(t, r, "esc", "esc") // close confirmation, clear filter
+
+	// 3. Filter for "Rivers" -> export filtered Markdown via 'e' -> creates exports/bookmarks-all.md safely!
+	sendUIKeys(t, r, "/", "r", "i", "v", "e", "r", "s", "enter", "e")
+	if err := r.Drain(); err != nil {
+		t.Fatal(err)
+	}
+	exportPath := filepath.Join(ws.RootPath(), "exports", "bookmarks-all.md")
+	raw, err := os.ReadFile(exportPath)
+	if err != nil {
+		t.Fatalf("expected exported Markdown file: %v", err)
+	}
+	text := string(raw)
+	if strings.Contains(text, "SECRET-TOKEN") || strings.Contains(text, "<script>") || strings.Contains(text, "<img") {
+		t.Fatalf("export leaked secret or unescaped HTML:\n%s", text)
+	}
+	if !strings.Contains(text, `\# Malicious &lt;script&gt;Rivers&lt;/script&gt;`) || strings.Contains(text, "Orchard note") {
+		t.Fatalf("filtered export content mismatch:\n%s", text)
+	}
+
+	// 4. Clear filter, press 'e' again -> opens Overwrite confirmation; Keep cancels and preserves file!
+	sendUIKeys(t, r, "esc", "e")
+	if err := r.Drain(); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(r.Model.View().Content, "Overwrite export") || !strings.Contains(r.Model.View().Content, "[Keep existing file]") {
+		t.Fatalf("expected overwrite confirmation:\n%s", r.Model.View().Content)
+	}
+	sendUIKeys(t, r, "enter") // Keep existing file
+	rawAfterKeep, _ := os.ReadFile(exportPath)
+	if string(rawAfterKeep) != text {
+		t.Fatal("Keep existing file modified export")
+	}
+
+	// 5. Write failure during overwrite (unsafe 0755 exports dir) keeps confirmation recoverable; restore 0700 and overwrite!
+	sendUIKeys(t, r, "e")
+	if err := r.Drain(); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(filepath.Join(ws.RootPath(), "exports"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	sendUIKeys(t, r, "tab", "enter")
+	if err := r.Drain(); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(r.Model.View().Content, "unsafe") {
+		t.Fatalf("expected unsafe export error:\n%s", r.Model.View().Content)
+	}
+	if err := os.Chmod(filepath.Join(ws.RootPath(), "exports"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	sendUIKeys(t, r, "enter") // retry overwrite
+	if err := r.Drain(); err != nil {
+		t.Fatal(err)
+	}
+	rawOverwritten, _ := os.ReadFile(exportPath)
+	if !strings.Contains(string(rawOverwritten), "Orchard note") || !strings.Contains(string(rawOverwritten), "Missing audio note") {
+		t.Fatalf("overwrite did not write all 3 bookmarks:\n%s", string(rawOverwritten))
+	}
+
+	// 6. Cross-book switch from global search (Rivers bm-b1 while Orchard is playing).
+	sendUIKeys(t, r, "/", "r", "i", "v", "e", "r", "s", "enter", "enter")
+	if err := r.Drain(); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(r.Model.View().Content, "Switch audiobook") {
+		t.Fatalf("expected cross-book switch confirmation from global search:\n%s", r.Model.View().Content)
+	}
+	sendUIKeys(t, r, "tab", "enter")
+	if err := r.Drain(); err != nil {
+		t.Fatal(err)
+	}
+	if snap := player.Snapshot(); *snap.Book != kB || snap.Position != 5*time.Minute {
+		t.Fatalf("global search cross-book switch failed: %+v", snap)
+	}
+
+	// Single-book export & error paths.
+	encA, _ := EncodeBookKey(kA)
+	if msg := coord.Dispatch(ui.Action{Kind: ui.ExportBookmarks, Key: encA})(); !strings.Contains(msg.(ui.NoticeMsg).Activity, "Exported 1 bookmarks") {
+		t.Fatalf("single-book export failed: %#v", msg)
+	}
+	if msg := coord.Dispatch(ui.Action{Kind: ui.ExportBookmarks, Key: "bad"})(); !strings.Contains(msg.(ui.NoticeMsg).Error, "Invalid") {
+		t.Fatalf("expected invalid key export error: %#v", msg)
+	}
+	noBmCoord, _ := NewCoordinator(ctx, st, Options{})
+	defer noBmCoord.Close(context.Background())
+	if msg := noBmCoord.Dispatch(ui.Action{Kind: ui.OpenGlobalBookmarks})(); msg.(ui.OpenBookmarksMsg).Error == "" {
+		t.Fatalf("expected unavailable global bookmarks error: %#v", msg)
+	}
+	if msg := noBmCoord.Dispatch(ui.Action{Kind: ui.ExportBookmarks, Overwrite: true})(); !strings.Contains(msg.(ui.ModalResultMsg).Error, "Operation failed") {
+		t.Fatalf("expected unavailable overwrite export error: %#v", msg)
 	}
 }

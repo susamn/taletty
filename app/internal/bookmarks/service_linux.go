@@ -168,6 +168,7 @@ type Options struct {
 type Service struct {
 	store        BookmarkStore
 	player       PlaybackController
+	rootOwner    RootOwner
 	mediaChecker MediaChecker
 	newID        func() (string, error)
 	editToken    chan struct{}
@@ -191,6 +192,7 @@ func NewService(opts Options) (*Service, error) {
 	return &Service{
 		store:        opts.Store,
 		player:       opts.Player,
+		rootOwner:    opts.RootOwner,
 		mediaChecker: checker,
 		newID:        newID,
 		editToken:    token,
