@@ -6,6 +6,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/susamn/taletty/app/internal/downloads"
 	"github.com/susamn/taletty/app/internal/playback"
 	"github.com/susamn/taletty/app/internal/profile"
 	"github.com/susamn/taletty/app/internal/store"
@@ -82,14 +83,28 @@ func OpenEngineWorkspace(ctx context.Context, home, pythonExplicit string, opts 
 		_ = ws.Close(context.Background())
 		return nil, err
 	}
+	dlMgr, err := downloads.New(ctx, downloads.Options{
+		Store:      ws.Store(),
+		Downloader: NewEngineDownloader(ws.Owner(), pythonExplicit),
+		RootOwner:  ws.Owner(),
+		Clock:      clock,
+	})
+	if err != nil {
+		_ = player.Close(context.Background())
+		_ = ws.Close(context.Background())
+		return nil, err
+	}
 	opts.Clock = clock
 	opts.Account = NewEngineAccount(ws.Owner(), pythonExplicit)
 	opts.Player = player
 	opts.MediaChecker = NewRootMediaChecker(ws.Owner())
 	opts.ChapterReader = FFprobeChapterReader{}
+	opts.DownloadsMgr = dlMgr
+	opts.RootOwner = ws.Owner()
 	opts.WorkspaceCloser = ws.Close
 	coord, err := NewCoordinator(ctx, ws.Store(), opts)
 	if err != nil {
+		_ = dlMgr.Close(context.Background())
 		_ = player.Close(context.Background())
 		_ = ws.Close(context.Background())
 		return nil, err

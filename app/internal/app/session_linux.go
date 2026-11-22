@@ -7,6 +7,7 @@ import (
 	"time"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/susamn/taletty/app/internal/downloads"
 	"github.com/susamn/taletty/app/internal/terminal"
 	"github.com/susamn/taletty/app/internal/ui"
 )
@@ -15,10 +16,28 @@ const playbackPollInterval = 500 * time.Millisecond
 
 type playbackTickMsg struct{}
 
+type downloadWatchMsg struct {
+	snap downloads.Snapshot
+	ch   <-chan downloads.Snapshot
+}
+
 type sessionModel struct {
 	inner tea.Model
 	ctx   context.Context
 	coord *Coordinator
+}
+
+func waitDownloadCmd(ch <-chan downloads.Snapshot) tea.Cmd {
+	if ch == nil {
+		return nil
+	}
+	return func() tea.Msg {
+		snap, ok := <-ch
+		if !ok {
+			return nil
+		}
+		return downloadWatchMsg{snap: snap, ch: ch}
+	}
 }
 
 func (m sessionModel) Init() tea.Cmd {
@@ -36,6 +55,12 @@ func (m sessionModel) Init() tea.Cmd {
 				return nil
 			})
 		}
+		if m.coord.downloadsMgr != nil {
+			cmds = append(cmds, func() tea.Msg {
+				return m.coord.DownloadsSnapshot()
+			})
+			cmds = append(cmds, waitDownloadCmd(m.coord.WatchDownloads(m.ctx)))
+		}
 		if m.coord.player != nil {
 			cmds = append(cmds, tea.Tick(playbackPollInterval, func(time.Time) tea.Msg {
 				return playbackTickMsg{}
@@ -46,6 +71,36 @@ func (m sessionModel) Init() tea.Cmd {
 }
 
 func (m sessionModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	if dw, ok := msg.(downloadWatchMsg); ok {
+		var cmds []tea.Cmd
+		if m.coord != nil {
+			dlMsg := m.coord.ProjectDownloads(dw.snap)
+			next, cmd := m.inner.Update(dlMsg)
+			m.inner = next
+			if cmd != nil {
+				cmds = append(cmds, cmd)
+			}
+			snapMsg := m.coord.RefreshSnapshotFromDownloads(m.ctx, dw.snap)
+			next, cmd = m.inner.Update(snapMsg)
+			m.inner = next
+			if cmd != nil {
+				cmds = append(cmds, cmd)
+			}
+			if dw.snap.Active == nil && len(dw.snap.History) > 0 && dw.snap.History[0].State == "ready" {
+				k := dw.snap.History[0].Key
+				cmds = append(cmds, func() tea.Msg {
+					if chMsg, ok := m.coord.LoadChapters(m.ctx, k); ok {
+						return chMsg
+					}
+					return nil
+				})
+			}
+		}
+		if nextWatch := waitDownloadCmd(dw.ch); nextWatch != nil {
+			cmds = append(cmds, nextWatch)
+		}
+		return m, tea.Batch(cmds...)
+	}
 	if _, ok := msg.(playbackTickMsg); ok {
 		var cmds []tea.Cmd
 		if m.coord != nil && m.coord.player != nil {

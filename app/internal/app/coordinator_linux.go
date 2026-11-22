@@ -49,6 +49,7 @@ type CatalogStore interface {
 	Favorites(ctx context.Context) ([]store.BookKey, error)
 	LocalMedia(ctx context.Context, key store.BookKey) (store.LocalMedia, bool, error)
 	LocalMediaList(ctx context.Context) ([]store.LocalMedia, error)
+	DeleteLocalMedia(ctx context.Context, key store.BookKey) error
 	DownloadJobs(ctx context.Context) ([]store.DownloadJob, error)
 }
 
@@ -113,6 +114,8 @@ type Options struct {
 	MediaChecker    MediaChecker
 	ChapterReader   ChapterReader
 	Downloads       DownloadEnqueuer
+	DownloadsMgr    DownloadManager
+	RootOwner       RootLeaseOwner
 	Clock           func() time.Time
 	WorkspaceCloser func(context.Context) error
 }
@@ -151,6 +154,8 @@ type Coordinator struct {
 	mediaChecker    MediaChecker
 	chapterReader   ChapterReader
 	downloads       DownloadEnqueuer
+	downloadsMgr    DownloadManager
+	rootOwner       RootLeaseOwner
 	clock           func() time.Time
 	workspaceCloser func(context.Context) error
 
@@ -160,6 +165,7 @@ type Coordinator struct {
 
 	mu            sync.Mutex
 	closed        bool
+	downloadsDone bool
 	playerClosed  bool
 	accountClosed bool
 	workspaceDone bool
@@ -168,6 +174,9 @@ type Coordinator struct {
 	syncSeq       uint64
 	dialogSeq     uint64
 	activeSyncID  string
+	speedJobID    string
+	speedBytes    int64
+	speedAt       time.Time
 	viewState     store.ViewState
 	settings      store.Settings
 	durations     map[store.BookKey]time.Duration
@@ -243,6 +252,8 @@ func NewCoordinator(ctx context.Context, st CatalogStore, opts Options) (*Coordi
 		mediaChecker:    opts.MediaChecker,
 		chapterReader:   opts.ChapterReader,
 		downloads:       opts.Downloads,
+		downloadsMgr:    opts.DownloadsMgr,
+		rootOwner:       opts.RootOwner,
 		clock:           clock,
 		workspaceCloser: opts.WorkspaceCloser,
 		ctx:             lifeCtx,
@@ -677,11 +688,16 @@ func (c *Coordinator) Dispatch(action ui.Action) tea.Cmd {
 		return func() tea.Msg {
 			return c.runSync()
 		}
-	case ui.PlayBook, ui.ActivateChapter, ui.ConfirmSwitchPlay, ui.QueueDownload,
+	case ui.PlayBook, ui.ActivateChapter, ui.ConfirmSwitchPlay,
 		ui.TogglePlayback, ui.SeekBackward, ui.SeekForward,
 		ui.SpeedDown, ui.SpeedUp, ui.VolumeDown, ui.VolumeUp:
 		return func() tea.Msg {
 			return c.handlePlaybackAction(action)
+		}
+	case ui.QueueDownload, ui.DownloadCancel, ui.DownloadRetry, ui.DownloadRemove,
+		ui.DownloadMoveUp, ui.DownloadMoveDown, ui.DownloadDeleteAudio:
+		return func() tea.Msg {
+			return c.handleDownloadAction(action)
 		}
 	default:
 		return func() tea.Msg {
@@ -1044,6 +1060,18 @@ func (c *Coordinator) Close(ctx context.Context) error {
 	case <-ctx.Done():
 		return ctx.Err()
 	case <-joined:
+	}
+
+	c.mu.Lock()
+	needDownloadsClose := c.downloadsMgr != nil && !c.downloadsDone
+	c.mu.Unlock()
+	if needDownloadsClose {
+		if err := c.downloadsMgr.Close(ctx); err != nil {
+			return err
+		}
+		c.mu.Lock()
+		c.downloadsDone = true
+		c.mu.Unlock()
 	}
 
 	c.mu.Lock()
