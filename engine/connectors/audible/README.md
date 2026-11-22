@@ -1,17 +1,45 @@
 # Linux Audible connector
 
-Development API; a [headless doctor/login/sync source CLI](../../cmd/taletty-engine/README.md)
-now consumes it (not the Taletty TUI or a release). Use an explicit CPython 3.12
-venv with `internal/bridge/adapter/requirements.txt`; installation/platform policy
-remains #26. `Doctor(ctx, pythonExecutable)` is separate and read-only.
+See [the engine module README](../../README.md) for prerequisites, source
+installation, and post-merge `engine/v0.1.0` release tagging. A [headless
+doctor/login/sync/download source CLI](../../cmd/taletty-engine/README.md)
+consumes this connector (not the Taletty TUI). Use an explicit CPython 3.12
+venv with [`internal/bridge/adapter/requirements.txt`](internal/bridge/adapter/requirements.txt);
+artifact packaging/platform policy remains #26.
+
+## Contract pins and runtime discovery (#8)
+
+- `ContractVersion` (`"v0.1.0"`), `BridgeProtocolVersion` (`1`),
+  `PinnedPythonVersion` (`"3.12"`), and `PinnedAudibleVersion` (`"0.13.1"`).
+- `ResolvePython(explicit, getenv, lookPath)` and `DiscoverPython(explicit)`
+  resolve the Python executable with strict precedence: explicit override ->
+  `TALETTY_PYTHON` -> `python3.12` on `PATH` -> `python3` on `PATH`. Empty,
+  whitespace-only, or NUL-containing explicit overrides (and invalid
+  `TALETTY_PYTHON` values) are rejected cleanly without falling back; legacy
+  `~/.config/audible-tui` paths are never scanned, `pip` is never invoked, and
+  missing runtimes return `ErrRuntimeMissing`.
+- `Doctor(ctx, pythonExecutable)` is separate and read-only.
+
+## Session ownership and borrowed root handoff
 
 `Open(ctx, absoluteRoot, pythonExecutable)` returns a `*Client`. Supply the fresh
 Taletty-owned root (eventually `~/.config/taletty/`), already created as effective-
 UID-owned 0700. No root/runtime/legacy discovery or directory creation occurs.
 One client owns the private advisory lock until `Close(ctx)`; another owner gets
-`ErrAuthBusy`. Close waits for authenticated work; cancel/join that work before
+`ErrAuthBusy`.
+
+`OpenBorrowed(ctx, root *os.File, pythonExecutable)` (#8, for #13 app
+integration) duplicates a caller-owned effective-UID-owned `0700` directory
+descriptor via `openat(".", O_RDONLY|O_DIRECTORY|O_NOFOLLOW|O_CLOEXEC)` and
+verifies `0700` + `euid` without acquiring or unlocking `.auth.lock`. It
+serializes `Login`, `Library`, and `Download` with `Session.token`, and
+`Client.Close(ctx)` closes only its duplicated root descriptor. The caller must
+hold exclusive cooperative root ownership (for example, `store.Owner` /
+`RootLease`) until `Client.Close` returns.
+
+Close waits for authenticated work; cancel/join that work before
 shutdown. A canceled Close retains ownership and is retryable; closed clients
-reject login with `ErrClosed`. Playback and Doctor do not acquire this gate.
+reject operations with `ErrClosed`. Playback and Doctor do not acquire this gate.
 
 `client.Login(ctx, terminal *os.File)` is explicit, synchronous and US-only.
 Suspend the UI/other terminal users first. Borrow the controlling foreground TTY

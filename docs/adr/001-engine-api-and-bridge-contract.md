@@ -498,6 +498,32 @@ At #13 integration, pin a released engine tag and run `GOWORK=off` builds/tests 
 the developer workspace. CI checks both development wiring and pinned-release mode
 once integration exists; it cannot require an unpublished engine tag in the bootstrap.
 
+#8 prepares the first independently consumable engine release (`engine/v0.1.0`):
+- Exposes `ContractVersion` (`"v0.1.0"`), `BridgeProtocolVersion` (`1`),
+  `PinnedPythonVersion` (`"3.12"`), and `PinnedAudibleVersion` (`"0.13.1"`) in
+  `engine/connectors/audible`.
+- Adds `ResolvePython` / `DiscoverPython` with strict precedence (`explicit` >
+  `TALETTY_PYTHON` > `python3.12` on `PATH` > `python3` on `PATH`), rejecting
+  empty/NUL/whitespace-only explicit overrides cleanly, never scanning
+  `~/.config/audible-tui` or legacy paths, never running `pip` or mutating system
+  Python, and returning `ErrRuntimeMissing` when no candidate resolves.
+- Wires optional `--python` in `taletty-engine` using `ResolvePython` (explicit
+  invalid `--python` values fail with usage exit `2` without echoing; missing
+  runtimes fail safely with `runtime_missing` exit `1` across `doctor`, `login`,
+  `sync`, and `download`).
+- Adds `auth.OpenBorrowed(ctx, root *os.File)` and
+  `audible.OpenBorrowed(ctx, root *os.File, python string)` for #13 app
+  integration: duplicates the caller-owned `0700` same-UID directory descriptor
+  via `openat(".", O_RDONLY|O_DIRECTORY|O_NOFOLLOW|O_CLOEXEC)`, verifies `0700` +
+  `euid`, serializes `Login`/`Library`/`Download` with `Session.token` without
+  acquiring or unlocking `.auth.lock` (`fd: -1`), and closes only its duplicated
+  root descriptor in `Close`. Callers must retain exclusive cooperative root
+  ownership (such as `store.Owner` / `RootLease`) until `Client.Close` returns.
+- Documents prerequisites, source installation, and post-merge maintainer tagging
+  (`git tag -a engine/v0.1.0 ...`) in [the engine README](../../engine/README.md)
+  and verifies clean temp-dir `go install` plus an ephemeral external consumer
+  module outside the workspace.
+
 ## Synthetic protocol examples (not credentials or real provider data)
 
 ```json
