@@ -128,22 +128,25 @@ const (
 	MarkFinished           ActionKind = "mark-finished"
 	MarkUnfinished         ActionKind = "mark-unfinished"
 	ReplayBook             ActionKind = "replay-book"
+	SetSleepTimer          ActionKind = "set-sleep-timer"
 )
 
 // Current-audio actions carry the source session so the coordinator can reject
 // stale commands after replacement, including a reload of the same book.
 type Action struct {
-	Kind         ActionKind
-	Key, Session string
-	JobID        string
-	Target       NoteTarget
-	Text         string
-	RequestID    string
-	Attempt      uint64
-	ChapterIndex int
-	ChapterStart time.Duration
-	BookmarkID   string
-	BookmarkPos  time.Duration
+	Kind          ActionKind
+	Key, Session  string
+	JobID         string
+	Target        NoteTarget
+	Text          string
+	RequestID     string
+	Attempt       uint64
+	ChapterIndex  int
+	ChapterStart  time.Duration
+	BookmarkID    string
+	BookmarkPos   time.Duration
+	SleepMode     string
+	SleepDuration time.Duration
 }
 
 // Model owns presentation only. Dispatch creates commands; it must not perform
@@ -170,6 +173,8 @@ type Model struct {
 	downloadsCursor  int
 	dlMenu           *downloadActionMenu
 	bookMenu         *bookActionMenu
+	sleepOpen        bool
+	sleepCursor      int
 	dialogSeq        uint64
 	control          int
 	failure          string
@@ -350,6 +355,9 @@ func (m Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 		if m.bookMenu != nil {
 			return m.bookMenuKey(key)
 		}
+		if m.sleepOpen {
+			return m.sleepKey(key)
+		}
 		if key == "q" || key == "ctrl+c" {
 			return m.request(Action{Kind: RequestQuit})
 		}
@@ -379,6 +387,9 @@ func (m Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		case "s":
 			m.openSortMenu()
+			return m, nil
+		case "t":
+			m.openSleepMenu()
 			return m, nil
 		case "f":
 			if m.focus == PlayerPane {
