@@ -597,6 +597,27 @@ exercise J03 library browsing and persistence journeys:
   (`Destination`, `SortOrder`, `FilterText`, `Focus`, `Selected`) persistence
   and restoration across restarts.
 
+## Download manager and safe audio deletion (#17)
+
+[`downloads_test.go`](../app/internal/ui/downloads_test.go) and
+[`downloads_linux_test.go`](../app/internal/app/downloads_linux_test.go)
+exercise J04–J06/J12/J13 download and deletion journeys over real
+`*store.Store`, `*profile.Workspace`, `*downloads.Coordinator`,
+`*playback.Controller`, `EngineDownloader`, and `testkit.Runner`:
+
+- `d` enqueue deduplication, `D` Downloads view, known-total percentage and
+  measured speed vs unknown-total (`no %`) and indeterminate `Preparing`/
+  `Licensing`/`Publishing` stages, and `Canceling…` annotation.
+- Row action menu with frozen target job ID and stale-target invalidation,
+  default-safe cancel confirmation, commit-point cancel race (`Ready` wins),
+  waiting queue `Move up`/`Move down`/`Remove`, `disk_full` failure and
+  explicit `Retry`.
+- Safe audio deletion (`x` / `Delete downloaded audio`): stops/checkpoints
+  loaded playback first (preserving audio if `Stop` fails), unlinks only
+  private `0600` regular `.m4b` files under `downloads/` via `openat`/
+  `O_NOFOLLOW`/`unlinkat`, and preserves `ListeningState`, `Favorite`,
+  `Bookmark`, and `CatalogBook` metadata.
+
 ## Runtime packaging and platform matrix (#26)
 
 [ADR 003](adr/003-runtime-and-platform-matrix.md) defines the OS/architecture

@@ -113,6 +113,12 @@ const (
 	ActivateChapter        ActionKind = "activate-chapter"
 	ConfirmSwitchPlay      ActionKind = "confirm-switch-play"
 	QueueDownload          ActionKind = "queue-download"
+	DownloadCancel         ActionKind = "download-cancel"
+	DownloadRetry          ActionKind = "download-retry"
+	DownloadRemove         ActionKind = "download-remove"
+	DownloadMoveUp         ActionKind = "download-move-up"
+	DownloadMoveDown       ActionKind = "download-move-down"
+	DownloadDeleteAudio    ActionKind = "download-delete-audio"
 )
 
 // Current-audio actions carry the source session so the coordinator can reject
@@ -120,6 +126,7 @@ const (
 type Action struct {
 	Kind         ActionKind
 	Key, Session string
+	JobID        string
 	Target       NoteTarget
 	Text         string
 	RequestID    string
@@ -131,33 +138,38 @@ type Action struct {
 // Model owns presentation only. Dispatch creates commands; it must not perform
 // blocking I/O. Playback is authoritative only when a coordinator sends a snapshot.
 type Model struct {
-	data          SnapshotMsg
-	appearance    AppearanceMsg
-	layout        Layout
-	focus         Pane
-	content       Pane
-	selected      string
-	chapterCursor int
-	libraryView   LibraryView
-	libraryCursor int
-	sortOrder     SortOrder
-	sortOpen      bool
-	sortCursor    int
-	filterQuery   string
-	filterDraft   string
-	filterPrev    string
-	filterEditing bool
-	control       int
-	failure       string
-	help          bool
-	helpOffset    int
-	accountOpen   bool
-	accountCursor int
-	account       AccountState
-	note          *noteEditor
-	confirmation  *confirmation
-	quitWarning   bool
-	dispatch      func(Action) tea.Cmd
+	data            SnapshotMsg
+	appearance      AppearanceMsg
+	layout          Layout
+	focus           Pane
+	content         Pane
+	selected        string
+	chapterCursor   int
+	libraryView     LibraryView
+	libraryCursor   int
+	sortOrder       SortOrder
+	sortOpen        bool
+	sortCursor      int
+	filterQuery     string
+	filterDraft     string
+	filterPrev      string
+	filterEditing   bool
+	downloads       []DownloadJob
+	downloadsOpen   bool
+	downloadsCursor int
+	dlMenu          *downloadActionMenu
+	dialogSeq       uint64
+	control         int
+	failure         string
+	help            bool
+	helpOffset      int
+	accountOpen     bool
+	accountCursor   int
+	account         AccountState
+	note            *noteEditor
+	confirmation    *confirmation
+	quitWarning     bool
+	dispatch        func(Action) tea.Cmd
 }
 
 func NewModel(data SnapshotMsg, dispatch func(Action) tea.Cmd) Model {
@@ -237,6 +249,8 @@ func (m Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 		m.restoreSession(msg)
 	case BookChaptersMsg:
 		m.applyBookChapters(msg)
+	case DownloadsMsg:
+		m.acceptDownloads(msg)
 	case SnapshotMsg:
 		m.accept(msg)
 	case AppearanceMsg:
@@ -284,10 +298,29 @@ func (m Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 		if m.filterEditing {
 			return m.filterKey(key, msg.Text), nil
 		}
+		if m.downloadsOpen {
+			return m.downloadsKey(key)
+		}
 		if key == "q" || key == "ctrl+c" {
 			return m.request(Action{Kind: RequestQuit})
 		}
 		switch key {
+		case "D":
+			m.openDownloads()
+			return m, nil
+		case "d":
+			if m.focus != PlayerPane && m.selected != "" {
+				return m.request(Action{Kind: QueueDownload, Key: m.selected})
+			}
+			return m, nil
+		case "x":
+			if (m.focus == Books || m.focus == Details) && m.selected != "" {
+				if idx := m.bookIndex(); idx >= 0 && m.data.Books[idx].Availability == Ready {
+					return m.Update(m.deleteAudioConfirmation(m.data.Books[idx].Key, m.data.Books[idx].Title, ""))
+				}
+				m.data.Activity = "No downloaded audio to delete for highlighted book"
+			}
+			return m, nil
 		case "esc":
 			if m.filterQuery != "" {
 				m.filterQuery = ""

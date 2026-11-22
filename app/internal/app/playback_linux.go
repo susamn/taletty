@@ -293,8 +293,6 @@ func (c *Coordinator) handlePlaybackAction(action ui.Action) tea.Msg {
 		return c.activateChapter(action)
 	case ui.ConfirmSwitchPlay:
 		return c.confirmSwitchPlay(action)
-	case ui.QueueDownload:
-		return c.queueDownload(action)
 	case ui.TogglePlayback:
 		return c.togglePlayback(action.Session)
 	case ui.SeekBackward:
@@ -601,33 +599,6 @@ func (c *Coordinator) confirmSwitchPlay(action ui.Action) tea.Msg {
 	return tea.BatchMsg{
 		func() tea.Msg { return ui.ModalResultMsg{ID: action.RequestID, Attempt: action.Attempt} },
 		func() tea.Msg { return updated },
-	}
-}
-
-func (c *Coordinator) queueDownload(action ui.Action) tea.Msg {
-	ctx, ok := c.beginWorker()
-	if !ok {
-		return ui.ModalResultMsg{ID: action.RequestID, Attempt: action.Attempt, Error: SanitizeError(ErrClosed)}
-	}
-	defer c.wg.Done()
-
-	if c.downloads == nil {
-		return ui.ModalResultMsg{
-			ID:      action.RequestID,
-			Attempt: action.Attempt,
-			Error:   "Download manager unavailable in this slice; use taletty-engine download.",
-		}
-	}
-	key, err := DecodeBookKey(action.Key)
-	if err != nil {
-		return ui.ModalResultMsg{ID: action.RequestID, Attempt: action.Attempt, Error: SanitizeError(ErrInvalidInput)}
-	}
-	if err := c.downloads.Enqueue(ctx, key); err != nil {
-		return ui.ModalResultMsg{ID: action.RequestID, Attempt: action.Attempt, Error: SanitizeError(err)}
-	}
-	return tea.BatchMsg{
-		func() tea.Msg { return ui.ModalResultMsg{ID: action.RequestID, Attempt: action.Attempt} },
-		func() tea.Msg { return ui.NoticeMsg{Activity: "Queued download"} },
 	}
 }
 

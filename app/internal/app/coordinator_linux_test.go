@@ -684,6 +684,12 @@ func (f *faultStore) LocalMediaList(ctx context.Context) ([]store.LocalMedia, er
 	}
 	return f.CatalogStore.LocalMediaList(ctx)
 }
+func (f *faultStore) DeleteLocalMedia(ctx context.Context, k store.BookKey) error {
+	if f.failStep == "DeleteLocalMedia" {
+		return errors.New("db fail")
+	}
+	return f.CatalogStore.DeleteLocalMedia(ctx, k)
+}
 func (f *faultStore) DownloadJobs(ctx context.Context) ([]store.DownloadJob, error) {
 	if f.failStep == "DownloadJobs" {
 		return nil, errors.New("db fail")
