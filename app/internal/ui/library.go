@@ -114,6 +114,7 @@ func (m Model) librarySidebarRows() []librarySidebarRow {
 		{label: fmt.Sprintf("Finished (%d)", counts[ViewFinished]), view: ViewFinished, selectable: true},
 		{label: "VIEWS / OVERLAYS", selectable: false},
 		{label: bmLabel, action: OpenBookmarks, selectable: true},
+		{label: "All bookmarks (search & export)", action: OpenGlobalBookmarks, selectable: true},
 	}
 }
 

@@ -66,7 +66,7 @@ func TestBookmarkCaptureAndExplicitBTargeting(t *testing.T) {
 	}
 
 	// Library sidebar Bookmarks entry names highlighted book and opens manager for B.
-	send(t, r, key("1"), key("G"))
+	send(t, r, key("1"), key("G"), key("k"))
 	view := screen(t, r, 144, 42)
 	if !strings.Contains(view, "Bookmarks: Stars") {
 		t.Fatalf("missing named Bookmarks sidebar entry:\n%s", view)
@@ -326,5 +326,69 @@ func TestBookmarksEdgeCasesDirectOpenFilterCancelAndMenuJump(t *testing.T) {
 	send(t, r, onlyPlayer, key("5"), key("B"))
 	if !strings.Contains(r.Model.View().Content, "Bookmarks - Player Only") {
 		t.Fatalf("expected Player title fallback:\n%s", r.Model.View().Content)
+	}
+}
+
+func TestGlobalBookmarkSearchAndExportTrigger(t *testing.T) {
+	var actions []ui.Action
+	r := start(t, fixture(), func(a ui.Action) tea.Cmd {
+		actions = append(actions, a)
+		return nil
+	})
+	screen(t, r, 144, 42)
+
+	// Open All bookmarks (search & export) from Library sidebar (G).
+	send(t, r, key("1"), key("G"), key("enter"))
+	if !r.Model.(ui.Model).BookmarksOpen() || !r.Model.(ui.Model).BookmarksGlobal() {
+		t.Fatal("expected global bookmark search open")
+	}
+	if actions[len(actions)-1].Kind != ui.OpenGlobalBookmarks {
+		t.Fatalf("expected OpenGlobalBookmarks action, got %+v", actions)
+	}
+
+	// Error + retry in global mode, then populate across books A and B.
+	send(t, r, ui.OpenBookmarksMsg{Global: true, Error: "Query failed"})
+	send(t, r, key("e"))
+	if !strings.Contains(r.Model.View().Content, "Reload bookmarks before exporting") {
+		t.Fatal("e should refuse while query error is active")
+	}
+	send(t, r, key("r"))
+	if actions[len(actions)-1].Kind != ui.OpenGlobalBookmarks {
+		t.Fatalf("r did not retry OpenGlobalBookmarks: %+v", actions)
+	}
+	send(t, r, ui.OpenBookmarksMsg{
+		Global: true,
+		Bookmarks: []ui.Bookmark{
+			{ID: "bm-a", Key: "A", BookTitle: "River", Position: 15 * time.Second, ChapterTitle: "Ch 1", Note: "River note"},
+			{ID: "bm-b", Key: "B", BookTitle: "Stars", Position: 45 * time.Second, ChapterTitle: "Ch 2", Note: "Stars note"},
+		},
+	})
+	view := screen(t, r, 144, 42)
+	if !strings.Contains(view, "River | 00:00:15") || !strings.Contains(view, "Stars | 00:00:45") {
+		t.Fatalf("global search missing book titles:\n%s", view)
+	}
+
+	// Filter by book title "stars", jump targets B, export carries filter query.
+	send(t, r, key("/"), key("s"), key("t"), key("a"), key("r"), key("s"), key("enter"))
+	send(t, r, key("enter"))
+	last := actions[len(actions)-1]
+	if last.Kind != ui.JumpBookmark || last.Key != "B" || last.BookmarkID != "bm-b" {
+		t.Fatalf("global jump did not target B/bm-b: %+v", last)
+	}
+	send(t, r, key("e"))
+	exp := actions[len(actions)-1]
+	if exp.Kind != ui.ExportBookmarks || exp.Key != "" || exp.Text != "stars" {
+		t.Fatalf("global export action mismatch: %+v", exp)
+	}
+
+	// Row action menu in global mode freezes (bm.Key, bm.ID) and updates via BookmarksMsg{Global: true}.
+	send(t, r, key("x"), key("j"), key("enter")) // Edit note for B/bm-b
+	if !strings.Contains(r.Model.View().Content, "Stars | Ch 2") {
+		t.Fatalf("global edit did not target Stars:\n%s", r.Model.View().Content)
+	}
+	send(t, r, key("esc"))
+	send(t, r, ui.BookmarksMsg{Global: true, Bookmarks: nil})
+	if !strings.Contains(r.Model.View().Content, "No bookmarks across library") {
+		t.Fatalf("missing empty global bookmarks message:\n%s", r.Model.View().Content)
 	}
 }

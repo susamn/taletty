@@ -280,7 +280,7 @@ func (m Model) View() tea.View {
 		case m.bmMenuOpen:
 			hints = "j/k choose | Enter act | Esc back | Transport disabled in menu"
 		default:
-			hints = "j/k move | Enter jump | x actions | b capture | / filter | Tab area | Esc back | " + m.helpTransport()
+			hints = "j/k move | Enter jump | x actions | e export | b capture | / filter | Esc back | " + m.helpTransport()
 		}
 	}
 	if m.help {

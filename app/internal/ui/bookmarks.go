@@ -14,6 +14,7 @@ import (
 type Bookmark struct {
 	ID           string
 	Key          string
+	BookTitle    string
 	Position     time.Duration
 	ChapterID    string
 	ChapterTitle string
@@ -22,18 +23,20 @@ type Bookmark struct {
 	UpdatedAtMS  int64
 }
 
-// OpenBookmarksMsg opens or populates the Bookmarks Manager for Key.
+// OpenBookmarksMsg opens or populates the Bookmarks Manager for Key (or Global search).
 type OpenBookmarksMsg struct {
 	Key       string
+	Global    bool
 	Title     string
 	Bookmarks []Bookmark
 	Error     string
 }
 
-// BookmarksMsg updates the bookmark list for Key only when the manager is
-// currently open for that exact fixed target Key.
+// BookmarksMsg updates the bookmark list for Key (or Global search) only when
+// the manager is currently open for that exact fixed target.
 type BookmarksMsg struct {
 	Key       string
+	Global    bool
 	Bookmarks []Bookmark
 	Error     string
 }
@@ -59,6 +62,9 @@ var bookmarkMenuOptions = []bookmarkMenuOption{
 
 // BookmarksOpen reports whether the Bookmarks Manager view is currently open.
 func (m Model) BookmarksOpen() bool { return m.bookmarksOpen }
+
+// BookmarksGlobal reports whether the Bookmarks Manager is in global search mode.
+func (m Model) BookmarksGlobal() bool { return m.bookmarksOpen && m.bookmarksGlobal }
 
 // BookmarksTarget returns the fixed BookKey currently targeted by the Bookmarks Manager.
 func (m Model) BookmarksTarget() string { return m.bookmarksTarget }
@@ -89,8 +95,9 @@ func bookmarkChapterLabel(bm Bookmark) string {
 	return cleanLine(bm.ChapterTitle)
 }
 
-func (m *Model) openBookmarksLoading(targetKey, targetTitle string) {
+func (m *Model) openBookmarksLoading(targetKey, targetTitle string, global bool) {
 	m.bookmarksOpen = true
+	m.bookmarksGlobal = global
 	m.bookmarksOrigin = m.focus
 	m.bookmarksTarget = targetKey
 	m.bookmarksTitle = targetTitle
@@ -107,15 +114,16 @@ func (m *Model) openBookmarksLoading(targetKey, targetTitle string) {
 	m.bmMenuOpen = false
 	m.bmMenuCursor = 0
 	m.bmMenuTargetID = ""
+	m.bmMenuTargetKey = ""
 	m.bmMenuStale = false
 }
 
 func (m *Model) applyOpenBookmarks(msg OpenBookmarksMsg) {
-	if msg.Key == "" {
+	if !msg.Global && msg.Key == "" {
 		return
 	}
 	if m.bookmarksOpen {
-		if msg.Key != m.bookmarksTarget {
+		if msg.Global != m.bookmarksGlobal || (!msg.Global && msg.Key != m.bookmarksTarget) {
 			return
 		}
 		if msg.Title != "" {
@@ -133,10 +141,17 @@ func (m *Model) applyOpenBookmarks(msg OpenBookmarksMsg) {
 		return
 	}
 	targetTitle := msg.Title
-	if targetTitle == "" {
-		targetTitle = m.bookTitleByKey(msg.Key)
+	if msg.Global {
+		if targetTitle == "" {
+			targetTitle = "All Books (Search)"
+		}
+		m.openBookmarksLoading("", targetTitle, true)
+	} else {
+		if targetTitle == "" {
+			targetTitle = m.bookTitleByKey(msg.Key)
+		}
+		m.openBookmarksLoading(msg.Key, targetTitle, false)
 	}
-	m.openBookmarksLoading(msg.Key, targetTitle)
 	m.bookmarksLoading = false
 	m.bookmarksError = cleanLine(msg.Error)
 	if msg.Error == "" {
@@ -146,7 +161,14 @@ func (m *Model) applyOpenBookmarks(msg OpenBookmarksMsg) {
 }
 
 func (m *Model) applyBookmarksUpdate(msg BookmarksMsg) {
-	if !m.bookmarksOpen || msg.Key == "" || msg.Key != m.bookmarksTarget {
+	if !m.bookmarksOpen {
+		return
+	}
+	if msg.Global {
+		if !m.bookmarksGlobal {
+			return
+		}
+	} else if m.bookmarksGlobal || msg.Key == "" || msg.Key != m.bookmarksTarget {
 		return
 	}
 	m.bookmarksLoading = false
@@ -161,15 +183,15 @@ func (m *Model) applyBookmarksUpdate(msg BookmarksMsg) {
 	m.bookmarks = cloneUIBookmarks(msg.Bookmarks)
 	m.reconcileBookmarkSelection(prevID)
 	if m.bmMenuOpen && m.bmMenuTargetID != "" {
-		if _, ok := m.bookmarkByID(m.bmMenuTargetID); !ok {
+		if _, ok := m.bookmarkByKeyAndID(m.bmMenuTargetKey, m.bmMenuTargetID); !ok {
 			m.bmMenuStale = true
 		}
 	}
 }
 
-func (m Model) bookmarkByID(id string) (Bookmark, bool) {
+func (m Model) bookmarkByKeyAndID(key, id string) (Bookmark, bool) {
 	for _, bm := range m.bookmarks {
-		if bm.ID == id {
+		if bm.ID == id && (key == "" || bm.Key == key) {
 			return bm, true
 		}
 	}
@@ -184,7 +206,8 @@ func (m Model) visibleBookmarks() []Bookmark {
 	out := make([]Bookmark, 0, len(m.bookmarks))
 	for _, bm := range m.bookmarks {
 		if strings.Contains(strings.ToLower(bm.Note), q) ||
-			strings.Contains(strings.ToLower(bm.ChapterTitle), q) {
+			strings.Contains(strings.ToLower(bm.ChapterTitle), q) ||
+			strings.Contains(strings.ToLower(bm.BookTitle), q) {
 			out = append(out, bm)
 		}
 	}
@@ -255,8 +278,27 @@ func (m Model) triggerOpenBookmarks() (tea.Model, tea.Cmd) {
 		m.data.Activity = "Bookmarks unavailable: no coordinator"
 		return m, nil
 	}
-	m.openBookmarksLoading(targetKey, targetTitle)
+	m.openBookmarksLoading(targetKey, targetTitle, false)
 	return m.request(Action{Kind: OpenBookmarks, Key: targetKey})
+}
+
+func (m Model) triggerOpenGlobalBookmarks() (tea.Model, tea.Cmd) {
+	if m.dispatch == nil {
+		m.data.Activity = "Bookmarks unavailable: no coordinator"
+		return m, nil
+	}
+	m.openBookmarksLoading("", "All Books (Search)", true)
+	return m.request(Action{Kind: OpenGlobalBookmarks})
+}
+
+func (m Model) bookmarkBookTitle(bm Bookmark) string {
+	if strings.TrimSpace(cleanLine(bm.BookTitle)) != "" {
+		return bm.BookTitle
+	}
+	if bm.Key != "" {
+		return m.bookTitleByKey(bm.Key)
+	}
+	return m.bookmarksTitle
 }
 
 func (m Model) bookmarksLayout() (Rect, Rect) {
@@ -272,6 +314,9 @@ func (m Model) bookmarksLayout() (Rect, Rect) {
 
 func (m Model) bookmarkNoteRows(bm Bookmark, width int) []string {
 	header := "Jump " + clock(bm.Position) + " | " + bookmarkChapterLabel(bm)
+	if m.bookmarksGlobal {
+		header = title(m.bookmarkBookTitle(bm)) + " | " + header
+	}
 	rows := []string{header}
 	wrapped := strings.Split(ansi.Wrap(safeNote(bm.Note), max(1, width), ""), "\n")
 	return append(rows, wrapped...)
@@ -327,12 +372,33 @@ func (m Model) bookmarksKey(key, text string) (tea.Model, tea.Cmd) {
 		// Never retarget an already-open Bookmarks Manager.
 		return m, nil
 	case "r":
-		if m.dispatch != nil && m.bookmarksTarget != "" {
-			m.bookmarksLoading = true
-			m.bookmarksError = ""
-			return m.request(Action{Kind: OpenBookmarks, Key: m.bookmarksTarget})
+		if m.dispatch != nil {
+			if m.bookmarksGlobal {
+				m.bookmarksLoading = true
+				m.bookmarksError = ""
+				return m.request(Action{Kind: OpenGlobalBookmarks})
+			}
+			if m.bookmarksTarget != "" {
+				m.bookmarksLoading = true
+				m.bookmarksError = ""
+				return m.request(Action{Kind: OpenBookmarks, Key: m.bookmarksTarget})
+			}
 		}
 		return m, nil
+	case "e":
+		if m.bookmarksError != "" {
+			m.data.Activity = "Reload bookmarks before exporting"
+			return m, nil
+		}
+		if m.dispatch == nil {
+			m.data.Activity = "Export unavailable: no coordinator"
+			return m, nil
+		}
+		return m.request(Action{
+			Kind: ExportBookmarks,
+			Key:  m.bookmarksTarget,
+			Text: m.bmFilterQuery,
+		})
 	case "left", "right":
 		if m.bookmarkFocus == bmFocusPlayer {
 			delta := 1
@@ -369,19 +435,30 @@ func (m Model) bookmarksKey(key, text string) (tea.Model, tea.Cmd) {
 		if m.bookmarkFocus == bmFocusPlayer {
 			return m.transport([]ActionKind{TogglePlayback, SeekBackward, SeekForward}[m.control])
 		}
-		if m.bookmarksError != "" && m.dispatch != nil && m.bookmarksTarget != "" {
-			m.bookmarksLoading = true
-			m.bookmarksError = ""
-			return m.request(Action{Kind: OpenBookmarks, Key: m.bookmarksTarget})
+		if m.bookmarksError != "" && m.dispatch != nil {
+			if m.bookmarksGlobal {
+				m.bookmarksLoading = true
+				m.bookmarksError = ""
+				return m.request(Action{Kind: OpenGlobalBookmarks})
+			}
+			if m.bookmarksTarget != "" {
+				m.bookmarksLoading = true
+				m.bookmarksError = ""
+				return m.request(Action{Kind: OpenBookmarks, Key: m.bookmarksTarget})
+			}
 		}
 		bm, ok := m.selectedBookmark()
 		if !ok {
 			m.data.Activity = "No bookmark selected"
 			return m, nil
 		}
+		targetKey := bm.Key
+		if targetKey == "" {
+			targetKey = m.bookmarksTarget
+		}
 		return m.request(Action{
 			Kind:        JumpBookmark,
-			Key:         m.bookmarksTarget,
+			Key:         targetKey,
 			Session:     m.data.Player.Session,
 			BookmarkID:  bm.ID,
 			BookmarkPos: bm.Position,
@@ -399,6 +476,7 @@ func (m Model) bookmarksKey(key, text string) (tea.Model, tea.Cmd) {
 		m.bmMenuOpen = true
 		m.bmMenuCursor = 0
 		m.bmMenuTargetID = bm.ID
+		m.bmMenuTargetKey = bm.Key
 		m.bmMenuStale = false
 		return m, nil
 	default:
@@ -439,6 +517,7 @@ func (m Model) bookmarkMenuKey(key string) (tea.Model, tea.Cmd) {
 	case "esc":
 		m.bmMenuOpen = false
 		m.bmMenuTargetID = ""
+		m.bmMenuTargetKey = ""
 		m.bmMenuStale = false
 		return m, nil
 	case "j", "down", "tab":
@@ -456,7 +535,7 @@ func (m Model) bookmarkMenuKey(key string) (tea.Model, tea.Cmd) {
 			m.data.Activity = "Target bookmark no longer exists; press Esc"
 			return m, nil
 		}
-		bm, ok := m.bookmarkByID(m.bmMenuTargetID)
+		bm, ok := m.bookmarkByKeyAndID(m.bmMenuTargetKey, m.bmMenuTargetID)
 		if !ok {
 			m.bmMenuStale = true
 			m.data.Activity = "Target bookmark no longer exists; press Esc"
@@ -465,12 +544,18 @@ func (m Model) bookmarkMenuKey(key string) (tea.Model, tea.Cmd) {
 		choice := bookmarkMenuOptions[m.bmMenuCursor]
 		m.bmMenuOpen = false
 		m.bmMenuTargetID = ""
+		m.bmMenuTargetKey = ""
 		m.bmMenuStale = false
+		targetKey := bm.Key
+		if targetKey == "" {
+			targetKey = m.bookmarksTarget
+		}
+		targetTitle := m.bookmarkBookTitle(bm)
 		switch choice.kind {
 		case "jump":
 			return m.request(Action{
 				Kind:        JumpBookmark,
-				Key:         m.bookmarksTarget,
+				Key:         targetKey,
 				Session:     m.data.Player.Session,
 				BookmarkID:  bm.ID,
 				BookmarkPos: bm.Position,
@@ -480,9 +565,9 @@ func (m Model) bookmarkMenuKey(key string) (tea.Model, tea.Cmd) {
 			m.openNote(OpenNoteEditorMsg{
 				ID: fmt.Sprintf("bm-edit-%d", m.bmDialogSeq),
 				Target: NoteTarget{
-					Key:        m.bookmarksTarget,
+					Key:        targetKey,
 					BookmarkID: bm.ID,
-					Title:      m.bookmarksTitle,
+					Title:      targetTitle,
 					Chapter:    bookmarkChapterLabel(bm),
 					Captured:   bm.Position,
 					Jump:       bm.Position,
@@ -500,12 +585,12 @@ func (m Model) bookmarkMenuKey(key string) (tea.Model, tea.Cmd) {
 				spec: OpenConfirmationMsg{
 					ID:      fmt.Sprintf("bm-del-%d", m.bmDialogSeq),
 					Title:   "Delete bookmark",
-					Prompt:  fmt.Sprintf("Delete bookmark in %q at %s (%q)? Audio, history, and favorites are preserved.", title(m.bookmarksTitle), clock(bm.Position), preview),
+					Prompt:  fmt.Sprintf("Delete bookmark in %q at %s (%q)? Audio, history, and favorites are preserved.", title(targetTitle), clock(bm.Position), preview),
 					Keep:    "Keep bookmark",
 					Confirm: "Delete bookmark",
 					Action: Action{
 						Kind:       DeleteBookmark,
-						Key:        m.bookmarksTarget,
+						Key:        targetKey,
 						BookmarkID: bm.ID,
 					},
 				},
@@ -542,7 +627,11 @@ func (m Model) bookmarksLines() []string {
 			"Press r or Enter to retry; Esc back",
 		}
 	case len(m.bookmarks) == 0:
-		listRows = []string{"No bookmarks for this book. Press b to capture current audio."}
+		if m.bookmarksGlobal {
+			listRows = []string{"No bookmarks across library. Press b to capture current audio."}
+		} else {
+			listRows = []string{"No bookmarks for this book. Press b to capture current audio."}
+		}
 	default:
 		visible := m.visibleBookmarks()
 		if len(visible) == 0 {
@@ -550,7 +639,11 @@ func (m Model) bookmarksLines() []string {
 		} else {
 			listRows = make([]string, len(visible))
 			for i, bm := range visible {
-				listRows[i] = clock(bm.Position) + " | " + bookmarkChapterLabel(bm) + " | " + cleanLine(bm.Note)
+				row := clock(bm.Position) + " | " + bookmarkChapterLabel(bm) + " | " + cleanLine(bm.Note)
+				if m.bookmarksGlobal {
+					row = title(m.bookmarkBookTitle(bm)) + " | " + row
+				}
+				listRows[i] = row
 			}
 			selectedRow = min(len(visible)-1, max(0, m.bookmarkCursor))
 		}
@@ -591,7 +684,7 @@ func (m Model) bookmarkMenuLines(lines []string) []string {
 			"Target bookmark no longer exists.",
 			"Press Esc to return to the bookmark list.",
 		}
-	} else if bm, ok := m.bookmarkByID(m.bmMenuTargetID); ok {
+	} else if bm, ok := m.bookmarkByKeyAndID(m.bmMenuTargetKey, m.bmMenuTargetID); ok {
 		rows = append(rows, ClipLine(clock(bm.Position)+" | "+bookmarkChapterLabel(bm), innerWidth, m.tail()))
 		rows = append(rows, ClipLine(cleanLine(bm.Note), innerWidth, m.tail()))
 		rows = append(rows, "")

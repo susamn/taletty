@@ -121,6 +121,8 @@ const (
 	DownloadDeleteAudio    ActionKind = "download-delete-audio"
 	CaptureBookmark        ActionKind = "capture-bookmark"
 	OpenBookmarks          ActionKind = "open-bookmarks"
+	OpenGlobalBookmarks    ActionKind = "open-global-bookmarks"
+	ExportBookmarks        ActionKind = "export-bookmarks"
 	JumpBookmark           ActionKind = "jump-bookmark"
 	ConfirmSwitchBookmark  ActionKind = "confirm-switch-bookmark"
 	DeleteBookmark         ActionKind = "delete-bookmark"
@@ -144,6 +146,7 @@ type Action struct {
 	ChapterStart time.Duration
 	BookmarkID   string
 	BookmarkPos  time.Duration
+	Overwrite    bool
 }
 
 // Model owns presentation only. Dispatch creates commands; it must not perform
@@ -179,6 +182,7 @@ type Model struct {
 	accountCursor    int
 	account          AccountState
 	bookmarksOpen    bool
+	bookmarksGlobal  bool
 	bookmarksOrigin  Pane
 	bookmarksTarget  string
 	bookmarksTitle   string
@@ -195,6 +199,7 @@ type Model struct {
 	bmMenuOpen       bool
 	bmMenuCursor     int
 	bmMenuTargetID   string
+	bmMenuTargetKey  string
 	bmMenuStale      bool
 	bmDialogSeq      uint64
 	note             *noteEditor
@@ -438,6 +443,9 @@ func (m Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 				if cur := m.clampedLibraryCursor(rows); cur >= 0 && rows[cur].selectable {
 					if rows[cur].action == OpenBookmarks {
 						return m.triggerOpenBookmarks()
+					}
+					if rows[cur].action == OpenGlobalBookmarks {
+						return m.triggerOpenGlobalBookmarks()
 					}
 					m.libraryView = rows[cur].view
 					m.reconcileSelection()
