@@ -680,6 +680,23 @@ exercise J08/J11 fake-clock playback, UI, and coordinator journeys:
   unknown durations/speeds safely and hiding secondary remaining time in compact
   `80x20` mode.
 
+## Sleep timer by duration and chapter end (#21)
+
+[`sleep_test.go`](../app/internal/ui/sleep_test.go) and
+[`sleep_linux_test.go`](../app/internal/app/sleep_linux_test.go) exercise J10
+fake-clock sleep timer journeys over real `*store.Store`, `*profile.Workspace`,
+`*playback.Controller`, and `testkit.Runner`:
+
+- `t` Sleep Timer menu (`15/30/45/60 min`, `End of current chapter`, `Turn off`)
+  with key ownership, unavailable chapter-end labeling without chapter metadata,
+  and narrow `80x20` player indication.
+- Fake-clock duration timer counting real playing elapsed time (not speed-scaled),
+  freezing while paused, surviving same-book seeks, and firing `Pause` once on
+  expiry while preserving the final checkpoint.
+- Chapter-end timer capturing `[Start, End)` on arm, canceling on explicit seeks
+  into another chapter, firing once at chapter end, canceling on book switch/
+  `Stop`/`Close`, rejecting stale sessions, and never restoring across restarts.
+
 ## Runtime packaging and platform matrix (#26)
 
 [ADR 003](adr/003-runtime-and-platform-matrix.md) defines the OS/architecture

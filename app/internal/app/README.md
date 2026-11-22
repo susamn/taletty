@@ -95,10 +95,6 @@ module.
     with zero provider calls and zero playback changes, retaining authoritative
     prior state on save failure.
 
-## Scope boundaries
-
-- Completion/smart-rewind (`#20`), sleep timer (`#21`), and global bookmark
-  search/export (`#23`) remain separate downstream issues.
 - **Completion state, smart rewind, and speed-adjusted remaining time (`#20`)**:
   - Wires `playback.DefaultSmartRewindPolicy()` in `OpenEngineWorkspace` (and
     optional `Options.SmartRewind`), `ReplayBook` confirmation on `PlayBook` for
@@ -107,7 +103,17 @@ module.
     `Player.ChapterEnd` projection for speed-adjusted book and chapter remaining
     time.
 
+- **Sleep timer by duration and chapter end (`#21`)**:
+  - Implements in-memory `sleepTimerState` (`15/30/45/60 min`, `End of current
+    chapter`, `Turn off`) driven by `Coordinator.clock` in `PollPlayback`:
+    duration counts real playing elapsed time and freezes while paused,
+    survives same-book seeks, and fires `player.Pause` once on expiry;
+    chapter-end captures `[Start, End)` on arm, cancels on explicit seeks into
+    another chapter, and fires once at chapter end; book switches, `Stop`, and
+    `Close` cancel any active timer with no timer restored across restarts.
+
 ## Scope boundaries
 
-- Sleep timer (`#21`), favorites UI (`#42`), and global bookmark search/export
-  (`#23`) remain separate downstream issues.
+- Global bookmark search/export (`#23`), local audiobook import (`#22`),
+  Settings/themes (`#34`), and Linux MPRIS (`#30`) remain separate downstream
+  issues.
