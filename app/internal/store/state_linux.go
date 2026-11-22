@@ -93,6 +93,37 @@ func (s *Store) ListeningState(ctx context.Context, key BookKey) (ListeningState
 	return out, found, nil
 }
 
+// ListeningStates returns all stored per-book checkpoints ordered by BookKey.
+func (s *Store) ListeningStates(ctx context.Context) ([]ListeningState, error) {
+	var out []ListeningState
+	err := s.withTx(ctx, false, func(c *sqlite3.Conn) error {
+		return queryStmt(c,
+			`SELECT bi.provider, bi.namespace, bi.id, ls.position_ns, ls.speed_millionths, ls.completion, ls.updated_at_ms
+			 FROM listening_state ls
+			 JOIN book_identity bi ON bi.book_key = ls.book_key
+			 ORDER BY bi.provider ASC, bi.namespace ASC, bi.id ASC`,
+			func(stmt *sqlite3.Stmt) error {
+				out = append(out, ListeningState{
+					Key: BookKey{
+						Provider:  stmt.ColumnText(0),
+						Namespace: stmt.ColumnText(1),
+						ID:        stmt.ColumnText(2),
+					},
+					PositionNS:  stmt.ColumnInt64(3),
+					SpeedMilli:  stmt.ColumnInt64(4),
+					Completion:  Completion(stmt.ColumnText(5)),
+					UpdatedAtMS: stmt.ColumnInt64(6),
+				})
+				return nil
+			},
+		)
+	})
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 type GlyphMode string
 
 const (

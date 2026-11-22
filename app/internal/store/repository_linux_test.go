@@ -380,6 +380,16 @@ func TestListeningStateSettingsViewStateFavoritesAndBookmarks(t *testing.T) {
 	if !found || gotLS != wantLS {
 		t.Fatalf("unexpected listening state: (%+v, %v)", gotLS, found)
 	}
+	allLS, err := s.ListeningStates(ctx)
+	must(t, err)
+	if len(allLS) != 1 || allLS[0] != wantLS {
+		t.Fatalf("unexpected ListeningStates: %+v", allLS)
+	}
+	canceledLS, cancelLS := context.WithCancel(ctx)
+	cancelLS()
+	if _, err := s.ListeningStates(canceledLS); err != context.Canceled {
+		t.Fatalf("expected context.Canceled for ListeningStates, got %v", err)
+	}
 
 	// Settings roundtrip.
 	wantSettings := Settings{GlyphMode: GlyphPlain, VolumePercent: 72}
