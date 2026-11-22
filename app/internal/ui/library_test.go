@@ -90,7 +90,8 @@ func TestJ03LibraryViewsDecorativeSkipAndSelectionPreservation(t *testing.T) {
 	}
 
 	// Switch to Finished (only k2) -> selection updates cleanly to k2.
-	send(t, r, key("1"), key("G"), key("enter"))
+	// G lands on Bookmarks entry; k skips VIEWS / OVERLAYS heading to Finished.
+	send(t, r, key("1"), key("G"), key("k"), key("enter"))
 	model = r.Model.(ui.Model)
 	v, _, _ = model.ViewState()
 	if v != ui.ViewFinished || model.Selection() != "k2" {

@@ -14,8 +14,8 @@ import (
 // includes pre-roll; editing an existing BookmarkID must not recapture position.
 // This component neither calculates playback policy nor persists bookmarks.
 type NoteTarget struct {
-	Key, BookmarkID, Title, Chapter string
-	Captured, Jump                  time.Duration
+	Key, BookmarkID, Title, Chapter, JumpChapter string
+	Captured, Jump                               time.Duration
 }
 
 // OpenNoteEditorMsg uses the same unique-opening-ID contract as confirmations.
@@ -232,8 +232,15 @@ func (m Model) modalLines(lines []string) []string {
 		rows = append(rows, status, buttons)
 	} else {
 		n := m.note
-		rows = []string{title(n.spec.Target.Title) + " | " + n.spec.Target.Chapter,
-			"Captured " + clock(n.spec.Target.Captured) + " | Jump " + clock(n.spec.Target.Jump)}
+		chapterLine := n.spec.Target.Chapter
+		if n.spec.Target.JumpChapter != "" && n.spec.Target.JumpChapter != n.spec.Target.Chapter {
+			chapterLine = "Cap: " + n.spec.Target.Chapter + " -> Jump: " + n.spec.Target.JumpChapter
+		}
+		timingLine := "Captured " + clock(n.spec.Target.Captured) + " | Jump " + clock(n.spec.Target.Jump)
+		if n.spec.Target.BookmarkID != "" {
+			timingLine = "Edit bookmark | Jump " + clock(n.spec.Target.Jump)
+		}
+		rows = []string{title(n.spec.Target.Title) + " | " + chapterLine, timingLine}
 		rows = append(rows, strings.Split(n.field.View(), "\n")...)
 		status := n.error
 		if n.pending {

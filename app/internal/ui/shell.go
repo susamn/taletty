@@ -119,6 +119,11 @@ const (
 	DownloadMoveUp         ActionKind = "download-move-up"
 	DownloadMoveDown       ActionKind = "download-move-down"
 	DownloadDeleteAudio    ActionKind = "download-delete-audio"
+	CaptureBookmark        ActionKind = "capture-bookmark"
+	OpenBookmarks          ActionKind = "open-bookmarks"
+	JumpBookmark           ActionKind = "jump-bookmark"
+	ConfirmSwitchBookmark  ActionKind = "confirm-switch-bookmark"
+	DeleteBookmark         ActionKind = "delete-bookmark"
 )
 
 // Current-audio actions carry the source session so the coordinator can reject
@@ -133,43 +138,64 @@ type Action struct {
 	Attempt      uint64
 	ChapterIndex int
 	ChapterStart time.Duration
+	BookmarkID   string
+	BookmarkPos  time.Duration
 }
 
 // Model owns presentation only. Dispatch creates commands; it must not perform
 // blocking I/O. Playback is authoritative only when a coordinator sends a snapshot.
 type Model struct {
-	data            SnapshotMsg
-	appearance      AppearanceMsg
-	layout          Layout
-	focus           Pane
-	content         Pane
-	selected        string
-	chapterCursor   int
-	libraryView     LibraryView
-	libraryCursor   int
-	sortOrder       SortOrder
-	sortOpen        bool
-	sortCursor      int
-	filterQuery     string
-	filterDraft     string
-	filterPrev      string
-	filterEditing   bool
-	downloads       []DownloadJob
-	downloadsOpen   bool
-	downloadsCursor int
-	dlMenu          *downloadActionMenu
-	dialogSeq       uint64
-	control         int
-	failure         string
-	help            bool
-	helpOffset      int
-	accountOpen     bool
-	accountCursor   int
-	account         AccountState
-	note            *noteEditor
-	confirmation    *confirmation
-	quitWarning     bool
-	dispatch        func(Action) tea.Cmd
+	data             SnapshotMsg
+	appearance       AppearanceMsg
+	layout           Layout
+	focus            Pane
+	content          Pane
+	selected         string
+	chapterCursor    int
+	libraryView      LibraryView
+	libraryCursor    int
+	sortOrder        SortOrder
+	sortOpen         bool
+	sortCursor       int
+	filterQuery      string
+	filterDraft      string
+	filterPrev       string
+	filterEditing    bool
+	downloads        []DownloadJob
+	downloadsOpen    bool
+	downloadsCursor  int
+	dlMenu           *downloadActionMenu
+	dialogSeq        uint64
+	control          int
+	failure          string
+	help             bool
+	helpOffset       int
+	accountOpen      bool
+	accountCursor    int
+	account          AccountState
+	bookmarksOpen    bool
+	bookmarksOrigin  Pane
+	bookmarksTarget  string
+	bookmarksTitle   string
+	bookmarksLoading bool
+	bookmarksError   string
+	bookmarks        []Bookmark
+	bookmarkCursor   int
+	bookmarkFocus    bookmarkArea
+	bookmarkNoteOff  int
+	bmFilterQuery    string
+	bmFilterDraft    string
+	bmFilterPrev     string
+	bmFilterEditing  bool
+	bmMenuOpen       bool
+	bmMenuCursor     int
+	bmMenuTargetID   string
+	bmMenuStale      bool
+	bmDialogSeq      uint64
+	note             *noteEditor
+	confirmation     *confirmation
+	quitWarning      bool
+	dispatch         func(Action) tea.Cmd
 }
 
 func NewModel(data SnapshotMsg, dispatch func(Action) tea.Cmd) Model {
@@ -238,6 +264,14 @@ func (m Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 			m.filterDraft += cleanLine(msg.Content)
 			m.filterQuery = m.filterDraft
 			m.reconcileSelection()
+		} else if m.layout.Mode != ResizeOnly && m.bookmarksOpen && m.bmFilterEditing {
+			prevID := ""
+			if bm, ok := m.selectedBookmark(); ok {
+				prevID = bm.ID
+			}
+			m.bmFilterDraft += cleanLine(msg.Content)
+			m.bmFilterQuery = m.bmFilterDraft
+			m.reconcileBookmarkSelection(prevID)
 		}
 	case OpenAccountMsg:
 		m.openAccount(msg.Account)
@@ -245,6 +279,10 @@ func (m Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 		m.accountOpen = false
 	case AccountStatusMsg:
 		m.account = msg.Account
+	case OpenBookmarksMsg:
+		m.applyOpenBookmarks(msg)
+	case BookmarksMsg:
+		m.applyBookmarksUpdate(msg)
 	case RestoreSessionMsg:
 		m.restoreSession(msg)
 	case BookChaptersMsg:
@@ -301,6 +339,9 @@ func (m Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 		if m.downloadsOpen {
 			return m.downloadsKey(key)
 		}
+		if m.bookmarksOpen {
+			return m.bookmarksKey(key, msg.Text)
+		}
 		if key == "q" || key == "ctrl+c" {
 			return m.request(Action{Kind: RequestQuit})
 		}
@@ -337,6 +378,10 @@ func (m Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 		case "a":
 			m.openAccount(nil)
 			return m, nil
+		case "b":
+			return m.triggerCaptureBookmark()
+		case "B":
+			return m.triggerOpenBookmarks()
 		case "?":
 			m.help, m.helpOffset = true, 0
 		case "tab":
@@ -376,6 +421,9 @@ func (m Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 			if m.focus == Library {
 				rows := m.librarySidebarRows()
 				if cur := m.clampedLibraryCursor(rows); cur >= 0 && rows[cur].selectable {
+					if rows[cur].action == OpenBookmarks {
+						return m.triggerOpenBookmarks()
+					}
 					m.libraryView = rows[cur].view
 					m.reconcileSelection()
 					m.focus = Books

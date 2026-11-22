@@ -48,6 +48,7 @@ const (
 type librarySidebarRow struct {
 	label      string
 	view       LibraryView
+	action     ActionKind
 	selectable bool
 }
 
@@ -93,12 +94,18 @@ func (m Model) librarySidebarRows() []librarySidebarRow {
 			counts[ViewFinished]++
 		}
 	}
+	bmLabel := "Bookmarks (no book)"
+	if m.selected != "" {
+		bmLabel = "Bookmarks: " + title(m.bookTitleByKey(m.selected))
+	}
 	return []librarySidebarRow{
 		{label: "LIBRARY VIEWS", selectable: false},
 		{label: fmt.Sprintf("All (%d)", counts[ViewAll]), view: ViewAll, selectable: true},
 		{label: fmt.Sprintf("Continue (%d)", counts[ViewContinue]), view: ViewContinue, selectable: true},
 		{label: fmt.Sprintf("Downloaded (%d)", counts[ViewDownloaded]), view: ViewDownloaded, selectable: true},
 		{label: fmt.Sprintf("Finished (%d)", counts[ViewFinished]), view: ViewFinished, selectable: true},
+		{label: "VIEWS / OVERLAYS", selectable: false},
+		{label: bmLabel, action: OpenBookmarks, selectable: true},
 	}
 }
 
@@ -324,6 +331,26 @@ func (m *Model) openFilter() {
 	m.filterDraft = m.filterQuery
 }
 
+func stepFilterDraft(draft, key, text string) (string, bool) {
+	switch key {
+	case "backspace":
+		runes := []rune(draft)
+		if len(runes) == 0 {
+			return draft, false
+		}
+		return string(runes[:len(runes)-1]), true
+	case "ctrl+u":
+		return "", true
+	case "space":
+		return draft + " ", true
+	default:
+		if clean := cleanLine(text); clean != "" {
+			return draft + clean, true
+		}
+		return draft, false
+	}
+}
+
 func (m Model) filterKey(key, text string) Model {
 	switch key {
 	case "enter":
@@ -335,25 +362,10 @@ func (m Model) filterKey(key, text string) Model {
 		m.filterDraft = m.filterPrev
 		m.filterEditing = false
 		m.reconcileSelection()
-	case "backspace":
-		runes := []rune(m.filterDraft)
-		if len(runes) > 0 {
-			m.filterDraft = string(runes[:len(runes)-1])
-			m.filterQuery = m.filterDraft
-			m.reconcileSelection()
-		}
-	case "ctrl+u":
-		m.filterDraft = ""
-		m.filterQuery = ""
-		m.reconcileSelection()
-	case "space":
-		m.filterDraft += " "
-		m.filterQuery = m.filterDraft
-		m.reconcileSelection()
 	default:
-		if clean := cleanLine(text); clean != "" {
-			m.filterDraft += clean
-			m.filterQuery = m.filterDraft
+		if next, changed := stepFilterDraft(m.filterDraft, key, text); changed {
+			m.filterDraft = next
+			m.filterQuery = next
 			m.reconcileSelection()
 		}
 	}

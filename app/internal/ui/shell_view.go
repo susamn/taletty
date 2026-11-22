@@ -59,7 +59,7 @@ func (m Model) paneRows(pane Pane, width int) (string, []string, int) {
 		rows := make([]string, len(sidebar))
 		for i, item := range sidebar {
 			label := item.label
-			if item.selectable && item.view == m.libraryView {
+			if item.selectable && item.action == "" && item.view == m.libraryView {
 				label = "* " + label
 			}
 			rows[i] = label
@@ -138,6 +138,9 @@ func (m Model) paneRows(pane Pane, width int) (string, []string, int) {
 // renderer styles as untrusted metadata: raw text is fitted before paint is added.
 func (m Model) frame(pane Pane, size Rect, name string, rows []string, selected int) []string {
 	focused := pane == m.focus && !m.help && !m.ownsModal() && !m.accountOpen && !m.sortOpen
+	if m.bookmarksOpen {
+		focused = pane == PlayerPane && m.bookmarkFocus == bmFocusPlayer && !m.help && !m.ownsModal() && !m.accountOpen && !m.sortOpen && !m.bmMenuOpen && !m.bmFilterEditing
+	}
 	if focused {
 		name = "[Focus] " + name
 	}
@@ -199,6 +202,8 @@ func (m Model) View() tea.View {
 		lines = m.helpLines()
 	} else if m.downloadsOpen {
 		lines = m.downloadsLines()
+	} else if m.bookmarksOpen {
+		lines = m.bookmarksLines()
 	} else if g.Mode == Wide {
 		left, right := m.pane(Library, g.Library), m.pane(Chapters, g.Chapters)
 		middle := append(m.pane(Books, g.Books), m.pane(Details, g.Details)...)
@@ -247,6 +252,16 @@ func (m Model) View() tea.View {
 	}
 	if m.filterEditing {
 		hints = "Filter: " + cleanLine(m.filterDraft) + "_ | Enter apply | Esc cancel"
+	}
+	if m.bookmarksOpen {
+		switch {
+		case m.bmFilterEditing:
+			hints = "Bookmark filter: " + cleanLine(m.bmFilterDraft) + "_ | Enter apply | Esc cancel"
+		case m.bmMenuOpen:
+			hints = "j/k choose | Enter act | Esc back | Transport disabled in menu"
+		default:
+			hints = "j/k move | Enter jump | x actions | b capture | / filter | Tab area | Esc back | " + m.helpTransport()
+		}
 	}
 	if m.help {
 		hints = "Esc Back | j/k scroll | PgUp/PgDown | g/G bounds | " + m.helpTransport()
