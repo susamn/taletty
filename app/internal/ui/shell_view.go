@@ -197,6 +197,8 @@ func (m Model) View() tea.View {
 	var lines []string
 	if m.help {
 		lines = m.helpLines()
+	} else if m.downloadsOpen {
+		lines = m.downloadsLines()
 	} else if g.Mode == Wide {
 		left, right := m.pane(Library, g.Library), m.pane(Chapters, g.Chapters)
 		middle := append(m.pane(Books, g.Books), m.pane(Details, g.Details)...)
@@ -254,6 +256,12 @@ func (m Model) View() tea.View {
 	}
 	if m.sortOpen {
 		hints = "j/k/Tab choose | Enter sort | Esc cancel | Transport disabled in Sort"
+	}
+	if m.downloadsOpen {
+		hints = "j/k jobs | Enter/x actions | Esc back | Space/,/. current audio"
+		if m.dlMenu != nil {
+			hints = "j/k/Tab choose | Enter act | Esc back | Transport disabled in menu"
+		}
 	}
 	if m.ownsModal() {
 		hints = "Enter/Ctrl+S save | Alt+Enter newline | Tab local focus | Esc back"
