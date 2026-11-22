@@ -156,6 +156,11 @@ long Unicode scrolling, cell bounds and two-step tiny-terminal quit recovery.
 the dedicated Bookmarks Manager view, multiline note scrolling, local `/`
 filtering, row action menus with frozen IDs and stale-target invalidation,
 query-failure retry, and `Tab`/`1-5`/`Esc` focus restoration.
+[`completion_test.go`](completion_test.go) exercises speed-adjusted book and
+chapter remaining time (including unknown durations/speeds and compact hiding)
+and the `x` Book Context Action Menu (`Mark as finished`, `Mark as unfinished`,
+`Replay from start` confirmation, `Delete downloaded audio`, and stale-target
+invalidation).
 Pure geometry tests include the boundary grid and extreme integer dimensions;
 actual rendered views are checked at supported/minimum/tiny sizes in terminal cells.
 This is partial J13 (and the browse-target portion of J07), not complete app journeys.
