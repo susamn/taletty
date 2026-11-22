@@ -180,8 +180,8 @@ transaction (`ErrInvalidInput` and explicit conflict sentinels):
 - **Playback & UI state (`state_linux.go`)**: `PutListeningState`/`ListeningState`,
   `PutSettings`/`Settings` (defaults `unicode`, `100`), `PutViewState`/`ViewState`
   (defaults `all`, `books`, `title`, optional `Selected`), `SetFavorite`/`Favorites`,
-  and `PutBookmark`/`DeleteBookmark`/`Bookmarks` (multiline safe notes, cross-book
-  ID guard).
+  and `PutBookmark`/`DeleteBookmark`/`Bookmarks`/`AllBookmarks` (multiline safe
+  notes, cross-book ID guard, global ordered listing).
 - **Local media & download jobs (`jobs_media_linux.go`)**: `LocalMedia` path-shape
   confinement (`downloads/...` `.m4b` only, `ErrMediaPathConflict` on duplicate
   path across books), `DownloadJob` uniqueness/state checks (`ErrActiveJobExists`,

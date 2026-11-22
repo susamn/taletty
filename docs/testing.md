@@ -680,6 +680,26 @@ exercise J08/J11 fake-clock playback, UI, and coordinator journeys:
   unknown durations/speeds safely and hiding secondary remaining time in compact
   `80x20` mode.
 
+## Global bookmark search and safe Markdown export (#23)
+
+[`export_linux_test.go`](../app/internal/bookmarks/export_linux_test.go),
+[`bookmarks_test.go`](../app/internal/ui/bookmarks_test.go), and
+[`bookmarks_linux_test.go`](../app/internal/app/bookmarks_linux_test.go)
+exercise J16 global bookmark search and export journeys over real `*store.Store`,
+`*profile.Workspace`, `*bookmarks.Service`, `*playback.Controller`, and
+`testkit.Runner`:
+
+- `All bookmarks (search & export)` sidebar entry searching across book titles,
+  chapters, and notes, jumping to explicit targets (including missing-audio
+  `Queue download` and B3 `Stay` / `Switch and play` cross-book confirmation),
+  and editing/deleting with frozen `(Key, ID)` targets.
+- Safe Markdown export (`e`) anchored under `~/.config/taletty/exports/` (`0700`
+  dir, `0600` regular `.md` file, `O_NOFOLLOW`), filename/traversal/symlink/
+  hardlink/mode validation, Markdown/HTML/ANSI escaping on malicious titles and
+  notes with zero auth/URL/path leakage, default-safe overwrite confirmation
+  (`Keep existing file` / `Overwrite export`), and recoverable write-failure
+  handling.
+
 ## Runtime packaging and platform matrix (#26)
 
 [ADR 003](adr/003-runtime-and-platform-matrix.md) defines the OS/architecture

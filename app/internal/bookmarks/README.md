@@ -53,9 +53,20 @@ jump targeting without terminal UI dependencies (`#19`).
     (preserving the prior book's checkpoint via `Controller`) and `SeekAbsolute`
     to the exact bookmark position.
 
+- **Global listing & safe Markdown export (`export_linux.go`, `#23`)**:
+  - `ListAll` returns all bookmarks across books offline ordered by `BookKey`,
+    `PositionNS`, and `ID`.
+  - `ExportMarkdown` writes escaped, ANSI-free Markdown atomically under
+    `~/.config/taletty/exports/` (`0700` dir, `0600` regular `.md` file,
+    `O_NOFOLLOW`), validating safe basenames, rejecting symlinks/hardlinks/unsafe
+    modes (`ErrUnsafeExportTarget`), returning `ErrExportExists` when the target
+    exists without `Overwrite: true`, and never exporting auth, signed URLs, or
+    local paths.
+
 ## Verification & scope boundaries
 
-[`service_linux_test.go`](service_linux_test.go) exercises `Service` against real
+[`service_linux_test.go`](service_linux_test.go) and
+[`export_linux_test.go`](export_linux_test.go) exercise `Service` against real
 `*store.Store` on temporary SQLite, real `*playback.Controller` (with a fake
 `playback.Backend`), real `*store.Owner` private roots, and a deterministic fake
 clock: playing/paused capture, idle/stopped/failed rejection, highlighted-vs-loaded
@@ -65,10 +76,10 @@ without recapture/re-rewind, single-bookmark delete preserving audio/history/fav
 offline ordering, same-book paused jump and stale session rejection, cross-book
 jump (including root rename and unknown catalog duration), missing/unsafe/symlink/
 hardlink/mode-mismatch local audio, mid-check stale confirmation, store/checkpoint
-faults, and `-race` concurrency.
+faults, `-race` concurrency, global `ListAll`, filename/path confinement,
+Markdown/HTML escaping, overwrite confirmation, and unsafe export target refusal.
 
-Limits: Linux-only service (`service_linux.go`); terminal UI modal/key wiring
-(`#19`), full J09 UI journeys, and global bookmark search/export (`#23`) remain
-separate dependent tasks. See [ADR 002](../../../docs/adr/002-storage-contract.md),
+Limits: Linux-only service (`service_linux.go`, `export_linux.go`). See
+[ADR 002](../../../docs/adr/002-storage-contract.md),
 [the bookmarks design](../../../docs/design/bookmarks.md), and
 [the test strategy](../../../docs/testing.md).
