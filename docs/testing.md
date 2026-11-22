@@ -573,6 +573,30 @@ J02/J07/J08/J13 playback and chapter journeys over real `*store.Store`,
   `mpv --ao=null` through `app.Coordinator` (skipped locally only when media
   tools are absent; mandatory fail in CI when `TALETTY_REQUIRE_MEDIA_TOOLS=1`).
 
+## Library views, stable sorting, and contributor filtering (#14)
+
+[`library_test.go`](../app/internal/ui/library_test.go),
+[`repository_linux_test.go`](../app/internal/store/repository_linux_test.go),
+and [`coordinator_linux_test.go`](../app/internal/app/coordinator_linux_test.go)
+exercise J03 library browsing and persistence journeys:
+
+- Sidebar `Library` views (`All`, `Continue Listening`, `Downloaded`,
+  `Finished`) with live counts and non-selectable decorative heading rows
+  skipped during navigation.
+- Local `/` filter editor (available in `Library`, `Books`, `Chapters`;
+  unavailable in `Details`/`PlayerPane`; case-insensitive matching across
+  `Title`, `Subtitle`, `Author`, `Narrator`; typing ownership; `Enter` applying
+  without playing; `Esc` restoring prior filter while editing and clearing
+  applied filter outside editing before navigating back).
+- `s` Sort menu (`Title`, `Author`, `Duration`, `Recent listening`,
+  `Acquisition` preserving catalog order when acquisition timestamps are
+  absent without inventing timestamps), preserving `Selection` by `Book.Key`
+  across sort changes, view switches, and asynchronous refreshes (with clean
+  fallback when a selected book is deleted).
+- Bulk `store.ListeningStates` projection and full `store.ViewState`
+  (`Destination`, `SortOrder`, `FilterText`, `Focus`, `Selected`) persistence
+  and restoration across restarts.
+
 ## Runtime packaging and platform matrix (#26)
 
 [ADR 003](adr/003-runtime-and-platform-matrix.md) defines the OS/architecture
