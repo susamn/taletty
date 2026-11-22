@@ -10,16 +10,29 @@ if result.Media != nil {
 ```
 
 Uses the existing explicit Python runtime, US-only Client session, root lock and
-cancel-aware gate shared with Login/Library. No queue, app storage, CLI download,
-automatic retry, byte/preparation progress (#7), or competing process owner.
+cancel-aware gate shared with Login/Library. No queue, app storage, automatic
+retry, or competing process owner. CLI `download` passes a `nil` reporter so
+CLI stdout stays clean.
 Invalid requests and duplicate live IDs emit no events/start no child. IDs are
 ASCII `[A-Za-z0-9_-]{1,64}`, shared across **Library and Download** on this Client,
 including queued work and callbacks until return/panic cleanup.
 
-Accepted calls emit Started then exactly one Completed/Failed/Canceled with an
-independently owned `OperationEvent.Download`, except a caller reporter panic.
-No stages/progress are fabricated: the accepted producer has a terminal-only
-contract. Event sequence starts1 and is separate from private bridge sequence.
+Accepted calls emit `Started`, ordered `Stage`/`Progress` notifications (#7),
+and exactly one `Completed`/`Failed`/`Canceled` with an independently owned
+`OperationEvent.Download`, except a caller reporter panic. Verified ready reuse
+skips all stages and progress (`Started` -> `Completed`). Fresh downloads emit
+`Stage` (`licensing`, `downloading`, `preparing`, `publishing`) in strict order
+without duplicates or backwards transitions, and monotonic `Progress` (`Bytes`,
+optional `Total` omitted when unknown or `< Bytes`) during `downloading` only.
+Preparation emits `Stage("preparing")` with no fake byte progress. Every
+nonterminal frame is strictly validated (exact keys, duplicate keys, UTF-8/lone
+surrogates, stage enum/order, monotonic nonnegative `bytes`, consistent optional
+`total >= bytes`); `reconcile` continues rejecting any nonterminal frame.
+Event sequence starts at 1 and is separate from private bridge sequence.
+Callbacks receive independent pointer copies for `Bytes`, `Total`, `Failure`,
+and `Download`. Bounded channel backpressure selects on cancellation; all owned
+child/ffmpeg process-group users join on cancel, panic, or error before
+reconciliation.
 Return is authoritative: correlate event and return by operation ID, don't apply
 it twice. Completion does not imply authentication was attempted or persisted.
 

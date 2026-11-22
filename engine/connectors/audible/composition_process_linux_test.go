@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/susamn/taletty/engine/connectors/audible/internal/bridge"
+	"github.com/susamn/taletty/engine/model"
 	"golang.org/x/sys/unix"
 )
 
@@ -110,8 +111,18 @@ if mode=="postcommit":
             assert barrier.recv(1)==b"G"
         original_save(root_fd,payload)
     package.auth_store.save=save
-outcome=package.composition.run(3,"B000000001")
-frame=dict(protocol=1,operation_id=request["operation_id"],seq=1,type="result",outcome=dataclasses.asdict(outcome))
+seq=0
+def emit(kind,**payload):
+    global seq
+    if not request.get("emit"):
+        return
+    seq+=1
+    frame=dict(protocol=1,operation_id=request["operation_id"],seq=seq,type=kind,**payload)
+    control.write(json.dumps(frame)+"\n")
+    control.flush()
+outcome=package.composition.run(3,"B000000001",emit=emit)
+seq+=1
+frame=dict(protocol=1,operation_id=request["operation_id"],seq=seq,type="result",outcome=dataclasses.asdict(outcome))
 control.write(json.dumps(frame)+"\n");control.close()
 `
 
@@ -140,9 +151,13 @@ func compositionSource(t *testing.T, clear []byte) string {
 }
 
 func runComposition(ctx context.Context, client *Client, source, mode, barrier string) (frame bridge.Frame, err error) {
+	return runCompositionFrames(ctx, client, source, mode, barrier, nil)
+}
+
+func runCompositionFrames(ctx context.Context, client *Client, source, mode, barrier string, frames chan<- bridge.Frame) (frame bridge.Frame, err error) {
 	err = client.session.WithRoot(ctx, func(work context.Context, root *os.File) error {
-		request, _ := json.Marshal(map[string]any{"protocol": 1, "operation_id": "composition-test", "action": "fixture", "mode": mode, "barrier": barrier})
-		frame, err = bridge.RunRoot(work, client.python, []string{"-I", "-B", "-c", source}, request, "composition-test", root, nil)
+		request, _ := json.Marshal(map[string]any{"protocol": 1, "operation_id": "composition-test", "action": "fixture", "mode": mode, "barrier": barrier, "emit": frames != nil})
+		frame, err = bridge.RunRoot(work, client.python, []string{"-I", "-B", "-c", source}, request, "composition-test", root, frames)
 		return err
 	})
 	return
@@ -376,5 +391,47 @@ func TestCompositionRunRootPostcommitCancelReconcilesReady(t *testing.T) {
 	licenses, err := os.ReadFile(filepath.Join(root, "fixture-license"))
 	if err != nil || string(licenses) != "S" {
 		t.Fatal("reconciliation unexpectedly relicensed media", err)
+	}
+}
+
+func TestCompositionRunRootProgressFramesAndReuse(t *testing.T) {
+	clear := compositionClearSource(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 25*time.Second)
+	defer cancel()
+	client, _, _ := librarySDK(t)
+	source := compositionSource(t, clear)
+	frames := make(chan bridge.Frame, 16)
+	frame, err := runCompositionFrames(ctx, client, source, "success", "", frames)
+	close(frames)
+	outcome := decodeComposition(t, frame, err)
+	if !outcome.Ready || outcome.Reused {
+		t.Fatal("fresh composition failed", outcome)
+	}
+	var tracker downloadTracker
+	var stages []string
+	var progressCount int
+	for f := range frames {
+		event, err := tracker.next(f)
+		if err != nil {
+			t.Fatal("invalid composition progress frame", string(f.Raw), err)
+		}
+		if event.Type == model.Stage {
+			stages = append(stages, event.Stage)
+		} else if event.Type == model.Progress {
+			progressCount++
+			if event.Total == nil || *event.Total != int64(len(clear)) {
+				t.Fatal("unexpected composition total", event.Total, len(clear))
+			}
+		}
+	}
+	if strings.Join(stages, ",") != "licensing,downloading,preparing,publishing" || progressCount == 0 {
+		t.Fatal("unexpected composition stages/progress", stages, progressCount)
+	}
+	reuseFrames := make(chan bridge.Frame, 4)
+	frame, err = runCompositionFrames(ctx, client, source, "reuse", "", reuseFrames)
+	close(reuseFrames)
+	outcome = decodeComposition(t, frame, err)
+	if !outcome.Ready || !outcome.Reused || len(reuseFrames) != 0 {
+		t.Fatal("reuse emitted unexpected frames", outcome, len(reuseFrames))
 	}
 }

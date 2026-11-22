@@ -43,8 +43,8 @@ class DownloadProducerTests(unittest.TestCase):
                     real_sync(fd)
                 denied = {"content_license": {"status_code": "Denied"}}
                 response = denied if mode == "denied" else None
-                def run(fd, asin):
-                    return original_run(fixture.fd, asin)
+                def run(fd, asin, cancel_fd=None, emit=None):
+                    return original_run(fixture.fd, asin, cancel_fd=cancel_fd, emit=emit)
                 original_run = fixtures.composition.run
                 with (fixture.provider(response), patch.object(launcher.os, "dup", return_value=17),
                       patch.object(launcher.os, "fdopen", return_value=control), patch.object(launcher.os, "set_inheritable"),
@@ -53,12 +53,29 @@ class DownloadProducerTests(unittest.TestCase):
                       patch.object(recovery, "inspect", return_value="absent")):
                     loader = Mock(return_value=package)
                     launcher.main({}, loader, Mock(), action="reconcile" if mode == "reconcile" else "download")
-                frame = json.loads(output.getvalue())
-                self.assertEqual((frame["seq"], frame["type"]), (1, "result"))
+                frames = [json.loads(line) for line in output.getvalue().splitlines()]
+                self.assertEqual([f["seq"] for f in frames], list(range(1, len(frames) + 1)))
                 self.assertNotIn("private", output.getvalue())
+                frame = frames[-1]
+                self.assertEqual(frame["type"], "result")
                 if mode == "reconcile":
+                    self.assertEqual(len(frames), 1)
                     self.assertEqual(frame["state"], "absent")
                     continue
+                if mode == "reuse":
+                    self.assertEqual(len(frames), 1)
+                elif mode == "denied":
+                    self.assertEqual([(f["type"], f.get("stage")) for f in frames[:-1]], [("stage", "licensing")])
+                else:
+                    self.assertEqual([(f["type"], f.get("stage")) for f in frames[:-1]], [
+                        ("stage", "licensing"),
+                        ("stage", "downloading"),
+                        ("progress", None),
+                        ("stage", "preparing"),
+                        ("stage", "publishing"),
+                    ])
+                    self.assertEqual(frames[2]["bytes"], len(fixtures.PAYLOAD))
+                    self.assertNotIn("total", frames[2])
                 outcome = frame["outcome"]
                 self.assertEqual(outcome["ready"], mode != "denied")
                 self.assertEqual(outcome["reused"], mode == "reuse")

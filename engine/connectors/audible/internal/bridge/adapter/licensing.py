@@ -23,11 +23,12 @@ class LicenseError(Exception):
 
 
 class _Plan:
-    __slots__ = ("_url", "_key", "_iv", "_chapter_info")
+    __slots__ = ("_url", "_key", "_iv", "_chapter_info", "_total_bytes")
 
     def __init__(self, url, key, iv):
         self._url, self._key, self._iv = url, key, iv
         self._chapter_info = None
+        self._total_bytes = None
 
     def __repr__(self):
         return "<private media plan>"
@@ -37,7 +38,14 @@ class _Plan:
 
     def clear(self):
         # Drop references, not a promise of zeroizing Python/SDK immutable strings.
-        self._url = self._key = self._iv = self._chapter_info = None
+        self._url = self._key = self._iv = self._chapter_info = self._total_bytes = None
+
+
+def _content_length(value):
+    if not isinstance(value, str) or re.fullmatch(r"[0-9]+", value) is None:
+        return None
+    total = int(value)
+    return total if total <= (1 << 63) - 1 else None
 
 
 def _url(value):
@@ -131,11 +139,13 @@ def signed_stream(plan):
     """
     failure = None
     try:
+        plan._total_bytes = None
         url = _url(plan._url)
         with httpx.Client(auth=None, trust_env=False, follow_redirects=False, timeout=120) as client:
             with client.stream("GET", url) as response:
                 if response.status_code != 200:
                     raise LicenseError("throttled" if response.status_code == 429 else "network")
+                plan._total_bytes = _content_length(response.headers.get("content-length"))
                 yield response.iter_bytes(1024 * 1024)
     except KeyboardInterrupt:
         failure = "canceled"
@@ -143,5 +153,8 @@ def signed_stream(plan):
         failure = error.code
     except Exception:
         failure = "network"
+    finally:
+        if hasattr(plan, "_total_bytes"):
+            plan._total_bytes = None
     if failure is not None:
         raise sdk_session.ProviderError(failure) from None
