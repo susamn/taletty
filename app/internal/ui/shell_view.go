@@ -144,7 +144,7 @@ func (m Model) paneRows(pane Pane, width int) (string, []string, int) {
 // frame owns borders, a cursor gutter and one-cell inner padding. It never clips
 // renderer styles as untrusted metadata: raw text is fitted before paint is added.
 func (m Model) frame(pane Pane, size Rect, name string, rows []string, selected int) []string {
-	focused := pane == m.focus && !m.help && !m.ownsModal() && !m.accountOpen && !m.sortOpen && !m.downloadsOpen && m.bookMenu == nil
+	focused := pane == m.focus && !m.help && !m.ownsModal() && !m.accountOpen && !m.sortOpen && !m.downloadsOpen && m.bookMenu == nil && !m.sleepOpen
 	if m.bookmarksOpen {
 		focused = pane == PlayerPane && m.bookmarkFocus == bmFocusPlayer && !m.help && !m.ownsModal() && !m.accountOpen && !m.sortOpen && !m.bmMenuOpen && !m.bmFilterEditing
 	}
@@ -239,6 +239,8 @@ func (m Model) View() tea.View {
 		lines = m.sortLines(lines)
 	} else if m.bookMenu != nil && !m.help && !m.downloadsOpen && !m.bookmarksOpen {
 		lines = m.bookMenuLines(lines)
+	} else if m.sleepOpen && !m.help && !m.downloadsOpen && !m.bookmarksOpen {
+		lines = m.sleepLines(lines)
 	}
 	lines = append(lines, m.playerLines(g.Player)...)
 	activity, tint := m.data.Activity, m.appearance.Palette.Muted
@@ -294,6 +296,9 @@ func (m Model) View() tea.View {
 	}
 	if m.bookMenu != nil {
 		hints = "j/k/Tab choose | Enter act | Esc back | Transport disabled in menu"
+	}
+	if m.sleepOpen {
+		hints = "j/k/Tab choose | Enter arm | Esc back | Transport disabled in Sleep menu"
 	}
 	if m.downloadsOpen {
 		hints = "j/k jobs | Enter/x actions | Esc back | Space/,/. current audio"

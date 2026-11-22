@@ -481,7 +481,14 @@ func (c *Coordinator) jumpBookmark(action ui.Action) tea.Msg {
 		if err != nil {
 			return ui.NoticeMsg{Error: sanitizeBookmarkError(err)}
 		}
-		return c.refreshPlaybackSnapshot(seeked, c.cachedChaptersFor(&key), "Jumped to "+formatClock(time.Duration(bm.PositionNS)))
+		c.mu.Lock()
+		sleepNotice := c.reconcileSleepAfterSeekLocked(seeked)
+		c.mu.Unlock()
+		activity := "Jumped to " + formatClock(time.Duration(bm.PositionNS))
+		if sleepNotice != "" {
+			activity = sleepNotice
+		}
+		return c.refreshPlaybackSnapshot(seeked, c.cachedChaptersFor(&key), activity)
 	}
 
 	absPath, title, dur, ready := c.verifyBookMedia(ctx, key)
@@ -514,6 +521,9 @@ func (c *Coordinator) jumpBookmark(action ui.Action) tea.Msg {
 	if err != nil {
 		return ui.NoticeMsg{Error: sanitizeBookmarkError(err)}
 	}
+	c.mu.Lock()
+	c.cancelSleepTimerLocked()
+	c.mu.Unlock()
 	return c.refreshPlaybackSnapshot(seeked, chapters, "Playing "+title+" at "+formatClock(time.Duration(bm.PositionNS)))
 }
 
@@ -555,6 +565,9 @@ func (c *Coordinator) confirmSwitchBookmark(action ui.Action) tea.Msg {
 	if err != nil {
 		return ui.ModalResultMsg{ID: action.RequestID, Attempt: action.Attempt, Error: sanitizeBookmarkError(err)}
 	}
+	c.mu.Lock()
+	c.cancelSleepTimerLocked()
+	c.mu.Unlock()
 	updated := c.refreshPlaybackSnapshot(seeked, chapters, "Switched to "+title+" at "+formatClock(time.Duration(bm.PositionNS)))
 	return tea.BatchMsg{
 		func() tea.Msg { return ui.ModalResultMsg{ID: action.RequestID, Attempt: action.Attempt} },

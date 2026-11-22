@@ -42,6 +42,7 @@ type PlaybackController interface {
 	SetCompletion(ctx context.Context, key store.BookKey, completion store.Completion) (playback.Snapshot, error)
 	SetSmartRewind(policy playback.SmartRewindPolicy) error
 	Toggle(ctx context.Context, session uint64) (playback.Snapshot, error)
+	Pause(ctx context.Context, session uint64) (playback.Snapshot, error)
 	SeekRelative(ctx context.Context, session uint64, delta time.Duration) (playback.Snapshot, error)
 	SeekAbsolute(ctx context.Context, session uint64, target time.Duration) (playback.Snapshot, error)
 	StepSpeed(ctx context.Context, session uint64, deltaMilli int64) (playback.Snapshot, error)
@@ -511,6 +512,9 @@ func (c *Coordinator) playBook(encodedKey string) tea.Msg {
 	if err != nil {
 		return ui.NoticeMsg{Error: sanitizePlaybackError(err)}
 	}
+	c.mu.Lock()
+	c.cancelSleepTimerLocked()
+	c.mu.Unlock()
 	return c.refreshPlaybackSnapshot(snap, chapters, "Playing "+title)
 }
 
@@ -542,6 +546,9 @@ func (c *Coordinator) replayBook(action ui.Action) tea.Msg {
 	if err != nil {
 		return ui.ModalResultMsg{ID: action.RequestID, Attempt: action.Attempt, Error: sanitizePlaybackError(err)}
 	}
+	c.mu.Lock()
+	c.cancelSleepTimerLocked()
+	c.mu.Unlock()
 	updated := c.refreshPlaybackSnapshot(snap, chapters, "Replaying "+title)
 	return tea.BatchMsg{
 		func() tea.Msg { return ui.ModalResultMsg{ID: action.RequestID, Attempt: action.Attempt} },
@@ -649,7 +656,14 @@ func (c *Coordinator) activateChapter(action ui.Action) tea.Msg {
 			return ui.NoticeMsg{Error: sanitizePlaybackError(err)}
 		}
 		chapters := c.ensureChapters(ctx, key, absPath)
-		return c.refreshPlaybackSnapshot(seeked, chapters, "Jumped to "+formatClock(action.ChapterStart))
+		c.mu.Lock()
+		sleepNotice := c.reconcileSleepAfterSeekLocked(seeked)
+		c.mu.Unlock()
+		activity := "Jumped to " + formatClock(action.ChapterStart)
+		if sleepNotice != "" {
+			activity = sleepNotice
+		}
+		return c.refreshPlaybackSnapshot(seeked, chapters, activity)
 	}
 
 	if active && snap.Book != nil && *snap.Book != key {
@@ -687,6 +701,9 @@ func (c *Coordinator) activateChapter(action ui.Action) tea.Msg {
 	if err != nil {
 		return ui.NoticeMsg{Error: sanitizePlaybackError(err)}
 	}
+	c.mu.Lock()
+	c.cancelSleepTimerLocked()
+	c.mu.Unlock()
 	return c.refreshPlaybackSnapshot(seeked, chapters, "Playing "+title)
 }
 
@@ -730,6 +747,9 @@ func (c *Coordinator) confirmSwitchPlay(action ui.Action) tea.Msg {
 	if err != nil {
 		return ui.ModalResultMsg{ID: action.RequestID, Attempt: action.Attempt, Error: sanitizePlaybackError(err)}
 	}
+	c.mu.Lock()
+	c.cancelSleepTimerLocked()
+	c.mu.Unlock()
 	updated := c.refreshPlaybackSnapshot(seeked, chapters, "Switched to "+title)
 	return tea.BatchMsg{
 		func() tea.Msg { return ui.ModalResultMsg{ID: action.RequestID, Attempt: action.Attempt} },
@@ -755,6 +775,11 @@ func (c *Coordinator) togglePlayback(sessionStr string) tea.Msg {
 	if err != nil {
 		return ui.NoticeMsg{Error: sanitizePlaybackError(err)}
 	}
+	c.mu.Lock()
+	if c.sleep.kind == sleepDuration {
+		c.sleep.lastTick = c.clock()
+	}
+	c.mu.Unlock()
 	return c.refreshPlaybackSnapshot(snap, c.cachedChaptersFor(snap.Book), "")
 }
 
@@ -776,7 +801,10 @@ func (c *Coordinator) seekRelative(sessionStr string, delta time.Duration) tea.M
 	if err != nil {
 		return ui.NoticeMsg{Error: sanitizePlaybackError(err)}
 	}
-	return c.refreshPlaybackSnapshot(snap, c.cachedChaptersFor(snap.Book), "")
+	c.mu.Lock()
+	sleepNotice := c.reconcileSleepAfterSeekLocked(snap)
+	c.mu.Unlock()
+	return c.refreshPlaybackSnapshot(snap, c.cachedChaptersFor(snap.Book), sleepNotice)
 }
 
 func (c *Coordinator) stepSpeed(sessionStr string, deltaMilli int64) tea.Msg {
@@ -827,7 +855,7 @@ func (c *Coordinator) stepVolume(delta int) tea.Msg {
 	return c.refreshPlaybackSnapshot(snap, c.cachedChaptersFor(snap.Book), "")
 }
 
-// PollPlayback refreshes active playback position and chapter state.
+// PollPlayback refreshes active playback position, chapter state, and sleep timer.
 func (c *Coordinator) PollPlayback(ctx context.Context) (ui.SnapshotMsg, bool) {
 	if c == nil || c.player == nil || ctx == nil {
 		return ui.SnapshotMsg{}, false
@@ -836,7 +864,8 @@ func (c *Coordinator) PollPlayback(ctx context.Context) (ui.SnapshotMsg, bool) {
 	if err != nil {
 		return ui.SnapshotMsg{}, false
 	}
-	return c.refreshPlaybackSnapshot(snap, c.cachedChaptersFor(snap.Book), ""), true
+	snap, sleepActivity := c.advanceSleepTimer(ctx, snap)
+	return c.refreshPlaybackSnapshot(snap, c.cachedChaptersFor(snap.Book), sleepActivity), true
 }
 
 func (c *Coordinator) cachedChaptersFor(book *store.BookKey) []Chapter {
@@ -851,6 +880,7 @@ func (c *Coordinator) cachedChaptersFor(book *store.BookKey) []Chapter {
 func (c *Coordinator) refreshPlaybackSnapshot(snap playback.Snapshot, chapters []Chapter, activity string) ui.SnapshotMsg {
 	player := projectActivePlayer(snap, chapters)
 	c.mu.Lock()
+	player.Sleep = c.sleepLabelLocked()
 	c.snapshot.Player = player
 	if activity != "" {
 		c.snapshot.Activity = activity

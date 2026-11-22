@@ -166,6 +166,9 @@ chapter remaining time (including unknown durations/speeds and compact hiding)
 and the `x` Book Context Action Menu (`Mark as finished`, `Mark as unfinished`,
 `Replay from start` confirmation, `Delete downloaded audio`, and stale-target
 invalidation).
+[`sleep_test.go`](sleep_test.go) exercises the `t` Sleep Timer menu (`15/30/45/60
+min`, `End of current chapter` availability, `Turn off`), key ownership, and
+narrow `80x20` player sleep indication.
 Pure geometry tests include the boundary grid and extreme integer dimensions;
 actual rendered views are checked at supported/minimum/tiny sizes in terminal cells.
 This is partial J13 (and the browse-target portion of J07), not complete app journeys.
