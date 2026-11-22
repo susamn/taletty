@@ -96,7 +96,7 @@ func (m Model) paneRows(pane Pane, width int) (string, []string, int) {
 // frame owns borders, a cursor gutter and one-cell inner padding. It never clips
 // renderer styles as untrusted metadata: raw text is fitted before paint is added.
 func (m Model) frame(pane Pane, size Rect, name string, rows []string, selected int) []string {
-	focused := pane == m.focus && !m.help && !m.ownsModal()
+	focused := pane == m.focus && !m.help && !m.ownsModal() && !m.accountOpen
 	if focused {
 		name = "[Focus] " + name
 	}
@@ -167,6 +167,8 @@ func (m Model) View() tea.View {
 	}
 	if m.ownsModal() {
 		lines = m.modalLines(lines)
+	} else if m.accountOpen {
+		lines = m.accountLines(lines)
 	}
 	lines = append(lines, m.playerLines(g.Player)...)
 	activity, tint := m.data.Activity, m.appearance.Palette.Muted
@@ -195,6 +197,9 @@ func (m Model) View() tea.View {
 	}
 	if m.help {
 		hints = "Esc Back | j/k scroll | PgUp/PgDown | g/G bounds | " + m.helpTransport()
+	}
+	if m.accountOpen {
+		hints = "j/k/Tab choose | Enter act | Esc back | Transport disabled in Account"
 	}
 	if m.ownsModal() {
 		hints = "Enter/Ctrl+S save | Alt+Enter newline | Tab local focus | Esc back"

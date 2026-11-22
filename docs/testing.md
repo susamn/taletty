@@ -508,6 +508,34 @@ faults retaining drafts/state, and `-race` concurrency. See
 (`#19`), full J09 UI journeys, and global bookmark search/export (`#23`) remain
 open.
 
+## Session coordinator, cached boot, and onboarding UI (#131 under #13)
+
+[`coordinator_linux_test.go`](../app/internal/app/coordinator_linux_test.go)
+and [`account_test.go`](../app/internal/ui/account_test.go) exercise
+`app.Coordinator` and `ui.Model` against real `*profile.Workspace` and
+`*store.Store` temporary SQLite databases, fake `AccountClient` /
+`TerminalHandoff` seams, and `testkit.Runner`:
+
+- **J01 onboarding & account lifecycle**: fresh `~/.config/taletty/` boot
+  opening the Account/onboarding overlay without autoplay or legacy
+  `~/.config/audible-tui/` discovery, login cancel/error (`storage_uncertain`)/
+  success via TTY handoff without collecting passwords in UI widgets, explicit
+  `Sync` publishing atomically via `store.ReplaceCatalog`, and `ViewState`
+  persistence on `Close`.
+- **J02 offline restoration**: reopening with `Account == nil` (no Python or
+  network) restores `Focus`, `Selection` by encoded `BookKey`, `GlyphMode`,
+  favorites, local media/job availability, and stopped/finished last-book
+  player metadata without autoplay.
+- **Failure, concurrency, and recovery**: failed/canceled/stale `Sync` replies
+  preserving existing cached catalog and selection, concurrent busy guard,
+  `Doctor` readiness states, `Close(ctx)` timeout/retry joining active workers,
+  Account overlay key ownership (blocking transport/quit/pane shortcuts),
+  resize preservation across `79x19`/`80x20`/`144x42`, and ANSI sanitization.
+
+See [the app coordinator README](../app/internal/app/README.md); concrete
+`engine/v0.1.0` pinning and `app/cmd/taletty` entrypoint wiring remain `#132`
+(blocked by `#131` and maintainer tagging `engine/v0.1.0`).
+
 ## Runtime packaging and platform matrix (#26)
 
 [ADR 003](adr/003-runtime-and-platform-matrix.md) defines the OS/architecture
