@@ -335,8 +335,39 @@ stage/progress validation and `FuzzDownloadPayload`, unknown vs known-zero
 consumer backpressure + cancellation, killed `ffmpeg` process group +
 reconciliation, and mandatory CI generated-media verification of
 `licensing -> downloading -> progress -> preparing -> publishing -> completed`.
-App storage/queue (#16), UI J04/J05/J06 (#17), engine packaging (#8), live
-accounts, protected media and working release remain open.
+App storage/queue (#16), UI J04/J05/J06 (#17), live
+accounts, protected media and full app release remain open.
+
+## Engine release preparation (#8)
+
+[`runtime_linux_test.go`](../engine/connectors/audible/runtime_linux_test.go),
+[`session_linux_test.go`](../engine/connectors/audible/internal/auth/session_linux_test.go),
+[`login_linux_test.go`](../engine/connectors/audible/login_linux_test.go),
+[`cli_linux_test.go`](../engine/internal/cli/cli_linux_test.go),
+[`main_linux_test.go`](../engine/cmd/taletty-engine/main_linux_test.go), and
+[`release_linux_test.go`](../engine/release_linux_test.go) verify:
+
+- Contract and runtime pinning constants (`ContractVersion = "v0.1.0"`,
+  `BridgeProtocolVersion = 1`, `PinnedPythonVersion = "3.12"`,
+  `PinnedAudibleVersion = "0.13.1"`) matching `requirements.txt` and `doctor.py`.
+- `ResolvePython` / `DiscoverPython` strict precedence (`explicit` >
+  `TALETTY_PYTHON` > `python3.12` > `python3`), clean rejection of invalid
+  explicit/env overrides without fallback, `ErrRuntimeMissing` when absent, and
+  no scanning of `~/.config/audible-tui` or legacy paths.
+- Optional `--python` CLI wiring across `doctor`, `login`, `sync`, and
+  `download` (flag override, `TALETTY_PYTHON`, `PATH` fallback, exit `2` without
+  echoing invalid explicit `--python`, and `runtime_missing` exit `1` without
+  creating `~/.config/taletty`).
+- `auth.OpenBorrowed` and `audible.OpenBorrowed`: borrowing an externally locked
+  `0700` root without `ErrAuthBusy`, `Session.token` serialization across
+  operations, `Close` closing only the duplicated root descriptor without
+  unlocking `.auth.lock`, rejection of nil/closed/regular/symlink/non-0700/
+  foreign-UID roots, and real `Doctor`/`Login`/`Library`/`Download` fixtures.
+- Clean temp-dir `go install ./cmd/taletty-engine` executing `taletty-engine
+  doctor --json` against prepared and missing runtimes, plus an ephemeral
+  external consumer Go module created dynamically in `t.TempDir()` (`GOWORK=off`,
+  local `replace` only inside the temp `go.mod`, never committed in the repo)
+  compiling and running against `engine/model` and `engine/connectors/audible`.
 
 ## Executable storage contract (#3)
 

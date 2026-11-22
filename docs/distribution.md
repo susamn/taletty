@@ -28,9 +28,19 @@ pip calls in package lifecycle scripts. Explain first-install network requiremen
 separately from offline library/playback after setup.
 
 The app pins a released engine module; engine module/CLI/bridge versions and protocol
-must agree. Engine release #8 and clean consumer builds verify independent release
-rather than relying on a developer workspace. Keep runtime discovery overrideable,
-report missing/incompatible tools in doctor and never expose credentials in diagnostics.
+must agree. Engine release #8 prepares the first independently consumable engine
+release (`engine/v0.1.0`, `ContractVersion = "v0.1.0"`, `BridgeProtocolVersion = 1`,
+`PinnedPythonVersion = "3.12"`, `PinnedAudibleVersion = "0.13.1"`), adds
+`ResolvePython`/`DiscoverPython` (`--python` > `TALETTY_PYTHON` > `python3.12` >
+`python3`, never scanning `~/.config/audible-tui` or mutating system Python), adds
+`OpenBorrowed` for caller-owned cooperative root handoff, and verifies clean
+temp-dir `go install ./cmd/taletty-engine` plus an ephemeral external consumer
+module outside the workspace. See [the engine README](../engine/README.md) for
+prerequisites (Go `1.26.0+`, CPython `3.12` +
+[`requirements.txt`](../engine/connectors/audible/internal/bridge/adapter/requirements.txt),
+`ffmpeg`/`ffprobe`), source install steps, and post-merge maintainer tagging
+(`git tag -a engine/v0.1.0 ...`). Keep runtime discovery overrideable, report
+missing/incompatible tools in doctor and never expose credentials in diagnostics.
 
 ## Packaging and upgrades
 
