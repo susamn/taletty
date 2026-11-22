@@ -6,6 +6,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/susamn/taletty/app/internal/playback"
 	"github.com/susamn/taletty/app/internal/profile"
 	"github.com/susamn/taletty/app/internal/store"
 	"github.com/susamn/taletty/engine/connectors/audible"
@@ -68,11 +69,28 @@ func OpenEngineWorkspace(ctx context.Context, home, pythonExplicit string, opts 
 	if err != nil {
 		return nil, err
 	}
+	settings, err := ws.Store().Settings(ctx)
+	if err != nil {
+		_ = ws.Close(context.Background())
+		return nil, err
+	}
+	player, err := playback.NewController(playback.NewMPVProcess(playback.MPVConfig{}), playback.Options{
+		Store:  ws.Store(),
+		Volume: &settings.VolumePercent,
+	})
+	if err != nil {
+		_ = ws.Close(context.Background())
+		return nil, err
+	}
 	opts.Clock = clock
 	opts.Account = NewEngineAccount(ws.Owner(), pythonExplicit)
+	opts.Player = player
+	opts.MediaChecker = NewRootMediaChecker(ws.Owner())
+	opts.ChapterReader = FFprobeChapterReader{}
 	opts.WorkspaceCloser = ws.Close
 	coord, err := NewCoordinator(ctx, ws.Store(), opts)
 	if err != nil {
+		_ = player.Close(context.Background())
 		_ = ws.Close(context.Background())
 		return nil, err
 	}

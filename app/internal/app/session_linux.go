@@ -4,11 +4,72 @@ import (
 	"context"
 	"io"
 	"os"
+	"time"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/susamn/taletty/app/internal/terminal"
 	"github.com/susamn/taletty/app/internal/ui"
 )
+
+const playbackPollInterval = 500 * time.Millisecond
+
+type playbackTickMsg struct{}
+
+type sessionModel struct {
+	inner tea.Model
+	ctx   context.Context
+	coord *Coordinator
+}
+
+func (m sessionModel) Init() tea.Cmd {
+	var cmds []tea.Cmd
+	if initCmd := m.inner.Init(); initCmd != nil {
+		cmds = append(cmds, initCmd)
+	}
+	if m.coord != nil {
+		for _, key := range m.coord.DownloadedBookKeys(m.ctx) {
+			k := key
+			cmds = append(cmds, func() tea.Msg {
+				if msg, ok := m.coord.LoadChapters(m.ctx, k); ok {
+					return msg
+				}
+				return nil
+			})
+		}
+		if m.coord.player != nil {
+			cmds = append(cmds, tea.Tick(playbackPollInterval, func(time.Time) tea.Msg {
+				return playbackTickMsg{}
+			}))
+		}
+	}
+	return tea.Batch(cmds...)
+}
+
+func (m sessionModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	if _, ok := msg.(playbackTickMsg); ok {
+		var cmds []tea.Cmd
+		if m.coord != nil && m.coord.player != nil {
+			if snap, ok := m.coord.PollPlayback(m.ctx); ok {
+				next, cmd := m.inner.Update(snap)
+				m.inner = next
+				if cmd != nil {
+					cmds = append(cmds, cmd)
+				}
+			}
+			cmds = append(cmds, tea.Tick(playbackPollInterval, func(time.Time) tea.Msg {
+				return playbackTickMsg{}
+			}))
+		}
+		return m, tea.Batch(cmds...)
+	}
+	next, cmd := m.inner.Update(msg)
+	m.inner = next
+	return m, cmd
+}
+
+func (m sessionModel) View() tea.View {
+	return m.inner.View()
+}
 
 // ProgramRunner executes a Bubble Tea model on an owned controlling terminal.
 // terminal.Run satisfies this signature directly.
@@ -47,7 +108,11 @@ func RunSession(ctx context.Context, coord *Coordinator, tty *os.File, output io
 			Account:     &acct,
 		})
 
-		finalModel, runErr := runner(ctx, updated, tty, output)
+		wrapped := sessionModel{inner: updated, ctx: ctx, coord: coord}
+		finalModel, runErr := runner(ctx, wrapped, tty, output)
+		if sm, ok := finalModel.(sessionModel); ok {
+			finalModel = sm.inner
+		}
 		if finalUI, ok := finalModel.(ui.Model); ok {
 			focus = finalUI.Focus()
 			selected = finalUI.Selection()

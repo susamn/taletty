@@ -42,9 +42,11 @@ type CatalogStore interface {
 	SnapshotRefreshedAt(ctx context.Context, provider, namespace string) (int64, bool, error)
 	ListeningState(ctx context.Context, key store.BookKey) (store.ListeningState, bool, error)
 	Settings(ctx context.Context) (store.Settings, error)
+	PutSettings(ctx context.Context, settings store.Settings) error
 	ViewState(ctx context.Context) (store.ViewState, error)
 	PutViewState(ctx context.Context, state store.ViewState) error
 	Favorites(ctx context.Context) ([]store.BookKey, error)
+	LocalMedia(ctx context.Context, key store.BookKey) (store.LocalMedia, bool, error)
 	LocalMediaList(ctx context.Context) ([]store.LocalMedia, error)
 	DownloadJobs(ctx context.Context) ([]store.DownloadJob, error)
 }
@@ -106,6 +108,10 @@ type Options struct {
 	Account         AccountClient
 	Handoff         TerminalHandoff
 	SuspendForLogin bool
+	Player          PlaybackController
+	MediaChecker    MediaChecker
+	ChapterReader   ChapterReader
+	Downloads       DownloadEnqueuer
 	Clock           func() time.Time
 	WorkspaceCloser func(context.Context) error
 }
@@ -140,6 +146,10 @@ type Coordinator struct {
 	account         AccountClient
 	handoff         TerminalHandoff
 	suspendForLogin bool
+	player          PlaybackController
+	mediaChecker    MediaChecker
+	chapterReader   ChapterReader
+	downloads       DownloadEnqueuer
 	clock           func() time.Time
 	workspaceCloser func(context.Context) error
 
@@ -149,14 +159,18 @@ type Coordinator struct {
 
 	mu            sync.Mutex
 	closed        bool
+	playerClosed  bool
 	accountClosed bool
 	workspaceDone bool
 	accountBusy   bool
 	pendingLogin  bool
 	syncSeq       uint64
+	dialogSeq     uint64
 	activeSyncID  string
 	viewState     store.ViewState
 	settings      store.Settings
+	durations     map[store.BookKey]time.Duration
+	chapters      map[store.BookKey][]Chapter
 	accountState  ui.AccountState
 	snapshot      ui.SnapshotMsg
 	appearance    ui.AppearanceMsg
@@ -211,7 +225,7 @@ func NewCoordinator(ctx context.Context, st CatalogStore, opts Options) (*Coordi
 		clock = time.Now
 	}
 
-	snapshot, appearance, restore, viewState, settings, accountState, err := loadInitialState(ctx, st, provider, namespace, opts.Account != nil)
+	snapshot, appearance, restore, viewState, settings, accountState, durations, err := loadInitialState(ctx, st, provider, namespace, opts.Account != nil)
 	if err != nil {
 		return nil, err
 	}
@@ -224,12 +238,18 @@ func NewCoordinator(ctx context.Context, st CatalogStore, opts Options) (*Coordi
 		account:         opts.Account,
 		handoff:         opts.Handoff,
 		suspendForLogin: opts.SuspendForLogin,
+		player:          opts.Player,
+		mediaChecker:    opts.MediaChecker,
+		chapterReader:   opts.ChapterReader,
+		downloads:       opts.Downloads,
 		clock:           clock,
 		workspaceCloser: opts.WorkspaceCloser,
 		ctx:             lifeCtx,
 		cancel:          cancel,
 		viewState:       viewState,
 		settings:        settings,
+		durations:       durations,
+		chapters:        make(map[store.BookKey][]Chapter),
 		accountState:    accountState,
 		snapshot:        snapshot,
 		appearance:      appearance,
@@ -238,41 +258,47 @@ func NewCoordinator(ctx context.Context, st CatalogStore, opts Options) (*Coordi
 }
 
 func loadInitialState(ctx context.Context, st CatalogStore, provider, namespace string, hasAccount bool) (
-	ui.SnapshotMsg, ui.AppearanceMsg, ui.RestoreSessionMsg, store.ViewState, store.Settings, ui.AccountState, error,
+	ui.SnapshotMsg, ui.AppearanceMsg, ui.RestoreSessionMsg, store.ViewState, store.Settings, ui.AccountState, map[store.BookKey]time.Duration, error,
 ) {
 	catalog, err := st.Catalog(ctx, "", "")
 	if err != nil {
-		return ui.SnapshotMsg{}, ui.AppearanceMsg{}, ui.RestoreSessionMsg{}, store.ViewState{}, store.Settings{}, ui.AccountState{}, err
+		return ui.SnapshotMsg{}, ui.AppearanceMsg{}, ui.RestoreSessionMsg{}, store.ViewState{}, store.Settings{}, ui.AccountState{}, nil, err
 	}
 	_, hasSnapshot, err := st.SnapshotRefreshedAt(ctx, provider, namespace)
 	if err != nil {
-		return ui.SnapshotMsg{}, ui.AppearanceMsg{}, ui.RestoreSessionMsg{}, store.ViewState{}, store.Settings{}, ui.AccountState{}, err
+		return ui.SnapshotMsg{}, ui.AppearanceMsg{}, ui.RestoreSessionMsg{}, store.ViewState{}, store.Settings{}, ui.AccountState{}, nil, err
 	}
 	favorites, err := st.Favorites(ctx)
 	if err != nil {
-		return ui.SnapshotMsg{}, ui.AppearanceMsg{}, ui.RestoreSessionMsg{}, store.ViewState{}, store.Settings{}, ui.AccountState{}, err
+		return ui.SnapshotMsg{}, ui.AppearanceMsg{}, ui.RestoreSessionMsg{}, store.ViewState{}, store.Settings{}, ui.AccountState{}, nil, err
 	}
 	media, err := st.LocalMediaList(ctx)
 	if err != nil {
-		return ui.SnapshotMsg{}, ui.AppearanceMsg{}, ui.RestoreSessionMsg{}, store.ViewState{}, store.Settings{}, ui.AccountState{}, err
+		return ui.SnapshotMsg{}, ui.AppearanceMsg{}, ui.RestoreSessionMsg{}, store.ViewState{}, store.Settings{}, ui.AccountState{}, nil, err
 	}
 	jobs, err := st.DownloadJobs(ctx)
 	if err != nil {
-		return ui.SnapshotMsg{}, ui.AppearanceMsg{}, ui.RestoreSessionMsg{}, store.ViewState{}, store.Settings{}, ui.AccountState{}, err
+		return ui.SnapshotMsg{}, ui.AppearanceMsg{}, ui.RestoreSessionMsg{}, store.ViewState{}, store.Settings{}, ui.AccountState{}, nil, err
 	}
 	settings, err := st.Settings(ctx)
 	if err != nil {
-		return ui.SnapshotMsg{}, ui.AppearanceMsg{}, ui.RestoreSessionMsg{}, store.ViewState{}, store.Settings{}, ui.AccountState{}, err
+		return ui.SnapshotMsg{}, ui.AppearanceMsg{}, ui.RestoreSessionMsg{}, store.ViewState{}, store.Settings{}, ui.AccountState{}, nil, err
 	}
 	viewState, err := st.ViewState(ctx)
 	if err != nil {
-		return ui.SnapshotMsg{}, ui.AppearanceMsg{}, ui.RestoreSessionMsg{}, store.ViewState{}, store.Settings{}, ui.AccountState{}, err
+		return ui.SnapshotMsg{}, ui.AppearanceMsg{}, ui.RestoreSessionMsg{}, store.ViewState{}, store.Settings{}, ui.AccountState{}, nil, err
 	}
 
+	durations := make(map[store.BookKey]time.Duration, len(catalog))
+	for _, item := range catalog {
+		if item.DurationNS != nil && *item.DurationNS > 0 {
+			durations[item.Key] = time.Duration(*item.DurationNS)
+		}
+	}
 	books := projectBooks(catalog, favorites, media, jobs)
 	player, err := projectRestoredPlayer(ctx, st, viewState, books, settings)
 	if err != nil {
-		return ui.SnapshotMsg{}, ui.AppearanceMsg{}, ui.RestoreSessionMsg{}, store.ViewState{}, store.Settings{}, ui.AccountState{}, err
+		return ui.SnapshotMsg{}, ui.AppearanceMsg{}, ui.RestoreSessionMsg{}, store.ViewState{}, store.Settings{}, ui.AccountState{}, nil, err
 	}
 
 	firstLaunch := !hasSnapshot && len(books) == 0
@@ -306,7 +332,7 @@ func loadInitialState(ctx context.Context, st CatalogStore, provider, namespace 
 		OpenAccount: firstLaunch,
 		Account:     &accountCopy,
 	}
-	return snapshot, appearance, restore, viewState, settings, accountState, nil
+	return snapshot, appearance, restore, viewState, settings, accountState, durations, nil
 }
 
 func initialAccountState(firstLaunch, hasAccount bool) ui.AccountState {
@@ -557,6 +583,12 @@ func (c *Coordinator) Dispatch(action ui.Action) tea.Cmd {
 		return func() tea.Msg {
 			return c.runSync()
 		}
+	case ui.PlayBook, ui.ActivateChapter, ui.ConfirmSwitchPlay, ui.QueueDownload,
+		ui.TogglePlayback, ui.SeekBackward, ui.SeekForward,
+		ui.SpeedDown, ui.SpeedUp, ui.VolumeDown, ui.VolumeUp:
+		return func() tea.Msg {
+			return c.handlePlaybackAction(action)
+		}
 	default:
 		return func() tea.Msg {
 			return ui.NoticeMsg{Activity: "Action unavailable in this slice"}
@@ -768,7 +800,7 @@ func (c *Coordinator) commitSync(ctx context.Context, opID string, books []store
 		return c.accountErrorMsg("", "Failed to save synced library; previous cache preserved.", err)
 	}
 
-	snapshot, _, _, viewState, settings, _, err := loadInitialState(ctx, c.store, provider, namespace, true)
+	snapshot, _, _, viewState, settings, _, durations, err := loadInitialState(ctx, c.store, provider, namespace, true)
 	if err != nil {
 		return c.accountErrorMsg("", "Failed to reload synced library.", err)
 	}
@@ -778,6 +810,21 @@ func (c *Coordinator) commitSync(ctx context.Context, opID string, books []store
 	c.accountBusy = false
 	c.viewState = viewState
 	c.settings = settings
+	c.durations = durations
+	if c.player != nil {
+		if active := c.player.Snapshot(); active.Book != nil {
+			snapshot.Player = projectActivePlayer(active, c.chapters[*active.Book])
+		}
+	}
+	for i := range snapshot.Books {
+		if key, decErr := DecodeBookKey(snapshot.Books[i].Key); decErr == nil {
+			if chs, ok := c.chapters[key]; ok && len(chs) > 0 {
+				titles, starts := splitChapters(chs)
+				snapshot.Books[i].Chapters = titles
+				snapshot.Books[i].ChapterStarts = starts
+			}
+		}
+	}
 	c.snapshot = snapshot
 	c.accountState.Busy = false
 	c.accountState.SignedIn = true
@@ -884,6 +931,18 @@ func (c *Coordinator) Close(ctx context.Context) error {
 	case <-ctx.Done():
 		return ctx.Err()
 	case <-joined:
+	}
+
+	c.mu.Lock()
+	needPlayerClose := c.player != nil && !c.playerClosed
+	c.mu.Unlock()
+	if needPlayerClose {
+		if err := c.player.Close(ctx); err != nil {
+			return err
+		}
+		c.mu.Lock()
+		c.playerClosed = true
+		c.mu.Unlock()
 	}
 
 	c.mu.Lock()

@@ -642,6 +642,12 @@ func (f *faultStore) Settings(ctx context.Context) (store.Settings, error) {
 	}
 	return f.CatalogStore.Settings(ctx)
 }
+func (f *faultStore) PutSettings(ctx context.Context, s store.Settings) error {
+	if f.failStep == "PutSettings" {
+		return errors.New("db fail")
+	}
+	return f.CatalogStore.PutSettings(ctx, s)
+}
 func (f *faultStore) ViewState(ctx context.Context) (store.ViewState, error) {
 	if f.failStep == "ViewState" {
 		return store.ViewState{}, errors.New("db fail")
@@ -659,6 +665,12 @@ func (f *faultStore) Favorites(ctx context.Context) ([]store.BookKey, error) {
 		return nil, errors.New("db fail")
 	}
 	return f.CatalogStore.Favorites(ctx)
+}
+func (f *faultStore) LocalMedia(ctx context.Context, k store.BookKey) (store.LocalMedia, bool, error) {
+	if f.failStep == "LocalMedia" {
+		return store.LocalMedia{}, false, errors.New("db fail")
+	}
+	return f.CatalogStore.LocalMedia(ctx, k)
 }
 func (f *faultStore) LocalMediaList(ctx context.Context) ([]store.LocalMedia, error) {
 	if f.failStep == "LocalMediaList" {
