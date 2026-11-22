@@ -12,6 +12,8 @@ import (
 	"syscall"
 	"testing"
 	"time"
+
+	"golang.org/x/sys/unix"
 )
 
 func privateRoot(t *testing.T) string {
@@ -381,5 +383,253 @@ func TestCloseIOFailureIsSafeAndTerminal(t *testing.T) {
 	}
 	if err := s.Run(context.Background(), func(context.Context) error { return nil }); !errors.Is(err, ErrClosed) {
 		t.Fatal("failed close session remained usable", err)
+	}
+}
+
+func TestOpenBorrowedOwnershipSerializationAndClose(t *testing.T) {
+	root := filepath.Join(privateRoot(t), "borrowed")
+	if err := os.Mkdir(root, 0700); err != nil {
+		t.Fatal(err)
+	}
+	lockPath := filepath.Join(root, ".auth.lock")
+	lockFile, err := os.OpenFile(lockPath, os.O_CREATE|os.O_RDWR, 0600)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer lockFile.Close()
+	if err := unix.Flock(int(lockFile.Fd()), unix.LOCK_EX|unix.LOCK_NB); err != nil {
+		t.Fatal(err)
+	}
+
+	callerRoot, err := os.Open(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer callerRoot.Close()
+
+	s, err := OpenBorrowed(context.Background(), callerRoot)
+	if err != nil {
+		t.Fatal("OpenBorrowed failed on externally locked root:", err)
+	}
+	if s.fd != -1 || s.root.Fd() == callerRoot.Fd() {
+		t.Fatalf("unexpected borrowed session descriptors: fd=%d root=%d caller=%d", s.fd, s.root.Fd(), callerRoot.Fd())
+	}
+	flags, _, errno := syscall.Syscall(syscall.SYS_FCNTL, s.root.Fd(), syscall.F_GETFD, 0)
+	if errno != 0 || flags&syscall.FD_CLOEXEC == 0 {
+		t.Fatal("borrowed root descriptor missing FD_CLOEXEC", flags, errno)
+	}
+
+	// Anchoring survives directory rename.
+	moved := root + "-moved"
+	if err := os.Rename(root, moved); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.WithRoot(context.Background(), func(_ context.Context, dir *os.File) error {
+		fd, err := syscall.Openat(int(dir.Fd()), "borrowed-marker", syscall.O_WRONLY|syscall.O_CREAT|syscall.O_EXCL, 0600)
+		if err != nil {
+			return err
+		}
+		return syscall.Close(fd)
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(moved, "borrowed-marker")); err != nil {
+		t.Fatal("borrowed root did not stay anchored across rename:", err)
+	}
+
+	// Concurrent operations serialize via Session.token.
+	var wg sync.WaitGroup
+	var active atomic.Int32
+	for range 20 {
+		wg.Go(func() {
+			if err := s.WithRoot(context.Background(), func(context.Context, *os.File) error {
+				if active.Add(1) != 1 {
+					t.Error("borrowed operations overlapped")
+				}
+				active.Add(-1)
+				return nil
+			}); err != nil {
+				t.Error(err)
+			}
+		})
+	}
+	wg.Wait()
+
+	// Canceled Close waits without closing duplicated root; retry succeeds.
+	started, release, done := make(chan struct{}), make(chan struct{}), make(chan error, 1)
+	go func() {
+		done <- s.Run(context.Background(), func(context.Context) error {
+			close(started)
+			<-release
+			return nil
+		})
+	}()
+	<-started
+	closing, closed := make(chan struct{}), make(chan error, 1)
+	closeCtx, cancelClose := context.WithCancel(context.Background())
+	go func() { closed <- s.Close(&observedContext{Context: closeCtx, waiting: closing}) }()
+	<-closing
+	cancelClose()
+	if err := <-closed; !errors.Is(err, context.Canceled) {
+		t.Fatal(err)
+	}
+	close(release)
+	if err := <-done; err != nil {
+		t.Fatal(err)
+	}
+
+	if err := s.Close(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Close(context.Background()); err != nil {
+		t.Fatal("repeat Close failed:", err)
+	}
+	if _, err := s.root.Stat(); !errors.Is(err, os.ErrClosed) {
+		t.Fatal("duplicated root fd not closed")
+	}
+	if _, err := callerRoot.Stat(); err != nil {
+		t.Fatal("Close closed caller's root fd:", err)
+	}
+	if err := s.Run(context.Background(), func(context.Context) error { return nil }); !errors.Is(err, ErrClosed) {
+		t.Fatal("closed borrowed session remained usable:", err)
+	}
+
+	// Caller's .auth.lock must still be held after borrowed Close.
+	checkChild := func(want string) {
+		t.Helper()
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		cmd := exec.CommandContext(ctx, os.Args[0], "-test.run=^TestRootLockChild$")
+		cmd.Env = append(os.Environ(), "TALETTY_LOCK_CHILD_ROOT="+moved)
+		data, err := cmd.CombinedOutput()
+		if err != nil || strings.TrimSpace(string(data)) != want {
+			t.Fatal("child lock outcome", string(data), err)
+		}
+	}
+	checkChild("busy")
+	if err := unix.Flock(int(lockFile.Fd()), unix.LOCK_UN); err != nil {
+		t.Fatal(err)
+	}
+	checkChild("acquired")
+}
+
+func TestOpenBorrowedRejectsUnsafeAndCanceled(t *testing.T) {
+	root := privateRoot(t)
+	callerRoot, err := os.Open(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer callerRoot.Close()
+
+	canceled, cancel := context.WithCancel(context.Background())
+	cancel()
+	if _, err := OpenBorrowed(canceled, callerRoot); !errors.Is(err, context.Canceled) {
+		t.Fatal(err)
+	}
+	if _, err := OpenBorrowed(context.Background(), nil); !errors.Is(err, ErrUnsafeRoot) {
+		t.Fatal(err)
+	}
+
+	// Regular file rejected.
+	regPath := filepath.Join(root, "regular")
+	if err := os.WriteFile(regPath, nil, 0600); err != nil {
+		t.Fatal(err)
+	}
+	regFile, err := os.Open(regPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer regFile.Close()
+	if _, err := OpenBorrowed(context.Background(), regFile); !errors.Is(err, ErrIO) {
+		t.Fatal(err)
+	}
+
+	// Symlink opened with O_PATH|O_NOFOLLOW rejected.
+	linkPath := filepath.Join(t.TempDir(), "link")
+	if err := os.Symlink(root, linkPath); err != nil {
+		t.Fatal(err)
+	}
+	linkFD, err := unix.Open(linkPath, unix.O_PATH|unix.O_NOFOLLOW, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	linkFile := os.NewFile(uintptr(linkFD), "symlink")
+	defer linkFile.Close()
+	if _, err := OpenBorrowed(context.Background(), linkFile); !errors.Is(err, ErrIO) {
+		t.Fatal(err)
+	}
+
+	// Closed file rejected.
+	closedFile, err := os.Open(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	closedFile.Close()
+	if _, err := OpenBorrowed(context.Background(), closedFile); !errors.Is(err, ErrIO) {
+		t.Fatal(err)
+	}
+
+	// Non-0700 modes rejected.
+	for _, mode := range []os.FileMode{0755, 0700 | os.ModeSticky} {
+		if err := os.Chmod(root, mode); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := OpenBorrowed(context.Background(), callerRoot); !errors.Is(err, ErrUnsafeRoot) {
+			t.Fatalf("mode %v accepted: %v", mode, err)
+		}
+	}
+	if err := os.Chmod(root, 0700); err != nil {
+		t.Fatal(err)
+	}
+
+	// Foreign UID, inspect I/O error, and post-inspect cancellation close duplicated fd.
+	var inspectedFD int
+	if _, err := openBorrowed(context.Background(), callerRoot, func(fd int, stat *syscall.Stat_t) error {
+		inspectedFD = fd
+		return syscall.EIO
+	}); !errors.Is(err, ErrIO) {
+		t.Fatal(err)
+	}
+	if err := syscall.Fstat(inspectedFD, new(syscall.Stat_t)); err != syscall.EBADF {
+		t.Fatal("inspect error leaked duplicated fd:", err)
+	}
+
+	if _, err := openBorrowed(context.Background(), callerRoot, func(fd int, stat *syscall.Stat_t) error {
+		inspectedFD = fd
+		if err := syscall.Fstat(fd, stat); err != nil {
+			return err
+		}
+		stat.Uid++
+		return nil
+	}); !errors.Is(err, ErrUnsafeRoot) {
+		t.Fatal(err)
+	}
+	if err := syscall.Fstat(inspectedFD, new(syscall.Stat_t)); err != syscall.EBADF {
+		t.Fatal("foreign UID leaked duplicated fd:", err)
+	}
+
+	if _, err := openBorrowed(raceContext(), callerRoot, func(fd int, stat *syscall.Stat_t) error {
+		inspectedFD = fd
+		return syscall.Fstat(fd, stat)
+	}); !errors.Is(err, context.Canceled) {
+		t.Fatal(err)
+	}
+	if err := syscall.Fstat(inspectedFD, new(syscall.Stat_t)); err != syscall.EBADF {
+		t.Fatal("canceled OpenBorrowed leaked duplicated fd:", err)
+	}
+
+	// Close I/O failure on borrowed session marks closed and returns ErrIO.
+	s, err := OpenBorrowed(context.Background(), callerRoot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.root.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Close(context.Background()); !errors.Is(err, ErrIO) {
+		t.Fatal(err)
+	}
+	if err := s.Run(context.Background(), func(context.Context) error { return nil }); !errors.Is(err, ErrClosed) {
+		t.Fatal(err)
 	}
 }

@@ -39,6 +39,49 @@ func Open(ctx context.Context, root string) (*Session, error) {
 	return open(ctx, root, syscall.Fstat)
 }
 
+// OpenBorrowed duplicates a caller-owned effective-UID-owned 0700 directory
+// descriptor via openat(".", O_RDONLY|O_DIRECTORY|O_NOFOLLOW|O_CLOEXEC) and
+// verifies 0700 + euid without acquiring or unlocking .auth.lock (fd: -1).
+// The caller must hold exclusive cooperative root ownership (for example,
+// store.Owner / RootLease) until Close returns. Close closes only the
+// duplicated root descriptor.
+func OpenBorrowed(ctx context.Context, root *os.File) (*Session, error) {
+	return openBorrowed(ctx, root, syscall.Fstat)
+}
+
+func openBorrowed(ctx context.Context, root *os.File, inspect func(int, *syscall.Stat_t) error) (*Session, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if root == nil {
+		return nil, ErrUnsafeRoot
+	}
+	dir, err := syscall.Openat(int(root.Fd()), ".", syscall.O_RDONLY|syscall.O_DIRECTORY|syscall.O_NOFOLLOW|syscall.O_CLOEXEC, 0)
+	if err != nil {
+		return nil, ErrIO
+	}
+	keepDir := false
+	defer func() {
+		if !keepDir {
+			syscall.Close(dir)
+		}
+	}()
+	var stat syscall.Stat_t
+	if err = inspect(dir, &stat); err != nil {
+		return nil, ErrIO
+	}
+	if stat.Mode&(syscall.S_IFMT|07777) != syscall.S_IFDIR|0700 || stat.Uid != uint32(os.Geteuid()) {
+		return nil, ErrUnsafeRoot
+	}
+	if err = ctx.Err(); err != nil {
+		return nil, err
+	}
+	s := &Session{fd: -1, root: os.NewFile(uintptr(dir), "authentication-root"), token: make(chan struct{}, 1)}
+	keepDir = true
+	s.token <- struct{}{}
+	return s, nil
+}
+
 // Inject descriptor inspection at the filesystem boundary so failed security
 // checks/cleanup can be exercised without mutable process-wide syscall hooks.
 func open(ctx context.Context, root string, inspect func(int, *syscall.Stat_t) error) (*Session, error) {
@@ -153,7 +196,10 @@ func (s *Session) Close(ctx context.Context) error {
 	}
 	s.closed = true
 	rootErr := s.root.Close()
-	lockErr := syscall.Close(s.fd) // Release ownership even if the root close failed.
+	var lockErr error
+	if s.fd >= 0 {
+		lockErr = syscall.Close(s.fd) // Release ownership even if the root close failed.
+	}
 	if rootErr != nil || lockErr != nil {
 		return ErrIO
 	}
