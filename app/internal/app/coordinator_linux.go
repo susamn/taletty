@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -607,6 +608,8 @@ func mapLibraryView(dest store.Destination) ui.LibraryView {
 		return ui.ViewContinue
 	case store.DestinationDownloaded:
 		return ui.ViewDownloaded
+	case store.DestinationFavorites:
+		return ui.ViewFavorites
 	case store.DestinationFinished:
 		return ui.ViewFinished
 	default:
@@ -620,6 +623,8 @@ func toStoreDestination(view ui.LibraryView) store.Destination {
 		return store.DestinationContinue
 	case ui.ViewDownloaded:
 		return store.DestinationDownloaded
+	case ui.ViewFavorites:
+		return store.DestinationFavorites
 	case ui.ViewFinished:
 		return store.DestinationFinished
 	default:
@@ -750,11 +755,61 @@ func (c *Coordinator) Dispatch(action ui.Action) tea.Cmd {
 		return func() tea.Msg {
 			return c.handleBookmarkAction(action)
 		}
+	case ui.ToggleFavorite:
+		return func() tea.Msg {
+			return c.toggleFavorite(action.Key)
+		}
 	default:
 		return func() tea.Msg {
 			return ui.NoticeMsg{Activity: "Action unavailable in this slice"}
 		}
 	}
+}
+
+type favoriteWriter interface {
+	SetFavorite(ctx context.Context, key store.BookKey, favored bool, createdAtMS int64) error
+}
+
+func (c *Coordinator) toggleFavorite(encodedKey string) tea.Msg {
+	ctx, ok := c.beginWorker()
+	if !ok {
+		return ui.NoticeMsg{Error: SanitizeError(ErrClosed)}
+	}
+	defer c.wg.Done()
+
+	key, err := DecodeBookKey(encodedKey)
+	if err != nil {
+		return ui.NoticeMsg{Error: SanitizeError(ErrInvalidInput)}
+	}
+	writer, ok := c.store.(favoriteWriter)
+	if !ok {
+		return ui.NoticeMsg{Error: "Favorites persistence unavailable."}
+	}
+	favs, err := c.store.Favorites(ctx)
+	if err != nil {
+		return ui.NoticeMsg{Error: SanitizeError(err)}
+	}
+	nextFav := !slices.Contains(favs, key)
+	nowMS := max(int64(0), c.clock().UnixMilli())
+	if err := writer.SetFavorite(ctx, key, nextFav, nowMS); err != nil {
+		return ui.NoticeMsg{Error: SanitizeError(err)}
+	}
+
+	activity := "Removed from Favorites"
+	if nextFav {
+		activity = "Added to Favorites"
+	}
+	c.mu.Lock()
+	for i := range c.snapshot.Books {
+		if c.snapshot.Books[i].Key == encodedKey {
+			c.snapshot.Books[i].Favorite = nextFav
+			break
+		}
+	}
+	c.snapshot.Activity = activity
+	out := c.snapshot
+	c.mu.Unlock()
+	return out
 }
 
 func (c *Coordinator) continueOffline() tea.Msg {

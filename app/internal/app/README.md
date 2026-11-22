@@ -89,6 +89,16 @@ module.
     download prompts, and B3 `Stay` / `Switch and play` cross-book switches with
     stale-session invalidation.
 
+- **Persistent favorite books and Favorites library view (`#42`)**:
+  - Maps `store.DestinationFavorites` <-> `ui.ViewFavorites` and handles
+    `ToggleFavorite` (`f`) offline via `store.SetFavorite` / `store.Favorites`
+    with zero provider calls and zero playback changes, retaining authoritative
+    prior state on save failure.
+
+## Scope boundaries
+
+- Completion/smart-rewind (`#20`), sleep timer (`#21`), and global bookmark
+  search/export (`#23`) remain separate downstream issues.
 - **Completion state, smart rewind, and speed-adjusted remaining time (`#20`)**:
   - Wires `playback.DefaultSmartRewindPolicy()` in `OpenEngineWorkspace` (and
     optional `Options.SmartRewind`), `ReplayBook` confirmation on `PlayBook` for

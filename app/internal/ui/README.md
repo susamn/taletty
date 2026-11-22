@@ -156,6 +156,10 @@ long Unicode scrolling, cell bounds and two-step tiny-terminal quit recovery.
 the dedicated Bookmarks Manager view, multiline note scrolling, local `/`
 filtering, row action menus with frozen IDs and stale-target invalidation,
 query-failure retry, and `Tab`/`1-5`/`Esc` focus restoration.
+[`favorites_test.go`](favorites_test.go) exercises the `Favorites` library
+destination, `f` highlighted-book targeting (unavailable in `PlayerPane`),
+accent-tinted `★` / `[Fav]` indicators in `Books` and `Details`, empty
+`Favorites` guidance, and `RestoreSessionMsg` restoration.
 [`completion_test.go`](completion_test.go) exercises speed-adjusted book and
 chapter remaining time (including unknown durations/speeds and compact hiding)
 and the `x` Book Context Action Menu (`Mark as finished`, `Mark as unfinished`,

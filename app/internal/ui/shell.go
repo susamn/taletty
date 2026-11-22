@@ -124,6 +124,7 @@ const (
 	JumpBookmark           ActionKind = "jump-bookmark"
 	ConfirmSwitchBookmark  ActionKind = "confirm-switch-bookmark"
 	DeleteBookmark         ActionKind = "delete-bookmark"
+	ToggleFavorite         ActionKind = "toggle-favorite"
 	MarkFinished           ActionKind = "mark-finished"
 	MarkUnfinished         ActionKind = "mark-unfinished"
 	ReplayBook             ActionKind = "replay-book"
@@ -379,6 +380,16 @@ func (m Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 		case "s":
 			m.openSortMenu()
 			return m, nil
+		case "f":
+			if m.focus == PlayerPane {
+				m.data.Activity = "Favorite toggle unavailable in Player"
+				return m, nil
+			}
+			if m.selected == "" {
+				m.data.Activity = "Favorite toggle unavailable: no highlighted book"
+				return m, nil
+			}
+			return m.request(Action{Kind: ToggleFavorite, Key: m.selected})
 		case "a":
 			m.openAccount(nil)
 			return m, nil

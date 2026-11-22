@@ -120,6 +120,13 @@ func (m Model) paneRows(pane Pane, width int) (string, []string, int) {
 		return name, book.Chapters, m.clampedChapterCursor(book)
 	}
 	rows := []string{title(book.Title)}
+	if book.Favorite {
+		favLabel := "[Fav] Favorite"
+		if m.appearance.Glyphs != Plain {
+			favLabel = "★ Favorite"
+		}
+		rows = append(rows, favLabel)
+	}
 	if book.Subtitle != "" {
 		rows = append(rows, book.Subtitle)
 	}
@@ -174,7 +181,18 @@ func (m Model) box(size Rect, name string, rows []string, selected int, focused,
 		if index == selected {
 			gutter, textTint = ">", m.appearance.Palette.Selection
 		}
-		lines[y] = border(vertical) + m.paint(" "+gutter+PadLine(text, size.Width-4-len(gutter), m.tail())+" ", textTint) + border(vertical)
+		fitted := PadLine(text, size.Width-4-len(gutter), m.tail())
+		body := m.paint(" "+gutter+fitted+" ", textTint)
+		if m.appearance.Palette.Focus != nil {
+			for _, prefix := range []string{"★ ", "[Fav] "} {
+				if strings.HasPrefix(fitted, prefix) {
+					rest := strings.TrimPrefix(fitted, prefix)
+					body = m.paint(" "+gutter, textTint) + m.paint(prefix, m.appearance.Palette.Focus) + m.paint(rest+" ", textTint)
+					break
+				}
+			}
+		}
+		lines[y] = border(vertical) + body + border(vertical)
 	}
 	lines[len(lines)-1] = border(bottomLeft + strings.Repeat(horizontal, size.Width-2) + bottomRight)
 	return lines

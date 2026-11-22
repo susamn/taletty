@@ -642,6 +642,20 @@ exercise J07/J08/J09/J12/J13 bookmark journeys over real `*store.Store`,
   invalidation, and missing-audio `Queue download` prompt without touching
   current audio.
 
+## Persistent favorite books and Favorites library view (#42)
+
+[`favorites_test.go`](../app/internal/ui/favorites_test.go) and
+[`favorites_linux_test.go`](../app/internal/app/favorites_linux_test.go)
+exercise J17 favorites journeys over real `*store.Store`, `*profile.Workspace`,
+`*playback.Controller`, and `testkit.Runner`:
+
+- `f` toggles favorite on the highlighted Library book (never falling back to
+  current audio or stealing modal/filter typing), persists offline by `BookKey`,
+  and survives background `Sync`, audio deletion, and offline restart.
+- `Favorites` sidebar destination reuses sorting/filtering, shows accent-tinted
+  `★` / `[Fav]` indicators in `Books` and `Details`, retains authoritative
+  prior state with a recoverable error on save failure, and keeps selection/focus
+  valid when unfavoriting rows including the final visible row.
 ## Completion state, smart rewind, and remaining time (#20)
 
 [`playback_linux_test.go`](../app/internal/playback/playback_linux_test.go),
