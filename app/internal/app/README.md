@@ -54,7 +54,16 @@ module.
     and `RunSession` periodic `PollPlayback` keep the miniplayer and chapter
     timeline synchronized, and `Close` saves the final checkpoint and reaps `mpv`.
 
+- **Library views, stable sorting, and contributor filtering (`#14`)**:
+  - Projects `Subtitle`, `Narrator`, `Duration`/`HasDuration`, `RecentAtMS`,
+    `InProgress`, `Finished`, and `CatalogOrder` from `store.Catalog` and
+    `store.ListeningStates` into `ui.Book`.
+  - Restores and persists all `store.ViewState` fields (`Destination`,
+    `SortOrder`, `FilterText`, `Focus`, `Selected`) across restarts via
+    `RestoreSessionMsg` and `SaveFullViewState`.
+
 ## Scope boundaries
 
-- Library filtering/sorting (`#14`), download manager UI (`#17`), and bookmark
-  UI (`#19`) remain separate downstream issues.
+- Download manager UI (`#17`), bookmark UI (`#19`), completion/smart-rewind
+  (`#20`), sleep timer (`#21`), and favorites UI (`#42`) remain separate
+  downstream issues.

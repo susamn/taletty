@@ -41,6 +41,7 @@ type CatalogStore interface {
 	ReplaceCatalog(ctx context.Context, provider, namespace string, books []store.CatalogBook, refreshedAtMS int64) error
 	SnapshotRefreshedAt(ctx context.Context, provider, namespace string) (int64, bool, error)
 	ListeningState(ctx context.Context, key store.BookKey) (store.ListeningState, bool, error)
+	ListeningStates(ctx context.Context) ([]store.ListeningState, error)
 	Settings(ctx context.Context) (store.Settings, error)
 	PutSettings(ctx context.Context, settings store.Settings) error
 	ViewState(ctx context.Context) (store.ViewState, error)
@@ -288,6 +289,10 @@ func loadInitialState(ctx context.Context, st CatalogStore, provider, namespace 
 	if err != nil {
 		return ui.SnapshotMsg{}, ui.AppearanceMsg{}, ui.RestoreSessionMsg{}, store.ViewState{}, store.Settings{}, ui.AccountState{}, nil, err
 	}
+	listeningStates, err := st.ListeningStates(ctx)
+	if err != nil {
+		return ui.SnapshotMsg{}, ui.AppearanceMsg{}, ui.RestoreSessionMsg{}, store.ViewState{}, store.Settings{}, ui.AccountState{}, nil, err
+	}
 
 	durations := make(map[store.BookKey]time.Duration, len(catalog))
 	for _, item := range catalog {
@@ -295,7 +300,7 @@ func loadInitialState(ctx context.Context, st CatalogStore, provider, namespace 
 			durations[item.Key] = time.Duration(*item.DurationNS)
 		}
 	}
-	books := projectBooks(catalog, favorites, media, jobs)
+	books := projectBooks(catalog, favorites, media, jobs, listeningStates)
 	player, err := projectRestoredPlayer(ctx, st, viewState, books, settings)
 	if err != nil {
 		return ui.SnapshotMsg{}, ui.AppearanceMsg{}, ui.RestoreSessionMsg{}, store.ViewState{}, store.Settings{}, ui.AccountState{}, nil, err
@@ -319,6 +324,9 @@ func loadInitialState(ctx context.Context, st CatalogStore, provider, namespace 
 		Glyphs: mapGlyphMode(settings.GlyphMode),
 	}
 	focus := mapFocusPane(viewState.Focus)
+	view := mapLibraryView(viewState.Destination)
+	sortOrder := mapSortOrder(viewState.SortOrder)
+	filterText := viewState.FilterText
 	selected := ""
 	if viewState.Selected != nil {
 		if encoded, encErr := EncodeBookKey(*viewState.Selected); encErr == nil {
@@ -328,6 +336,9 @@ func loadInitialState(ctx context.Context, st CatalogStore, provider, namespace 
 	accountCopy := accountState
 	restore := ui.RestoreSessionMsg{
 		Focus:       &focus,
+		View:        &view,
+		Sort:        &sortOrder,
+		Filter:      &filterText,
 		Selected:    selected,
 		OpenAccount: firstLaunch,
 		Account:     &accountCopy,
@@ -357,7 +368,7 @@ func initialAccountState(firstLaunch, hasAccount bool) ui.AccountState {
 	}
 }
 
-func projectBooks(catalog []store.CatalogBook, favorites []store.BookKey, media []store.LocalMedia, jobs []store.DownloadJob) []ui.Book {
+func projectBooks(catalog []store.CatalogBook, favorites []store.BookKey, media []store.LocalMedia, jobs []store.DownloadJob, listening []store.ListeningState) []ui.Book {
 	favSet := make(map[store.BookKey]struct{}, len(favorites))
 	for _, key := range favorites {
 		favSet[key] = struct{}{}
@@ -374,9 +385,13 @@ func projectBooks(catalog []store.CatalogBook, favorites []store.BookKey, media 
 			jobState[job.Key] = job.State
 		}
 	}
+	listenMap := make(map[store.BookKey]store.ListeningState, len(listening))
+	for _, ls := range listening {
+		listenMap[ls.Key] = ls
+	}
 
 	out := make([]ui.Book, 0, len(catalog))
-	for _, item := range catalog {
+	for idx, item := range catalog {
 		encoded, err := EncodeBookKey(item.Key)
 		if err != nil {
 			continue
@@ -389,9 +404,23 @@ func projectBooks(catalog []store.CatalogBook, favorites []store.BookKey, media 
 			}
 			author = strings.Join(names, ", ")
 		}
-		desc := ""
+		narrator := ""
+		if len(item.Narrators) > 0 {
+			names := make([]string, 0, len(item.Narrators))
+			for _, person := range item.Narrators {
+				names = append(names, person.Name)
+			}
+			narrator = strings.Join(names, ", ")
+		}
+		subtitle := ""
 		if item.Subtitle != nil {
-			desc = *item.Subtitle
+			subtitle = *item.Subtitle
+		}
+		var dur time.Duration
+		hasDur := false
+		if item.DurationNS != nil {
+			dur = time.Duration(*item.DurationNS)
+			hasDur = true
 		}
 		avail := ui.NotDownloaded
 		if _, ok := mediaSet[item.Key]; ok {
@@ -400,11 +429,20 @@ func projectBooks(catalog []store.CatalogBook, favorites []store.BookKey, media 
 			avail = mapJobAvailability(state)
 		}
 		_, fav := favSet[item.Key]
+		ls, hasLS := listenMap[item.Key]
 		out = append(out, ui.Book{
 			Key:          encoded,
 			Title:        item.Title,
 			Author:       author,
-			Description:  desc,
+			Subtitle:     subtitle,
+			Narrator:     narrator,
+			Description:  subtitle,
+			Duration:     dur,
+			HasDuration:  hasDur,
+			RecentAtMS:   ls.UpdatedAtMS,
+			InProgress:   hasLS && ls.PositionNS > 0 && ls.Completion != store.CompletionFinished,
+			Finished:     hasLS && ls.Completion == store.CompletionFinished,
+			CatalogOrder: idx,
 			Availability: avail,
 			Favorite:     fav,
 		})
@@ -504,6 +542,62 @@ func toStoreFocus(focus ui.Pane) store.FocusPane {
 		return store.FocusPlayer
 	default:
 		return store.FocusBooks
+	}
+}
+
+func mapLibraryView(dest store.Destination) ui.LibraryView {
+	switch dest {
+	case store.DestinationContinue:
+		return ui.ViewContinue
+	case store.DestinationDownloaded:
+		return ui.ViewDownloaded
+	case store.DestinationFinished:
+		return ui.ViewFinished
+	default:
+		return ui.ViewAll
+	}
+}
+
+func toStoreDestination(view ui.LibraryView) store.Destination {
+	switch view {
+	case ui.ViewContinue:
+		return store.DestinationContinue
+	case ui.ViewDownloaded:
+		return store.DestinationDownloaded
+	case ui.ViewFinished:
+		return store.DestinationFinished
+	default:
+		return store.DestinationAll
+	}
+}
+
+func mapSortOrder(order store.SortOrder) ui.SortOrder {
+	switch order {
+	case store.SortAuthor:
+		return ui.SortAuthor
+	case store.SortDuration:
+		return ui.SortDuration
+	case store.SortRecent:
+		return ui.SortRecent
+	case store.SortAcquisition:
+		return ui.SortAcquisition
+	default:
+		return ui.SortTitle
+	}
+}
+
+func toStoreSortOrder(order ui.SortOrder) store.SortOrder {
+	switch order {
+	case ui.SortAuthor:
+		return store.SortAuthor
+	case ui.SortDuration:
+		return store.SortDuration
+	case ui.SortRecent:
+		return store.SortRecent
+	case ui.SortAcquisition:
+		return store.SortAcquisition
+	default:
+		return store.SortTitle
 	}
 }
 
@@ -889,7 +983,26 @@ func (c *Coordinator) SaveViewState(ctx context.Context, focus ui.Pane, selected
 	}
 	next := c.viewState
 	c.mu.Unlock()
+	return c.SaveFullViewState(ctx, mapLibraryView(next.Destination), mapSortOrder(next.SortOrder), next.FilterText, focus, selectedKey)
+}
 
+// SaveFullViewState persists destination view, sort order, filter text, focus,
+// and selected BookKey.
+func (c *Coordinator) SaveFullViewState(ctx context.Context, view ui.LibraryView, sort ui.SortOrder, filter string, focus ui.Pane, selectedKey string) error {
+	if c == nil || ctx == nil {
+		return ErrInvalidInput
+	}
+	c.mu.Lock()
+	if c.closed {
+		c.mu.Unlock()
+		return ErrClosed
+	}
+	next := c.viewState
+	c.mu.Unlock()
+
+	next.Destination = toStoreDestination(view)
+	next.SortOrder = toStoreSortOrder(sort)
+	next.FilterText = filter
 	next.Focus = toStoreFocus(focus)
 	if selectedKey == "" {
 		next.Selected = nil

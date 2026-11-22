@@ -636,6 +636,12 @@ func (f *faultStore) ListeningState(ctx context.Context, k store.BookKey) (store
 	}
 	return f.CatalogStore.ListeningState(ctx, k)
 }
+func (f *faultStore) ListeningStates(ctx context.Context) ([]store.ListeningState, error) {
+	if f.failStep == "ListeningStates" {
+		return nil, errors.New("db fail")
+	}
+	return f.CatalogStore.ListeningStates(ctx)
+}
 func (f *faultStore) Settings(ctx context.Context) (store.Settings, error) {
 	if f.failStep == "Settings" {
 		return store.Settings{}, errors.New("db fail")
@@ -740,7 +746,7 @@ func TestValidationFaultsAndKeyEncoding(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	for _, step := range []string{"Catalog", "SnapshotRefreshedAt", "Favorites", "LocalMediaList", "DownloadJobs", "Settings", "ViewState", "ListeningState"} {
+	for _, step := range []string{"Catalog", "SnapshotRefreshedAt", "Favorites", "LocalMediaList", "DownloadJobs", "Settings", "ViewState", "ListeningStates", "ListeningState"} {
 		if _, err := app.NewCoordinator(context.Background(), &faultStore{CatalogStore: ws.Store(), failStep: step}, app.Options{}); err == nil {
 			t.Fatalf("expected error at step %s", step)
 		}
@@ -781,6 +787,78 @@ func TestValidationFaultsAndKeyEncoding(t *testing.T) {
 	}
 	if err := coord.SaveViewState(context.Background(), ui.Books, ""); !errors.Is(err, app.ErrClosed) {
 		t.Fatalf("expected ErrClosed after Close, got %v", err)
+	}
+	if err := coord.SaveFullViewState(context.Background(), ui.ViewAll, ui.SortTitle, "", ui.Books, ""); !errors.Is(err, app.ErrClosed) {
+		t.Fatalf("expected ErrClosed after Close on SaveFullViewState, got %v", err)
+	}
+	if err := (*app.Coordinator)(nil).SaveFullViewState(context.Background(), ui.ViewAll, ui.SortTitle, "", ui.Books, ""); !errors.Is(err, app.ErrInvalidInput) {
+		t.Fatalf("expected ErrInvalidInput for nil SaveFullViewState, got %v", err)
+	}
+}
+
+func TestJ03CoordinatorViewStatePersistenceAndMetadataProjection(t *testing.T) {
+	home := t.TempDir()
+	ws, err := profile.Open(context.Background(), home, 100)
+	if err != nil {
+		t.Fatal(err)
+	}
+	st := ws.Store()
+	books := sampleBooks()
+	if err := st.ReplaceCatalog(context.Background(), "audible", "us", books, 100); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.PutListeningState(context.Background(), store.ListeningState{
+		Key: books[0].Key, PositionNS: int64(15 * time.Second), SpeedMilli: 1_000_000, Completion: store.CompletionUnfinished, UpdatedAtMS: 500,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.PutListeningState(context.Background(), store.ListeningState{
+		Key: books[1].Key, PositionNS: int64(7200 * time.Second), SpeedMilli: 1_000_000, Completion: store.CompletionFinished, UpdatedAtMS: 900,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := ws.Close(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+
+	coord, err := app.OpenWorkspace(context.Background(), home, app.Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	snap := coord.InitialSnapshot()
+	if len(snap.Books) != 2 || !snap.Books[0].InProgress || !snap.Books[1].Finished || snap.Books[0].Narrator != "Narrator One" || !snap.Books[0].HasDuration {
+		t.Fatalf("unexpected projected metadata: %+v", snap.Books)
+	}
+
+	enc1, _ := app.EncodeBookKey(books[1].Key)
+	for _, tc := range []struct {
+		view ui.LibraryView
+		sort ui.SortOrder
+	}{
+		{ui.ViewContinue, ui.SortAuthor},
+		{ui.ViewDownloaded, ui.SortDuration},
+		{ui.ViewFinished, ui.SortRecent},
+		{ui.ViewAll, ui.SortAcquisition},
+	} {
+		if err := coord.SaveFullViewState(context.Background(), tc.view, tc.sort, "narrator", ui.Books, enc1); err != nil {
+			t.Fatalf("SaveFullViewState(%v, %v) failed: %v", tc.view, tc.sort, err)
+		}
+	}
+	if err := coord.SaveFullViewState(context.Background(), ui.ViewContinue, ui.SortRecent, "author", ui.Library, enc1); err != nil {
+		t.Fatal(err)
+	}
+	if err := coord.Close(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+
+	reopened, err := app.OpenWorkspace(context.Background(), home, app.Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = reopened.Close(context.Background()) }()
+	rest := reopened.InitialRestore()
+	if rest.View == nil || *rest.View != ui.ViewContinue || rest.Sort == nil || *rest.Sort != ui.SortRecent || rest.Filter == nil || *rest.Filter != "author" || rest.Selected != enc1 {
+		t.Fatalf("unexpected restored ViewState: %+v", rest)
 	}
 }
 

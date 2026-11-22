@@ -91,6 +91,18 @@ func RunSession(ctx context.Context, coord *Coordinator, tty *os.File, output io
 	if restore.Focus != nil {
 		focus = *restore.Focus
 	}
+	view := ui.ViewAll
+	if restore.View != nil {
+		view = *restore.View
+	}
+	sortOrder := ui.SortTitle
+	if restore.Sort != nil {
+		sortOrder = *restore.Sort
+	}
+	filterText := ""
+	if restore.Filter != nil {
+		filterText = *restore.Filter
+	}
 	selected := restore.Selected
 	accountOpen := restore.OpenAccount
 
@@ -103,6 +115,9 @@ func RunSession(ctx context.Context, coord *Coordinator, tty *os.File, output io
 		updated, _ := model.Update(appearance)
 		updated, _ = updated.Update(ui.RestoreSessionMsg{
 			Focus:       &focus,
+			View:        &view,
+			Sort:        &sortOrder,
+			Filter:      &filterText,
 			Selected:    selected,
 			OpenAccount: accountOpen,
 			Account:     &acct,
@@ -116,6 +131,7 @@ func RunSession(ctx context.Context, coord *Coordinator, tty *os.File, output io
 		if finalUI, ok := finalModel.(ui.Model); ok {
 			focus = finalUI.Focus()
 			selected = finalUI.Selection()
+			view, sortOrder, filterText = finalUI.ViewState()
 			accountOpen = finalUI.AccountOpen()
 		}
 		if runErr != nil {
@@ -129,6 +145,6 @@ func RunSession(ctx context.Context, coord *Coordinator, tty *os.File, output io
 			accountOpen = true
 			continue
 		}
-		return coord.SaveViewState(context.Background(), focus, selected)
+		return coord.SaveFullViewState(context.Background(), view, sortOrder, filterText, focus, selected)
 	}
 }
