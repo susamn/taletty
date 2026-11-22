@@ -37,17 +37,28 @@ func (m Model) timeline(width int) string {
 	}
 	labels := clock(p.Position) + " / " + duration
 	trackWidth := max(1, width-ansi.StringWidth(labels)-3)
-	line, dot := "-", "o"
+	line, dot, tick := "-", "o", "|"
 	if m.appearance.Glyphs != Plain {
-		line, dot = "─", "●"
+		line, dot, tick = "─", "●", "│"
 	}
-	track := strings.Repeat(line, trackWidth)
+	cells := make([]string, trackWidth)
+	for i := range cells {
+		cells[i] = line
+	}
 	if p.Duration > 0 {
+		for _, start := range p.ChapterTicks {
+			if start <= 0 || start >= p.Duration {
+				continue
+			}
+			ratio := min(1.0, max(0.0, float64(start)/float64(p.Duration)))
+			pos := int(float64(trackWidth-1) * ratio)
+			cells[pos] = tick
+		}
 		ratio := min(1.0, max(0.0, float64(p.Position)/float64(p.Duration)))
 		position := int(float64(trackWidth-1) * ratio)
-		track = strings.Repeat(line, position) + dot + strings.Repeat(line, trackWidth-position-1)
+		cells[position] = dot
 	}
-	return labels + " [" + track + "]"
+	return labels + " [" + strings.Join(cells, "") + "]"
 }
 
 func spread(left, right string, width int) string {

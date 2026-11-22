@@ -87,7 +87,7 @@ func (m Model) paneRows(pane Pane, width int) (string, []string, int) {
 		if len(book.Chapters) == 0 {
 			return name, []string{"No chapters available"}, -1
 		}
-		return name, book.Chapters, -1
+		return name, book.Chapters, m.clampedChapterCursor(book)
 	}
 	rows := []string{title(book.Title), "Author: " + book.Author, m.availability(book.Availability)}
 	return name, append(rows, strings.Split(book.Description, "\n")...), -1
@@ -100,7 +100,7 @@ func (m Model) frame(pane Pane, size Rect, name string, rows []string, selected 
 	if focused {
 		name = "[Focus] " + name
 	}
-	return m.box(size, fmt.Sprintf(" %d %s ", pane+1, name), rows, selected, focused, pane == Books)
+	return m.box(size, fmt.Sprintf(" %d %s ", pane+1, name), rows, selected, focused, pane == Books || (pane == Chapters && selected >= 0))
 }
 
 // box is shared by root panes and the dedicated Help view. Fitting precedes style.
@@ -182,6 +182,8 @@ func (m Model) View() tea.View {
 		hints += "j/k browse | Enter play"
 	case Details:
 		hints += "Enter request play highlighted book"
+	case Chapters:
+		hints += "j/k chapters | Enter jump/switch"
 	case PlayerPane:
 		hints += "Left/Right controls | Enter activate"
 	default:

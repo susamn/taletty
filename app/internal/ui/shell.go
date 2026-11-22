@@ -61,6 +61,7 @@ const (
 type Book struct {
 	Key, Title, Author, Description string
 	Chapters                        []string
+	ChapterStarts                   []time.Duration
 	Availability                    Availability
 	Favorite                        bool
 }
@@ -69,6 +70,7 @@ type Player struct {
 	Key, Session, Title, Chapter, Sleep string
 	State                               PlaybackState
 	Position, Duration                  time.Duration
+	ChapterTicks                        []time.Duration
 	Speed                               float64
 	Volume                              int
 	VolumeKnown                         bool
@@ -100,6 +102,9 @@ const (
 	AccountSync            ActionKind = "account-sync"
 	AccountDoctor          ActionKind = "account-doctor"
 	AccountContinueOffline ActionKind = "account-continue-offline"
+	ActivateChapter        ActionKind = "activate-chapter"
+	ConfirmSwitchPlay      ActionKind = "confirm-switch-play"
+	QueueDownload          ActionKind = "queue-download"
 )
 
 // Current-audio actions carry the source session so the coordinator can reject
@@ -111,6 +116,8 @@ type Action struct {
 	Text         string
 	RequestID    string
 	Attempt      uint64
+	ChapterIndex int
+	ChapterStart time.Duration
 }
 
 // Model owns presentation only. Dispatch creates commands; it must not perform
@@ -122,6 +129,7 @@ type Model struct {
 	focus         Pane
 	content       Pane
 	selected      string
+	chapterCursor int
 	control       int
 	failure       string
 	help          bool
@@ -149,13 +157,18 @@ func (m *Model) accept(data SnapshotMsg) {
 	data.Books = slices.Clone(data.Books)
 	for i := range data.Books {
 		data.Books[i].Chapters = slices.Clone(data.Books[i].Chapters)
+		data.Books[i].ChapterStarts = slices.Clone(data.Books[i].ChapterStarts)
 	}
+	data.Player.ChapterTicks = slices.Clone(data.Player.ChapterTicks)
 	m.data = data
 	if m.bookIndex() < 0 {
 		m.selected = ""
+		m.chapterCursor = 0
 		if len(data.Books) > 0 {
 			m.selected = data.Books[0].Key
 		}
+	} else {
+		m.chapterCursor = max(0, m.clampedChapterCursor(m.data.Books[m.bookIndex()]))
 	}
 	if data.Error != "" {
 		m.failure = data.Error
@@ -202,6 +215,8 @@ func (m Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 		m.account = msg.Account
 	case RestoreSessionMsg:
 		m.restoreSession(msg)
+	case BookChaptersMsg:
+		m.applyBookChapters(msg)
 	case SnapshotMsg:
 		m.accept(msg)
 	case AppearanceMsg:
@@ -258,14 +273,18 @@ func (m Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 			m.focus = (m.focus + 4) % 5
 		case "1", "2", "3", "4", "5":
 			m.focus = Pane(key[0] - '1')
-		case "j", "down", "k", "up":
+		case "j", "down", "k", "up", "g", "home", "G", "end", "pgdown", "pgup", "ctrl+d", "ctrl+u":
 			if m.focus == Books && len(m.data.Books) > 0 {
-				delta := 1
-				if key == "k" || key == "up" {
-					delta = -1
-				}
-				index := min(len(m.data.Books)-1, max(0, m.bookIndex()+delta))
+				prev := m.selected
+				index := moveListCursor(max(0, m.bookIndex()), len(m.data.Books), key, m.listPageSize())
 				m.selected = m.data.Books[index].Key
+				if m.selected != prev {
+					m.chapterCursor = 0
+				}
+			} else if m.focus == Chapters {
+				if idx := m.bookIndex(); idx >= 0 && len(m.data.Books[idx].Chapters) > 0 {
+					m.chapterCursor = moveListCursor(max(0, m.chapterCursor), len(m.data.Books[idx].Chapters), key, m.listPageSize())
+				}
 			}
 		case "left", "right":
 			if m.focus == PlayerPane {
@@ -278,6 +297,13 @@ func (m Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 		case "enter":
 			if (m.focus == Books || m.focus == Details) && m.selected != "" {
 				return m.request(Action{Kind: PlayBook, Key: m.selected})
+			}
+			if m.focus == Chapters {
+				next, action, send := m.activateSelectedChapter()
+				if send {
+					return next.request(action)
+				}
+				return next, nil
 			}
 			if m.focus == PlayerPane {
 				return m.transport([]ActionKind{TogglePlayback, SeekBackward, SeekForward}[m.control])
