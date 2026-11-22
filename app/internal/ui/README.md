@@ -156,6 +156,10 @@ long Unicode scrolling, cell bounds and two-step tiny-terminal quit recovery.
 the dedicated Bookmarks Manager view, multiline note scrolling, local `/`
 filtering, row action menus with frozen IDs and stale-target invalidation,
 query-failure retry, and `Tab`/`1-5`/`Esc` focus restoration.
+[`favorites_test.go`](favorites_test.go) exercises the `Favorites` library
+destination, `f` highlighted-book targeting (unavailable in `PlayerPane`),
+accent-tinted `★` / `[Fav]` indicators in `Books` and `Details`, empty
+`Favorites` guidance, and `RestoreSessionMsg` restoration.
 Pure geometry tests include the boundary grid and extreme integer dimensions;
 actual rendered views are checked at supported/minimum/tiny sizes in terminal cells.
 This is partial J13 (and the browse-target portion of J07), not complete app journeys.
