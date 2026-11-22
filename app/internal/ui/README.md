@@ -169,6 +169,10 @@ invalidation).
 [`sleep_test.go`](sleep_test.go) exercises the `t` Sleep Timer menu (`15/30/45/60
 min`, `End of current chapter` availability, `Turn off`), key ownership, and
 narrow `80x20` player sleep indication.
+[`settings_test.go`](settings_test.go) exercises the `S` Settings view (wide
+two-column and compact stacked layouts), candidate-vs-active theme selection,
+`[Reload active]`, playback/glyph preferences, key ownership, and origin
+restoration.
 Pure geometry tests include the boundary grid and extreme integer dimensions;
 actual rendered views are checked at supported/minimum/tiny sizes in terminal cells.
 This is partial J13 (and the browse-target portion of J07), not complete app journeys.
