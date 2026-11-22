@@ -75,7 +75,21 @@ module.
     and preserving `book_identity`, `listening_state`, `favorite`, `bookmark`,
     and `download_job` history).
 
+- **Bookmark editor, manager, and jump targeting (`#19`)**:
+  - Auto-wires `*bookmarks.Service` (`app/internal/bookmarks`) behind
+    `BookmarkManager` in `NewCoordinator` when `Player != nil` and `Store`
+    satisfies `bookmarks.BookmarkStore`.
+  - `CaptureBookmark` (`b`) freezes current audio (playing or paused) with
+    pre-roll clamping and chapter-boundary distinction; `SaveNote` persists
+    new captures from frozen drafts (preventing duplicate creation on retry)
+    and edits existing notes without recapturing position or reapplying pre-roll.
+  - `OpenBookmarks` (`B` / sidebar entry) lists bookmarks offline; `DeleteBookmark`
+    removes only the named bookmark and reloads authoritative state; `JumpBookmark`
+    and `ConfirmSwitchBookmark` perform same-book paused seeks, missing-audio
+    download prompts, and B3 `Stay` / `Switch and play` cross-book switches with
+    stale-session invalidation.
+
 ## Scope boundaries
 
-- Bookmark UI (`#19`), completion/smart-rewind (`#20`), sleep timer (`#21`),
-  and favorites UI (`#42`) remain separate downstream issues.
+- Completion/smart-rewind (`#20`), sleep timer (`#21`), favorites UI (`#42`),
+  and global bookmark search/export (`#23`) remain separate downstream issues.
