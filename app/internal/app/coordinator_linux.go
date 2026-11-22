@@ -193,6 +193,8 @@ type Coordinator struct {
 	draftOrder      []string
 	committedDrafts map[string]store.Bookmark
 	committedOrder  []string
+	sleep           sleepTimerState
+	sleepGen        uint64
 	accountState    ui.AccountState
 	snapshot        ui.SnapshotMsg
 	appearance      ui.AppearanceMsg
@@ -759,6 +761,10 @@ func (c *Coordinator) Dispatch(action ui.Action) tea.Cmd {
 		return func() tea.Msg {
 			return c.toggleFavorite(action.Key)
 		}
+	case ui.SetSleepTimer:
+		return func() tea.Msg {
+			return c.setSleepTimer(action)
+		}
 	default:
 		return func() tea.Msg {
 			return ui.NoticeMsg{Activity: "Action unavailable in this slice"}
@@ -1154,6 +1160,7 @@ func (c *Coordinator) Close(ctx context.Context) error {
 	}
 	c.mu.Lock()
 	c.closed = true
+	c.cancelSleepTimerLocked()
 	c.cancel()
 	c.mu.Unlock()
 

@@ -105,11 +105,14 @@ func (m Model) playerLines(size Rect) []string {
 	if p.VolumeKnown {
 		volume = fmt.Sprintf("Vol %d%%", min(100, max(0, p.Volume)))
 	}
-	sleep := p.Sleep
+	sleep := cleanLine(p.Sleep)
 	if sleep == "" {
 		sleep = "Off"
 	}
-	rows = append(rows, spread(transport, speed+" | "+volume+" | Sleep "+sleep, size.Width-4))
+	prefix := speed + " | " + volume + " | Sleep "
+	maxSleep := max(6, size.Width-4-ansi.StringWidth(cleanLine(transport))-1-ansi.StringWidth(prefix))
+	sleep = ClipLine(sleep, maxSleep, m.tail())
+	rows = append(rows, spread(transport, prefix+sleep, size.Width-4))
 	if size.Height == 6 {
 		remaining := "Remaining unknown"
 		if bookRem, ok := adjustedRemaining(p.Position, p.Duration, p.Speed); ok {

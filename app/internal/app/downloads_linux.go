@@ -343,6 +343,7 @@ func (c *Coordinator) deleteAudio(action ui.Action) tea.Msg {
 	c.mu.Lock()
 	delete(c.chapters, key)
 	if stoppedPlayer {
+		c.cancelSleepTimerLocked()
 		c.snapshot.Player = ui.Player{}
 	}
 	c.mu.Unlock()
