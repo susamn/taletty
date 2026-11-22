@@ -15,7 +15,7 @@ claim that Taletty implements it. #31 audits this map before core release #24.
 | Honest byte progress, preparing stage and terminal outcomes | #7, #17 | J04–J06 |
 | Persistent sequential jobs, cancel/retry/reorder | #16, #17 | J05/J06 |
 | Downloaded-file status and safe audio deletion | #14, #17 | J04/J12 |
-| Owned mpv playback, cleanup and local offline resume | #11, #15 | J02/J07/J08 plus real null-output mpv |
+| Owned mpv playback, cleanup and local offline resume | #11, #15 | J02/J07/J08 plus real null-output mpv ([`app/internal/playback`](../app/internal/playback/README.md) implements #11 serialized `Controller` + `MPVProcess`; #15 coordinator/UI wiring pending) |
 | Chapters, paused seeking and explicit cross-book targeting | #15 | J07/J08 |
 | Responsive fixed miniplayer, transport, speed and volume | #12, #15 | J08/J13 |
 | Per-book speed, completion and speed-adjusted time remaining | #20 | J08/J11 |
