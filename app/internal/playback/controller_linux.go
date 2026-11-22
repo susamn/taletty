@@ -21,7 +21,38 @@ const (
 	MinVolumePercent     int = 0
 	DefaultVolumePercent int = 100
 	MaxVolumePercent     int = 100
+
+	DefaultSmartRewindThreshold = 10 * time.Second
+	DefaultSmartRewindAmount    = 5 * time.Second
 )
+
+// SmartRewindPolicy configures automatic rewind when resuming after a pause.
+// Nonpositive Threshold or Rewind disables smart rewind.
+type SmartRewindPolicy struct {
+	Threshold time.Duration
+	Rewind    time.Duration
+}
+
+// DefaultSmartRewindPolicy returns Taletty's default smart-rewind policy (10s pause -> 5s rewind).
+func DefaultSmartRewindPolicy() SmartRewindPolicy {
+	return SmartRewindPolicy{
+		Threshold: DefaultSmartRewindThreshold,
+		Rewind:    DefaultSmartRewindAmount,
+	}
+}
+
+// Enabled reports whether smart rewind is active.
+func (p SmartRewindPolicy) Enabled() bool {
+	return p.Threshold > 0 && p.Rewind > 0
+}
+
+// Validate checks that Threshold and Rewind are nonnegative.
+func (p SmartRewindPolicy) Validate() error {
+	if p.Threshold < 0 || p.Rewind < 0 {
+		return ErrInvalidInput
+	}
+	return nil
+}
 
 var (
 	// ErrInvalidInput indicates malformed playback arguments or track metadata.
@@ -101,6 +132,7 @@ type Snapshot struct {
 	Duration      time.Duration
 	SpeedMilli    int64
 	VolumePercent int
+	Completion    store.Completion
 	Failure       string
 }
 
@@ -113,10 +145,11 @@ type CheckpointStore interface {
 
 // Options configures a Controller.
 type Options struct {
-	Store    CheckpointStore
-	Clock    func() time.Time
-	OnChange func(Snapshot)
-	Volume   *int
+	Store       CheckpointStore
+	Clock       func() time.Time
+	OnChange    func(Snapshot)
+	Volume      *int
+	SmartRewind *SmartRewindPolicy
 }
 
 // Controller is the single serialized authority for playback state, backend calls and checkpoints.
@@ -129,17 +162,20 @@ type Controller struct {
 	opMu    sync.Mutex
 	stateMu sync.Mutex
 
-	closed     bool
-	state      State
-	session    uint64
-	book       *store.BookKey
-	title      string
-	position   time.Duration
-	duration   time.Duration
-	speedMilli int64
-	volume     int
-	completion store.Completion
-	failure    string
+	closed        bool
+	state         State
+	session       uint64
+	book          *store.BookKey
+	title         string
+	position      time.Duration
+	duration      time.Duration
+	speedMilli    int64
+	volume        int
+	completion    store.Completion
+	smartRewind   SmartRewindPolicy
+	pausedAt      time.Time
+	pausedAtValid bool
+	failure       string
 }
 
 // NewController constructs a serialized playback Controller around backend.
@@ -155,16 +191,37 @@ func NewController(backend Backend, opts Options) (*Controller, error) {
 	if opts.Volume != nil {
 		volume = clampVolume(*opts.Volume)
 	}
+	var smartRewind SmartRewindPolicy
+	if opts.SmartRewind != nil {
+		if err := opts.SmartRewind.Validate(); err != nil {
+			return nil, err
+		}
+		smartRewind = *opts.SmartRewind
+	}
 	return &Controller{
-		backend:    backend,
-		store:      opts.Store,
-		clock:      clock,
-		onChange:   opts.OnChange,
-		state:      StateIdle,
-		speedMilli: DefaultSpeedMilli,
-		volume:     volume,
-		completion: store.CompletionUnfinished,
+		backend:     backend,
+		store:       opts.Store,
+		clock:       clock,
+		onChange:    opts.OnChange,
+		state:       StateIdle,
+		speedMilli:  DefaultSpeedMilli,
+		volume:      volume,
+		completion:  store.CompletionUnfinished,
+		smartRewind: smartRewind,
 	}, nil
+}
+
+// SetSmartRewind updates the smart-rewind policy for subsequent resumes.
+func (c *Controller) SetSmartRewind(policy SmartRewindPolicy) error {
+	if err := policy.Validate(); err != nil {
+		return err
+	}
+	c.opMu.Lock()
+	defer c.opMu.Unlock()
+	c.stateMu.Lock()
+	c.smartRewind = policy
+	c.stateMu.Unlock()
+	return nil
 }
 
 // Snapshot returns an isolated copy of the current playback snapshot.
@@ -183,6 +240,7 @@ func (c *Controller) snapshotLocked() Snapshot {
 		Duration:      c.duration,
 		SpeedMilli:    c.speedMilli,
 		VolumePercent: c.volume,
+		Completion:    c.completion,
 		Failure:       c.failure,
 	}
 	if c.book != nil {
@@ -245,6 +303,8 @@ func (c *Controller) Load(ctx context.Context, track Track, autoPlay bool) (Snap
 	pos := time.Duration(0)
 	speed := DefaultSpeedMilli
 	completion := store.CompletionUnfinished
+	var pausedAt time.Time
+	pausedAtValid := false
 
 	if c.store != nil {
 		saved, found, err := c.store.ListeningState(ctx, key)
@@ -256,6 +316,7 @@ func (c *Controller) Load(ctx context.Context, track Track, autoPlay bool) (Snap
 			c.duration = track.Duration
 			c.speedMilli = speed
 			c.completion = completion
+			c.pausedAtValid = false
 			c.stateMu.Unlock()
 			return c.failLocked(err), err
 		}
@@ -273,6 +334,15 @@ func (c *Controller) Load(ctx context.Context, track Track, autoPlay bool) (Snap
 			if saved.Completion == store.CompletionFinished || saved.Completion == store.CompletionUnfinished {
 				completion = saved.Completion
 			}
+			if autoPlay && c.smartRewind.Enabled() && pos > 0 && completion != store.CompletionFinished && saved.UpdatedAtMS > 0 {
+				nowMS := c.clock().UnixMilli()
+				if nowMS > saved.UpdatedAtMS && time.Duration(nowMS-saved.UpdatedAtMS)*time.Millisecond >= c.smartRewind.Threshold {
+					pos = clampPosition(pos-c.smartRewind.Rewind, track.Duration)
+				}
+			} else if !autoPlay && saved.UpdatedAtMS > 0 {
+				pausedAt = time.UnixMilli(saved.UpdatedAtMS)
+				pausedAtValid = true
+			}
 		}
 	}
 
@@ -284,6 +354,8 @@ func (c *Controller) Load(ctx context.Context, track Track, autoPlay bool) (Snap
 	c.duration = track.Duration
 	c.speedMilli = speed
 	c.completion = completion
+	c.pausedAt = pausedAt
+	c.pausedAtValid = pausedAtValid
 	c.failure = ""
 	volume := c.volume
 	c.stateMu.Unlock()
@@ -308,6 +380,167 @@ func (c *Controller) Load(ctx context.Context, track Track, autoPlay bool) (Snap
 	}
 
 	return c.emit(), nil
+}
+
+// Replay resets position to 0 and marks key unfinished while preserving saved
+// playback speed, then starts playback from the beginning without smart rewind.
+func (c *Controller) Replay(ctx context.Context, track Track) (Snapshot, error) {
+	if ctx == nil {
+		return c.Snapshot(), ErrInvalidInput
+	}
+	if err := track.Validate(); err != nil {
+		return c.Snapshot(), err
+	}
+	if err := ctx.Err(); err != nil {
+		return c.Snapshot(), err
+	}
+
+	c.opMu.Lock()
+	defer c.opMu.Unlock()
+
+	if c.closed {
+		return c.Snapshot(), ErrClosed
+	}
+	if err := ctx.Err(); err != nil {
+		return c.Snapshot(), err
+	}
+
+	if c.isActiveLocked() {
+		if pos, dur, _, _, err := c.backend.Position(ctx); err == nil {
+			c.updatePositionLocked(pos, dur)
+		}
+		if err := c.saveCheckpointLocked(ctx); err != nil {
+			return c.Snapshot(), err
+		}
+		if err := c.backend.Stop(ctx); err != nil {
+			return c.failLocked(err), err
+		}
+	}
+
+	c.stateMu.Lock()
+	c.session++
+	c.stateMu.Unlock()
+
+	key := track.Key
+	speed := DefaultSpeedMilli
+	if c.store != nil {
+		saved, found, err := c.store.ListeningState(ctx, key)
+		if err != nil {
+			c.stateMu.Lock()
+			c.book = &key
+			c.title = track.Title
+			c.position = 0
+			c.duration = track.Duration
+			c.speedMilli = speed
+			c.completion = store.CompletionUnfinished
+			c.pausedAtValid = false
+			c.stateMu.Unlock()
+			return c.failLocked(err), err
+		}
+		if found && saved.SpeedMilli > 0 {
+			speed = clampSpeed(saved.SpeedMilli)
+		}
+	}
+
+	c.stateMu.Lock()
+	c.state = StateLoading
+	c.book = &key
+	c.title = track.Title
+	c.position = 0
+	c.duration = track.Duration
+	c.speedMilli = speed
+	c.completion = store.CompletionUnfinished
+	c.pausedAtValid = false
+	c.failure = ""
+	volume := c.volume
+	c.stateMu.Unlock()
+	c.emit()
+
+	if err := c.backend.Start(ctx, track.Path, 0, speed, volume, false); err != nil {
+		return c.failLocked(err), err
+	}
+
+	c.stateMu.Lock()
+	c.state = StatePlaying
+	c.failure = ""
+	c.stateMu.Unlock()
+
+	if err := c.saveCheckpointLocked(ctx); err != nil {
+		_ = c.backend.Stop(context.Background())
+		return c.failLocked(err), err
+	}
+
+	return c.emit(), nil
+}
+
+// SetCompletion updates completion metadata for key without interrupting or
+// altering current playback position, speed, or active audio.
+func (c *Controller) SetCompletion(ctx context.Context, key store.BookKey, completion store.Completion) (Snapshot, error) {
+	if ctx == nil || key.Validate() != nil {
+		return c.Snapshot(), ErrInvalidInput
+	}
+	if completion != store.CompletionUnfinished && completion != store.CompletionFinished {
+		return c.Snapshot(), ErrInvalidInput
+	}
+	if err := ctx.Err(); err != nil {
+		return c.Snapshot(), err
+	}
+
+	c.opMu.Lock()
+	defer c.opMu.Unlock()
+
+	if c.closed {
+		return c.Snapshot(), ErrClosed
+	}
+	if err := ctx.Err(); err != nil {
+		return c.Snapshot(), err
+	}
+
+	posNS := int64(0)
+	speedMilli := DefaultSpeedMilli
+	c.stateMu.Lock()
+	sameActive := c.book != nil && *c.book == key && c.isActiveLocked()
+	if sameActive {
+		posNS = max(c.position.Nanoseconds(), 0)
+		speedMilli = c.speedMilli
+	}
+	c.stateMu.Unlock()
+
+	if !sameActive && c.store != nil {
+		saved, found, err := c.store.ListeningState(ctx, key)
+		if err != nil {
+			return c.Snapshot(), err
+		}
+		if found {
+			posNS = max(saved.PositionNS, 0)
+			if saved.SpeedMilli > 0 {
+				speedMilli = clampSpeed(saved.SpeedMilli)
+			}
+		}
+	}
+
+	if c.store != nil {
+		if err := c.store.PutListeningState(ctx, store.ListeningState{
+			Key:         key,
+			PositionNS:  posNS,
+			SpeedMilli:  speedMilli,
+			Completion:  completion,
+			UpdatedAtMS: max(c.clock().UnixMilli(), 0),
+		}); err != nil {
+			return c.Snapshot(), err
+		}
+	}
+
+	c.stateMu.Lock()
+	sameBook := c.book != nil && *c.book == key
+	if sameBook {
+		c.completion = completion
+	}
+	c.stateMu.Unlock()
+	if sameBook {
+		return c.emit(), nil
+	}
+	return c.Snapshot(), nil
 }
 
 // Toggle switches between playing and paused for the matching session.
@@ -391,6 +624,8 @@ func (c *Controller) pauseLocked(ctx context.Context) (Snapshot, error) {
 	}
 	c.stateMu.Lock()
 	c.state = StatePaused
+	c.pausedAt = c.clock()
+	c.pausedAtValid = true
 	c.failure = ""
 	c.stateMu.Unlock()
 
@@ -402,13 +637,42 @@ func (c *Controller) pauseLocked(ctx context.Context) (Snapshot, error) {
 }
 
 func (c *Controller) playLocked(ctx context.Context) (Snapshot, error) {
+	c.stateMu.Lock()
+	shouldRewind := c.smartRewind.Enabled() &&
+		c.pausedAtValid &&
+		c.position > 0 &&
+		c.completion != store.CompletionFinished &&
+		c.clock().Sub(c.pausedAt) >= c.smartRewind.Threshold
+	target := clampPosition(c.position-c.smartRewind.Rewind, c.duration)
+	curPos := c.position
+	c.stateMu.Unlock()
+
+	rewound := false
+	if shouldRewind && target != curPos {
+		if err := c.backend.SeekExact(ctx, target); err != nil {
+			return c.failBackendLocked(err), err
+		}
+		c.stateMu.Lock()
+		c.position = target
+		c.stateMu.Unlock()
+		rewound = true
+	}
+
 	if err := c.backend.SetPause(ctx, false); err != nil {
 		return c.failBackendLocked(err), err
 	}
 	c.stateMu.Lock()
 	c.state = StatePlaying
+	c.pausedAtValid = false
 	c.failure = ""
 	c.stateMu.Unlock()
+
+	if rewound {
+		if err := c.saveCheckpointLocked(ctx); err != nil {
+			c.setFailureLocked(err)
+			return c.emit(), err
+		}
+	}
 	return c.emit(), nil
 }
 
@@ -475,6 +739,7 @@ func (c *Controller) seekLocked(ctx context.Context, target time.Duration) (Snap
 	}
 	c.stateMu.Lock()
 	c.position = target
+	c.pausedAtValid = false
 	c.failure = ""
 	c.stateMu.Unlock()
 
@@ -638,6 +903,8 @@ func (c *Controller) Poll(ctx context.Context) (Snapshot, error) {
 			c.position = c.duration
 		}
 		c.state = StatePaused
+		c.completion = store.CompletionFinished
+		c.pausedAtValid = false
 		c.failure = ""
 		c.stateMu.Unlock()
 
@@ -650,9 +917,14 @@ func (c *Controller) Poll(ctx context.Context) (Snapshot, error) {
 
 	c.stateMu.Lock()
 	if paused {
+		if c.state != StatePaused {
+			c.pausedAt = c.clock()
+			c.pausedAtValid = true
+		}
 		c.state = StatePaused
 	} else {
 		c.state = StatePlaying
+		c.pausedAtValid = false
 	}
 	c.failure = ""
 	c.stateMu.Unlock()
