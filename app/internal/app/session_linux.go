@@ -86,14 +86,18 @@ func (m sessionModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if cmd != nil {
 				cmds = append(cmds, cmd)
 			}
-			if dw.snap.Active == nil && len(dw.snap.History) > 0 && dw.snap.History[0].State == "ready" {
-				k := dw.snap.History[0].Key
-				cmds = append(cmds, func() tea.Msg {
-					if chMsg, ok := m.coord.LoadChapters(m.ctx, k); ok {
-						return chMsg
+			if dw.snap.Active == nil {
+				for _, h := range dw.snap.History {
+					if h.State == "ready" && len(m.coord.cachedChaptersFor(&h.Key)) == 0 {
+						k := h.Key
+						cmds = append(cmds, func() tea.Msg {
+							if chMsg, ok := m.coord.LoadChapters(m.ctx, k); ok {
+								return chMsg
+							}
+							return nil
+						})
 					}
-					return nil
-				})
+				}
 			}
 		}
 		if nextWatch := waitDownloadCmd(dw.ch); nextWatch != nil {
