@@ -18,6 +18,7 @@ import (
 	"github.com/susamn/taletty/app/internal/playback"
 	"github.com/susamn/taletty/app/internal/profile"
 	"github.com/susamn/taletty/app/internal/store"
+	"github.com/susamn/taletty/app/internal/theme"
 	"github.com/susamn/taletty/app/internal/ui"
 )
 
@@ -164,6 +165,9 @@ type Coordinator struct {
 	rootOwner       RootLeaseOwner
 	bookmarks       BookmarkManager
 	preRoll         time.Duration
+	smartRewind     playback.SmartRewindPolicy
+	themeMgr        *theme.Manager
+	themeError      string
 	clock           func() time.Time
 	workspaceCloser func(context.Context) error
 
@@ -257,15 +261,19 @@ func NewCoordinator(ctx context.Context, st CatalogStore, opts Options) (*Coordi
 		return nil, err
 	}
 
+	smartRewind := playback.SmartRewindPolicy{}
 	if opts.SmartRewind != nil {
 		if err := opts.SmartRewind.Validate(); err != nil {
 			return nil, err
 		}
+		smartRewind = *opts.SmartRewind
 		if opts.Player != nil {
-			if err := opts.Player.SetSmartRewind(*opts.SmartRewind); err != nil {
+			if err := opts.Player.SetSmartRewind(smartRewind); err != nil {
 				return nil, err
 			}
 		}
+	} else if opts.WorkspaceCloser != nil {
+		smartRewind = playback.DefaultSmartRewindPolicy()
 	}
 	preRoll := bookmarks.DefaultPreRoll
 	if opts.PreRoll != nil {
@@ -295,7 +303,7 @@ func NewCoordinator(ctx context.Context, st CatalogStore, opts Options) (*Coordi
 	}
 
 	lifeCtx, cancel := context.WithCancel(context.Background())
-	return &Coordinator{
+	coord := &Coordinator{
 		store:           st,
 		provider:        provider,
 		namespace:       namespace,
@@ -310,6 +318,7 @@ func NewCoordinator(ctx context.Context, st CatalogStore, opts Options) (*Coordi
 		rootOwner:       opts.RootOwner,
 		bookmarks:       bmSvc,
 		preRoll:         preRoll,
+		smartRewind:     smartRewind,
 		clock:           clock,
 		workspaceCloser: opts.WorkspaceCloser,
 		ctx:             lifeCtx,
@@ -322,7 +331,9 @@ func NewCoordinator(ctx context.Context, st CatalogStore, opts Options) (*Coordi
 		snapshot:        snapshot,
 		appearance:      appearance,
 		restore:         restore,
-	}, nil
+	}
+	coord.initTheme(ctx)
+	return coord, nil
 }
 
 func loadInitialState(ctx context.Context, st CatalogStore, provider, namespace string, hasAccount bool) (
@@ -700,7 +711,7 @@ func (c *Coordinator) InitialRestore() ui.RestoreSessionMsg {
 
 // InitialMessages returns the startup messages to apply after ui.NewModel.
 func (c *Coordinator) InitialMessages() []tea.Msg {
-	return []tea.Msg{c.InitialAppearance(), c.InitialRestore()}
+	return []tea.Msg{c.InitialAppearance(), c.InitialSettings(), c.InitialRestore()}
 }
 
 // AccountState returns the current sanitized account state.
@@ -772,6 +783,11 @@ func (c *Coordinator) Dispatch(action ui.Action) tea.Cmd {
 	case ui.SetSleepTimer:
 		return func() tea.Msg {
 			return c.setSleepTimer(action)
+		}
+	case ui.OpenSettings, ui.ApplyTheme, ui.ReloadTheme,
+		ui.SetGlyphMode, ui.CycleSmartRewind, ui.CyclePreRoll:
+		return func() tea.Msg {
+			return c.handleSettingsAction(action)
 		}
 	default:
 		return func() tea.Msg {

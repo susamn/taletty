@@ -119,7 +119,19 @@ module.
     another chapter, and fires once at chapter end; book switches, `Stop`, and
     `Close` cancel any active timer with no timer restored across restarts.
 
+- **Semantic themes, Settings, and `SIGUSR1` reload (`#34`)**:
+  - Seeds `~/.config/taletty/{colors.toml,config.toml,themes/}` via
+    `theme.SeedDefaults` without overwriting user files or desktop-managed
+    symlinks, and opens `theme.Manager` on workspace boot.
+  - Handles `OpenSettings` (`S`), `ApplyTheme`, `ReloadTheme`, `SetGlyphMode`,
+    `CycleSmartRewind`, and `CyclePreRoll`, retaining prior active palettes and
+    settings on write/parse failure.
+  - Dispatches `SIGUSR1` live reloads in `RunSession` (`theme.WatchSIGUSR1` +
+    `HandleThemeSignal`) without interrupting playback, stealing focus, or
+    discarding editor drafts, while keeping explicit presets selected during
+    Omarchy `colors.toml` updates.
+
 ## Scope boundaries
 
-- Local audiobook import (`#22`), Settings/themes (`#34`), and Linux MPRIS
-  (`#30`) remain separate downstream issues.
+- Local audiobook import (`#22`) and Linux MPRIS (`#30`) remain separate
+  downstream issues.

@@ -716,6 +716,27 @@ fake-clock sleep timer journeys over real `*store.Store`, `*profile.Workspace`,
   into another chapter, firing once at chapter end, canceling on book switch/
   `Stop`/`Close`, rejecting stale sessions, and never restoring across restarts.
 
+## Semantic themes, Omarchy integration, and Settings (#34)
+
+[`theme_linux_test.go`](../app/internal/theme/theme_linux_test.go),
+[`settings_test.go`](../app/internal/ui/settings_test.go), and
+[`theme_linux_test.go`](../app/internal/app/theme_linux_test.go) exercise
+theme parsing, Settings UI, and `SIGUSR1` live reload journeys:
+
+- `colors.toml` parsing (Taletty semantic keys and Omarchy/Alacritty/base16
+  keys), strict `#RRGGBB` validation, partial fallback, ANSI/control/NUL/
+  oversized rejection, non-overwriting `O_EXCL` seeding preserving user files
+  and desktop-managed symlinks, and sorted/deduplicated custom `themes/*.toml`
+  discovery.
+- `S` Settings view (`colors` first, `solarized-dark`, `catppuccin`, custom
+  themes, `[Reload active]`, `Smart rewind`, `Bookmark pre-roll`, `Glyph mode`,
+  terminal font guidance) with candidate-vs-active separation, atomic
+  `config.toml` persistence, and write-failure recovery.
+- `SIGUSR1` live reload via `RunSession` and `HandleThemeSignal` while playing
+  and editing drafts (preserving playback, focus, and drafts, retaining prior
+  usable palette on malformed reload, ignoring stale generations, and keeping
+  explicit presets selected during Omarchy updates).
+
 ## Runtime packaging and platform matrix (#26)
 
 [ADR 003](adr/003-runtime-and-platform-matrix.md) defines the OS/architecture

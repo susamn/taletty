@@ -26,6 +26,38 @@ idempotent; selecting `colors` alone does not magically install a desktop hook.
 Never read the old Audible app or borrow podmutt's runtime config directory.
 No Omarchy dependency is required outside that desktop environment.
 
+## Explicit Omarchy hook
+
+To sync Omarchy theme changes into Taletty without touching Taletty's `config.toml`
+or interrupting playback, install an explicit idempotent hook (for example in
+`~/.config/omarchy/hooks/theme-set.d/50-taletty.sh` or an explicit user script):
+
+```sh
+#!/bin/sh
+set -eu
+
+src="${1:-$HOME/.config/omarchy/current/theme/colors.toml}"
+dst_dir="$HOME/.config/taletty"
+dst="$dst_dir/colors.toml"
+
+[ -r "$src" ] || exit 0
+mkdir -p -m 0700 "$dst_dir"
+tmp="$(mktemp "$dst_dir/.colors.toml.tmp.XXXXXX")"
+trap 'rm -f "$tmp"' EXIT
+chmod 0600 "$tmp"
+cp "$src" "$tmp"
+mv -f "$tmp" "$dst"
+trap - EXIT
+
+pkill -USR1 -x taletty >/dev/null 2>&1 || true
+```
+
+Alternatively, users who prefer desktop-managed symlinks may link
+`~/.config/taletty/colors.toml` to `~/.config/omarchy/current/theme/colors.toml`;
+Taletty's initial seeding (`O_CREAT|O_EXCL|O_NOFOLLOW`) never overwrites an existing
+file or symlink. Sending `SIGUSR1` reloads `colors.toml` live when `theme = "colors"`
+is active and leaves explicit presets (`solarized-dark`, `catppuccin`) selected.
+
 ## Settings
 
 Offer `colors`, built-in `solarized-dark` and `catppuccin`, plus valid custom
