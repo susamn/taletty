@@ -25,11 +25,13 @@ mkdir -p coverage
 python3 tools/check_inventory.py --root . --adapter-report coverage/adapter.json
 ```
 
-Engine contract tests always execute real Python and require the pinned SDK. CI
-explicitly installs ffmpeg/ffprobe and sets `TALETTY_REQUIRE_MEDIA_TOOLS=1`, requiring
-both actual tools to be ready. Locally absent tools produce truthful missing states;
-deterministic fake-tool success/failure/timeout cases still run. No provider/account
-or protected-media fixture is used. No installer or silent system pip mutation exists.
+Engine and app contract tests execute real Python/media tools where required. CI
+explicitly installs `ffmpeg`/`ffprobe`/`mpv` and sets `TALETTY_REQUIRE_MEDIA_TOOLS=1`,
+requiring actual tools to be ready for adapter/engine media preparation and app
+`mpv --ao=null` playback tests. Locally absent tools produce truthful missing
+states or explicit local skips; deterministic fake-tool/fake-IPC success, failure
+and timeout cases still run. No provider/account or protected-media fixture is
+used. No installer or silent system pip mutation exists.
 
 Build/test **each Go module independently** (Go 1.26/1.27 in CI):
 

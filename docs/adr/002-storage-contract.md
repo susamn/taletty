@@ -290,3 +290,27 @@ error, cancellation or panic.
   startup `ReconcileActiveJobs` (marking active jobs `ready` only when confirmed
   published, otherwise `failed`/`interrupted`). No app startup wiring, engine
   integration or UI persistence wiring is claimed by `#108`.
+
+## Fresh private profile root bootstrap (#10)
+
+`app/internal/profile` (`paths.go`, `bootstrap_linux.go`) implements `Open(ctx, home, nowMS)`
+and `Workspace` over `DefaultRoot`, `store.NewOwner`, `store.Open`, and
+`Store.LocalMediaList`/`Store.ReconcileActiveJobs` without importing `engine`.
+
+- Validates existing `~/.config` as a real `os.Geteuid()`-owned directory
+  (`O_NOFOLLOW`, without modifying its permissions) or creates it at `0700`,
+  then creates/verifies `~/.config/taletty/` (`0700`), `downloads/` (`0700`),
+  and `.auth.lock` (`0600`, `Nlink == 1`, `(Dev, Ino)` match, nonblocking
+  `LOCK_EX` -> `ErrBusy`) via anchored `O_NOFOLLOW`/`O_CLOEXEC` descriptors
+  without `chmod` repair.
+- Ignores `XDG_CONFIG_HOME`, never scans/reads/modifies `~/.config/audible-tui/`,
+  performs no login or device registration, and preserves existing `auth.json`
+  (`0600`) and all Taletty-owned repository data across restarts.
+- Reconciles interrupted active download jobs against validated private files
+  under `downloads/` (explicitly rejecting empty, `.`, `..`, NUL, or backslash
+  segments, symlinks, hardlinks, nonregular files, and unsafe modes/owners).
+- `Workspace.Close(ctx)` closes `Store` before `Owner` without unlocking
+  `.auth.lock` underneath active operations or leases if `ctx` expires.
+- Limits: Linux-only bootstrap foundation; no `cmd/taletty` CLI/UI startup
+  wiring, engine `Client` integration, or Taletty v2 schema migration yet. See
+  [the profile README](../../app/internal/profile/README.md).
