@@ -141,9 +141,7 @@ calls on startup.
 
 ### Executable names
 
-- **`taletty`**: Primary user-facing TUI and application binary (`app/cmd/taletty`,
-  wired in `#13`+; `app` currently provides internal packages without a `cmd/taletty`
-  entrypoint yet).
+- **`taletty`**: Primary user-facing TUI and application binary (`app/cmd/taletty`).
 - **`taletty-engine`**: Headless engine CLI binary (`engine/cmd/taletty-engine`),
   exposing `doctor`, `login`, `sync`, and `download <ASIN>`.
 
@@ -151,8 +149,8 @@ calls on startup.
 
 - **Compiled into Go binaries:**
   - `app`: Bubble Tea v2 / Lip Gloss v2 UI stack, `github.com/ncruces/go-sqlite3 v0.32.0`
-    + `github.com/tetratelabs/wazero v1.11.0` (embedded SQLite `3.51.3`), and
-    `golang.org/x/sys`.
+    + `github.com/tetratelabs/wazero v1.11.0` (embedded SQLite `3.51.3`),
+    `github.com/susamn/taletty/engine v0.1.0`, and `golang.org/x/sys`.
   - `engine`: `golang.org/x/sys` and embedded Python adapter scripts (`//go:embed`).
 - **System dependencies:** `mpv` (`>=0.37.0` evidenced), `ffmpeg` + `ffprobe`
   (`>=6.1.1` evidenced), `glibc` (`>=2.39` evidenced on Ubuntu 24.04), and

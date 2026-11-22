@@ -38,9 +38,10 @@ Network access is required only for initial dependency/package installation and
 explicit Audible `login`/`sync`/`download` operations; cached library browsing and
 local `mpv` playback work completely offline after setup.
 
-Executable names are `taletty` (primary TUI/app binary, wired in #13+) and
-`taletty-engine` (headless engine CLI). The app pins a released engine module;
-engine module/CLI/bridge versions and protocol must agree. Engine release #8
+Executable names are `taletty` (primary TUI/app binary, `app/cmd/taletty`) and
+`taletty-engine` (headless engine CLI). The app pins the released engine module
+(`github.com/susamn/taletty/engine v0.1.0`); engine module/CLI/bridge versions
+and protocol must agree. Engine release #8
 prepares the first independently consumable engine release (`engine/v0.1.0`,
 `ContractVersion = "v0.1.0"`, `BridgeProtocolVersion = 1`,
 `PinnedPythonVersion = "3.12"`, `PinnedAudibleVersion = "0.13.1"`), adds

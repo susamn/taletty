@@ -532,9 +532,27 @@ and [`account_test.go`](../app/internal/ui/account_test.go) exercise
   Account overlay key ownership (blocking transport/quit/pane shortcuts),
   resize preservation across `79x19`/`80x20`/`144x42`, and ANSI sanitization.
 
-See [the app coordinator README](../app/internal/app/README.md); concrete
-`engine/v0.1.0` pinning and `app/cmd/taletty` entrypoint wiring remain `#132`
-(blocked by `#131` and maintainer tagging `engine/v0.1.0`).
+See [the app coordinator README](../app/internal/app/README.md) and
+[the app CLI README](../app/cmd/taletty/README.md).
+
+## Pinned engine integration and `taletty` entrypoint (#132 under #13)
+
+[`engine_linux_test.go`](../app/internal/app/engine_linux_test.go) and
+[`main_linux_test.go`](../app/cmd/taletty/main_linux_test.go) verify:
+
+- `app/go.mod` pins released `github.com/susamn/taletty/engine v0.1.0` (no
+  `replace ../engine`, passing `GOWORK=off` and `go mod tidy -diff`).
+- `EngineAccount` adapts `audible.DiscoverPython`, `audible.Doctor`,
+  `audible.OpenBorrowed` under `*store.RootLease`, `Client.Login`, and
+  `Client.Library` lazily (never invoking Python during cached boot), tested
+  against a deterministic bridge-v1 helper executable (plus `TALETTY_TEST_PYTHON`
+  when configured) and a real controlling-PTY `Login` child.
+- `RunSession` cleanly exits and restores `terminal.Run` around interactive
+  `Login` TTY handoffs before resuming the TUI.
+- `app/cmd/taletty` (`taletty`) handles `--help`, invalid flags/`--python`
+  usage exit `2` without echoing values, missing `/dev/tty` exit `1`,
+  `profile.ErrBusy`, and real controlling-PTY cached launch/quit with exact
+  `termios` restoration and untouched `~/.config/audible-tui/`.
 
 ## Runtime packaging and platform matrix (#26)
 
