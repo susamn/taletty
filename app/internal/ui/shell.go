@@ -131,6 +131,12 @@ const (
 	MarkUnfinished         ActionKind = "mark-unfinished"
 	ReplayBook             ActionKind = "replay-book"
 	SetSleepTimer          ActionKind = "set-sleep-timer"
+	OpenSettings           ActionKind = "open-settings"
+	ApplyTheme             ActionKind = "apply-theme"
+	ReloadTheme            ActionKind = "reload-theme"
+	SetGlyphMode           ActionKind = "set-glyph-mode"
+	CycleSmartRewind       ActionKind = "cycle-smart-rewind"
+	CyclePreRoll           ActionKind = "cycle-pre-roll"
 )
 
 // Current-audio actions carry the source session so the coordinator can reject
@@ -155,62 +161,67 @@ type Action struct {
 // Model owns presentation only. Dispatch creates commands; it must not perform
 // blocking I/O. Playback is authoritative only when a coordinator sends a snapshot.
 type Model struct {
-	data             SnapshotMsg
-	appearance       AppearanceMsg
-	layout           Layout
-	focus            Pane
-	content          Pane
-	selected         string
-	chapterCursor    int
-	libraryView      LibraryView
-	libraryCursor    int
-	sortOrder        SortOrder
-	sortOpen         bool
-	sortCursor       int
-	filterQuery      string
-	filterDraft      string
-	filterPrev       string
-	filterEditing    bool
-	downloads        []DownloadJob
-	downloadsOpen    bool
-	downloadsCursor  int
-	dlMenu           *downloadActionMenu
-	bookMenu         *bookActionMenu
-	sleepOpen        bool
-	sleepCursor      int
-	dialogSeq        uint64
-	control          int
-	failure          string
-	help             bool
-	helpOffset       int
-	accountOpen      bool
-	accountCursor    int
-	account          AccountState
-	bookmarksOpen    bool
-	bookmarksGlobal  bool
-	bookmarksOrigin  Pane
-	bookmarksTarget  string
-	bookmarksTitle   string
-	bookmarksLoading bool
-	bookmarksError   string
-	bookmarks        []Bookmark
-	bookmarkCursor   int
-	bookmarkFocus    bookmarkArea
-	bookmarkNoteOff  int
-	bmFilterQuery    string
-	bmFilterDraft    string
-	bmFilterPrev     string
-	bmFilterEditing  bool
-	bmMenuOpen       bool
-	bmMenuCursor     int
-	bmMenuTargetID   string
-	bmMenuTargetKey  string
-	bmMenuStale      bool
-	bmDialogSeq      uint64
-	note             *noteEditor
-	confirmation     *confirmation
-	quitWarning      bool
-	dispatch         func(Action) tea.Cmd
+	data               SnapshotMsg
+	appearance         AppearanceMsg
+	layout             Layout
+	focus              Pane
+	content            Pane
+	selected           string
+	chapterCursor      int
+	libraryView        LibraryView
+	libraryCursor      int
+	sortOrder          SortOrder
+	sortOpen           bool
+	sortCursor         int
+	filterQuery        string
+	filterDraft        string
+	filterPrev         string
+	filterEditing      bool
+	downloads          []DownloadJob
+	downloadsOpen      bool
+	downloadsCursor    int
+	dlMenu             *downloadActionMenu
+	bookMenu           *bookActionMenu
+	sleepOpen          bool
+	sleepCursor        int
+	settingsOpen       bool
+	settingsSection    int
+	settingsCursor     int
+	settingsPrefCursor int
+	settings           SettingsState
+	dialogSeq          uint64
+	control            int
+	failure            string
+	help               bool
+	helpOffset         int
+	accountOpen        bool
+	accountCursor      int
+	account            AccountState
+	bookmarksOpen      bool
+	bookmarksGlobal    bool
+	bookmarksOrigin    Pane
+	bookmarksTarget    string
+	bookmarksTitle     string
+	bookmarksLoading   bool
+	bookmarksError     string
+	bookmarks          []Bookmark
+	bookmarkCursor     int
+	bookmarkFocus      bookmarkArea
+	bookmarkNoteOff    int
+	bmFilterQuery      string
+	bmFilterDraft      string
+	bmFilterPrev       string
+	bmFilterEditing    bool
+	bmMenuOpen         bool
+	bmMenuCursor       int
+	bmMenuTargetID     string
+	bmMenuTargetKey    string
+	bmMenuStale        bool
+	bmDialogSeq        uint64
+	note               *noteEditor
+	confirmation       *confirmation
+	quitWarning        bool
+	dispatch           func(Action) tea.Cmd
 }
 
 func NewModel(data SnapshotMsg, dispatch func(Action) tea.Cmd) Model {
@@ -294,6 +305,10 @@ func (m Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 		m.accountOpen = false
 	case AccountStatusMsg:
 		m.account = msg.Account
+	case OpenSettingsMsg:
+		m.openSettings(msg.Settings)
+	case SettingsMsg:
+		m.settings = msg.Settings
 	case OpenBookmarksMsg:
 		m.applyOpenBookmarks(msg)
 	case BookmarksMsg:
@@ -363,6 +378,9 @@ func (m Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 		if m.sleepOpen {
 			return m.sleepKey(key)
 		}
+		if m.settingsOpen {
+			return m.settingsKey(key)
+		}
 		if key == "q" || key == "ctrl+c" {
 			return m.request(Action{Kind: RequestQuit})
 		}
@@ -408,6 +426,12 @@ func (m Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 			return m.request(Action{Kind: ToggleFavorite, Key: m.selected})
 		case "a":
 			m.openAccount(nil)
+			return m, nil
+		case "S":
+			m.openSettings(nil)
+			if m.dispatch != nil {
+				return m.request(Action{Kind: OpenSettings})
+			}
 			return m, nil
 		case "b":
 			return m.triggerCaptureBookmark()

@@ -144,7 +144,7 @@ func (m Model) paneRows(pane Pane, width int) (string, []string, int) {
 // frame owns borders, a cursor gutter and one-cell inner padding. It never clips
 // renderer styles as untrusted metadata: raw text is fitted before paint is added.
 func (m Model) frame(pane Pane, size Rect, name string, rows []string, selected int) []string {
-	focused := pane == m.focus && !m.help && !m.ownsModal() && !m.accountOpen && !m.sortOpen && !m.downloadsOpen && m.bookMenu == nil && !m.sleepOpen
+	focused := pane == m.focus && !m.help && !m.ownsModal() && !m.accountOpen && !m.sortOpen && !m.downloadsOpen && m.bookMenu == nil && !m.sleepOpen && !m.settingsOpen
 	if m.bookmarksOpen {
 		focused = pane == PlayerPane && m.bookmarkFocus == bmFocusPlayer && !m.help && !m.ownsModal() && !m.accountOpen && !m.sortOpen && !m.bmMenuOpen && !m.bmFilterEditing
 	}
@@ -210,14 +210,18 @@ func (m Model) View() tea.View {
 	}
 	if g.Mode == ResizeOnly {
 		message := fmt.Sprintf("Resize to %dx%d (now %dx%d); q quit", MinWidth, MinHeight, g.Screen.Width, g.Screen.Height)
+		tint := m.appearance.Palette.Text
 		if m.quitWarning {
 			message = "Unsaved draft: q again quits; Esc keeps draft"
+			tint = m.appearance.Palette.Error
 		}
-		return tea.NewView(PadLine(message, g.Screen.Width, m.tail()))
+		return tea.NewView(m.paint(PadLine(message, g.Screen.Width, m.tail()), tint))
 	}
 	var lines []string
 	if m.help {
 		lines = m.helpLines()
+	} else if m.settingsOpen {
+		lines = m.settingsLines()
 	} else if m.downloadsOpen {
 		lines = m.downloadsLines()
 	} else if m.bookmarksOpen {
@@ -299,6 +303,9 @@ func (m Model) View() tea.View {
 	}
 	if m.sleepOpen {
 		hints = "j/k/Tab choose | Enter arm | Esc back | Transport disabled in Sleep menu"
+	}
+	if m.settingsOpen {
+		hints = "j/k select | Tab section | Enter apply/toggle | Esc back | Transport disabled in Settings"
 	}
 	if m.downloadsOpen {
 		hints = "j/k jobs | Enter/x actions | Esc back | Space/,/. current audio"
