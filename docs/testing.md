@@ -554,6 +554,25 @@ See [the app coordinator README](../app/internal/app/README.md) and
   `profile.ErrBusy`, and real controlling-PTY cached launch/quit with exact
   `termios` restoration and untouched `~/.config/audible-tui/`.
 
+## Book playback, chapter inspection, and miniplayer actions (#15)
+
+[`chapters_test.go`](../app/internal/ui/chapters_test.go) and
+[`playback_linux_test.go`](../app/internal/app/playback_linux_test.go) exercise
+J02/J07/J08/J13 playback and chapter journeys over real `*store.Store`,
+`*profile.Workspace`, `*playback.Controller`, `NewRootMediaChecker`,
+`FFprobeChapterReader`, and `testkit.Runner`:
+
+- Loading downloaded books at saved position/speed, inspecting another
+  downloaded book's chapters without replacing current audio, same-book paused
+  chapter seek, B3 `Stay` / `Switch and play` cross-book confirmation
+  (checkpointing the prior book and rejecting stale confirmations), missing/
+  unsafe audio download prompts, `,`/`.`/`-`/`=`/`[`/`]`/`Space` transport,
+  persisted volume settings, `PollPlayback`, and `Close` checkpoint/reap.
+- `TestRealGeneratedMediaPlaybackAndChapters` generates a real 2-chapter `.m4b`
+  via `ffmpeg`, reads chapters via `FFprobeChapterReader`, and drives real
+  `mpv --ao=null` through `app.Coordinator` (skipped locally only when media
+  tools are absent; mandatory fail in CI when `TALETTY_REQUIRE_MEDIA_TOOLS=1`).
+
 ## Runtime packaging and platform matrix (#26)
 
 [ADR 003](adr/003-runtime-and-platform-matrix.md) defines the OS/architecture
