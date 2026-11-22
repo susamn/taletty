@@ -427,6 +427,33 @@ confinement checks. See [the profile README](../app/internal/profile/README.md)
 and [ADR 002](adr/002-storage-contract.md). Full `cmd/taletty` CLI/UI startup
 wiring, live sign-in, and Taletty v2 schema upgrades remain future work.
 
+## Persistent sequential download-job coordinator (#16)
+
+[`coordinator_linux_test.go`](../app/internal/downloads/coordinator_linux_test.go)
+exercises `downloads.Coordinator` against real `*store.Store` temporary SQLite
+databases, anchored `store.RootOwner` private-file verification under
+`downloads/`, and deterministic channel/barrier fake `Downloader` fixtures (no
+real sleeps): startup reconciliation of interrupted active jobs (`JobReady` for
+verified private files vs `JobFailed`/`FailureInterrupted` for missing/unsafe
+files) with preserved waiting queue order; concurrent `Enqueue` deduplication
+(`ErrAlreadyQueued`, `ErrAlreadyDownloaded`) and sequential single-worker
+execution; stage transitions (`licensing`, `downloading`, `preparing`,
+`publishing`), monotonic `BytesReceived` with known vs unknown `BytesTotal`,
+and rejection of stale `OperationID`, out-of-order sequence, backwards stage,
+and invalid progress events; active cancellation keeping `Canceling` visible
+and the active slot occupied until worker join, plus commit-point race
+resolution (`JobReady` + `LocalMedia` winning over late cancel without
+unlinking committed media vs `JobCanceled` pre-commit); waiting queue
+`RemoveWaiting` (preserving active job, local media, history, bookmarks, and
+favorites) and atomic `ReorderWaiting`/`MoveWaiting` preserving authoritative
+order on persistence failure; explicit `Retry` for terminal `JobFailed`/
+`JobCanceled` only with zero automatic retries on `entitlement_denied` or
+`throttled` and sanitized failure messages; store fault injection; non-dropped
+stage/terminal `Watch(ctx)` delivery and stalled-watcher overflow safety; and
+idempotent `Close(ctx)` cancellation/join. See
+[the downloads README](../app/internal/downloads/README.md); terminal UI
+views/actions (`#17`, J04–J06) and `engine` integration (`#13`) remain open.
+
 ## Release evidence
 
 A release candidate needs an evidence matrix linking each supported journey to
