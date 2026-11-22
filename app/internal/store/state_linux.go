@@ -504,3 +504,37 @@ func (s *Store) Bookmarks(ctx context.Context, key BookKey) ([]Bookmark, error) 
 	}
 	return out, nil
 }
+
+// AllBookmarks returns all bookmarks across all books ordered by BookKey, position_ns, and bookmark_id.
+func (s *Store) AllBookmarks(ctx context.Context) ([]Bookmark, error) {
+	var out []Bookmark
+	err := s.withTx(ctx, false, func(c *sqlite3.Conn) error {
+		return queryStmt(c,
+			`SELECT bi.provider, bi.namespace, bi.id, bm.bookmark_id, bm.position_ns, bm.note, bm.chapter_id, bm.chapter_title, bm.created_at_ms, bm.updated_at_ms
+			 FROM bookmark bm
+			 JOIN book_identity bi ON bi.book_key = bm.book_key
+			 ORDER BY bi.provider ASC, bi.namespace ASC, bi.id ASC, bm.position_ns ASC, bm.bookmark_id ASC`,
+			func(stmt *sqlite3.Stmt) error {
+				out = append(out, Bookmark{
+					ID: stmt.ColumnText(3),
+					Key: BookKey{
+						Provider:  stmt.ColumnText(0),
+						Namespace: stmt.ColumnText(1),
+						ID:        stmt.ColumnText(2),
+					},
+					PositionNS:   stmt.ColumnInt64(4),
+					Note:         stmt.ColumnText(5),
+					ChapterID:    columnOptionalText(stmt, 6),
+					ChapterTitle: columnOptionalText(stmt, 7),
+					CreatedAtMS:  stmt.ColumnInt64(8),
+					UpdatedAtMS:  stmt.ColumnInt64(9),
+				})
+				return nil
+			},
+		)
+	})
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
