@@ -85,6 +85,10 @@ func TestCleanTempDirInstallAndDoctor(t *testing.T) {
 	if err := os.WriteFile(wrapper, []byte("#!/bin/sh\nexec \""+python+"\" \"$@\"\n"), 0700); err != nil {
 		t.Fatal(err)
 	}
+	decoyDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(decoyDir, "python3.12"), []byte("#!/bin/sh\nexit 1\n"), 0700); err != nil {
+		t.Fatal(err)
+	}
 
 	for _, tc := range []struct {
 		name string
@@ -94,7 +98,7 @@ func TestCleanTempDirInstallAndDoctor(t *testing.T) {
 			name: "prepared-via-env",
 			env: map[string]string{
 				"TALETTY_PYTHON": python,
-				"PATH":           t.TempDir(),
+				"PATH":           decoyDir + ":" + os.Getenv("PATH"),
 			},
 		},
 		{
