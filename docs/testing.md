@@ -458,6 +458,29 @@ confinement checks. See [the profile README](../app/internal/profile/README.md)
 and [ADR 002](adr/002-storage-contract.md). Full `cmd/taletty` CLI/UI startup
 wiring, live sign-in, and Taletty v2 schema upgrades remain future work.
 
+## Persistent timestamped bookmarks and targeting policy (#18)
+
+[`service_linux_test.go`](../app/internal/bookmarks/service_linux_test.go)
+exercises `bookmarks.Service` against real `*store.Store` on temporary SQLite,
+real `*playback.Controller` (with a fake `playback.Backend`), real `*store.Owner`
+private roots, and a deterministic fake clock: playing and paused capture,
+`ErrNoLoadedAudio` rejection when idle/stopped/failed/nil-book, highlighted-vs-loaded
+book separation, pre-roll zero clamping and chapter-boundary distinction, delayed
+save after playback advances or switches books, multiline note validation
+(rejecting whitespace-only, control characters, Unicode `Cf`, and invalid UTF-8),
+duplicate positions with distinct stable IDs, `EditNote` without recapturing
+position or reapplying pre-roll (plus missing/wrong-book rejection), single-bookmark
+`Delete` preserving audio/history/favorites, offline `List` ordering, same-book
+paused jump without double rewind, stale session rejection, cross-book jump
+(preserving prior checkpoint via `Controller`, loading target, seeking exact
+position, including root rename and unknown catalog duration), missing/unsafe/
+symlink/hardlink/mode-mismatch local audio returning `ErrMediaMissing` without
+touching current audio, mid-check stale confirmation rejection, store/checkpoint
+faults retaining drafts/state, and `-race` concurrency. See
+[the bookmarks README](../app/internal/bookmarks/README.md); UI modal/key wiring
+(`#19`), full J09 UI journeys, and global bookmark search/export (`#23`) remain
+open.
+
 ## Release evidence
 
 A release candidate needs an evidence matrix linking each supported journey to
