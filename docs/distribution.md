@@ -1,35 +1,48 @@
 # Distribution and platform support plan
 
-Status: planned, not shipped. Exact minimum versions/runtime strategy require #26.
+Status: runtime/platform contract accepted in [ADR 003](adr/003-runtime-and-platform-matrix.md)
+(#26); downloadable artifacts and native packages remain planned, not shipped
+(#27, #28, #29, #24).
 
 ## Target matrix
 
-| System | Architecture | Planned delivery | Support gate |
+| System | Architecture | Planned delivery | Current status & support gate |
 |---|---|---|---|
-| Linux | amd64 / x86_64 | First release: tar archive + source install (#27); native deb/rpm follow (#28) | Clean install and runtime tests on declared baseline |
-| Linux | arm64 / aarch64 | Same artifacts/staging as amd64 | Native/emulated runtime evidence, not just cross-build |
-| macOS | amd64 / Intel | Later archive + reviewed Homebrew approach (#29) | Native lifecycle/install/media verification |
-| macOS | arm64 / Apple Silicon | Later archive + reviewed Homebrew approach (#29) | Native lifecycle/install/media verification |
-| Windows / other OS/architectures | — | Not currently supported or scheduled | Separate feasibility and scoped work required |
+| Linux | amd64 / x86_64 | First release: tar archive + source install (#27); native deb/rpm follow (#28) | Runtime-verified in CI (Ubuntu 24.04 / glibc 2.39); clean install/upgrade/removal tests required in #27/#28/#24 |
+| Linux | arm64 / aarch64 | Same artifacts/staging as amd64 (#27, #28) | Source cross-build verified only (`GOOS=linux GOARCH=arm64 CGO_ENABLED=0`); native/emulated runtime evidence required in #27/#28 before release support claim |
+| macOS | amd64 / Intel | Later archive + reviewed Homebrew approach (#29) | Staged later; Darwin implementations and native lifecycle/install/media verification required (#29) |
+| macOS | arm64 / Apple Silicon | Later archive + reviewed Homebrew approach (#29) | Staged later; Darwin implementations and native lifecycle/install/media verification required (#29) |
+| Windows / other OS/architectures | — | Explicitly unsupported and unscheduled | Separate feasibility, security model, and scoped work required |
 
-No downloadable artifact or supported platform exists yet. Debian package names use
+No downloadable artifact or supported release exists yet. Debian package names use
 amd64/arm64; RPM uses x86_64/aarch64. Do not mistake naming differences for extra targets.
-Minimum distro/libc/macOS/Go/Python/mpv/ffmpeg versions will come from tests in #26,
-not guesses in documentation. Cross-compiled artifacts must be distinguished from
-runtime-verified targets in release notes.
+Tested-evidence minimum versions recorded in [ADR 003](adr/003-runtime-and-platform-matrix.md):
+Go `1.26.0+` (CI verified `1.26.11` & `1.27.4`), CPython `3.12` (CI `3.12.16`, local `3.12.3`),
+Ubuntu 24.04 / `glibc 2.39`, SQLite `>=3.38` (embedded `3.51.3` in `app`, `3.45.1` in schema oracle),
+`ffmpeg 7:6.1.1` / `ffprobe`, `mpv 0.37.0`, and `audible==0.13.1`. Cross-compiled artifacts
+must be distinguished from runtime-verified targets in release notes; Go cross-builds
+never prove runtime support.
 
 ## Runtime and engine delivery
 
 A Go binary alone is not the full install: the Audible adapter needs pinned Python
-dependencies, playback needs mpv, and preparation needs a compatible ffmpeg build.
-#26 decides an isolated managed environment versus bundled runtime per artifact.
-No silent system-Python mutation, unpinned first-run installs or privileged network
-pip calls in package lifecycle scripts. Explain first-install network requirements
-separately from offline library/playback after setup.
+dependencies, playback needs `mpv`, and preparation needs a compatible `ffmpeg`/`ffprobe` build.
+Per [ADR 003](adr/003-runtime-and-platform-matrix.md), Taletty standardizes on an
+**isolated managed CPython 3.12 virtual environment** pinned to
+[`requirements.lock`](../engine/connectors/audible/internal/bridge/adapter/requirements.lock)
+for source installs, Linux tar archives (#27), and `.deb`/`.rpm` packages (#28),
+with optional reproducibly staged bundled runtime packaging permitted for standalone
+tarballs (#27) or macOS (#29). No silent system-Python mutation, unpinned first-run
+installs, or privileged network `pip` calls in package lifecycle scripts are permitted.
+Network access is required only for initial dependency/package installation and
+explicit Audible `login`/`sync`/`download` operations; cached library browsing and
+local `mpv` playback work completely offline after setup.
 
-The app pins a released engine module; engine module/CLI/bridge versions and protocol
-must agree. Engine release #8 prepares the first independently consumable engine
-release (`engine/v0.1.0`, `ContractVersion = "v0.1.0"`, `BridgeProtocolVersion = 1`,
+Executable names are `taletty` (primary TUI/app binary, wired in #13+) and
+`taletty-engine` (headless engine CLI). The app pins a released engine module;
+engine module/CLI/bridge versions and protocol must agree. Engine release #8
+prepares the first independently consumable engine release (`engine/v0.1.0`,
+`ContractVersion = "v0.1.0"`, `BridgeProtocolVersion = 1`,
 `PinnedPythonVersion = "3.12"`, `PinnedAudibleVersion = "0.13.1"`), adds
 `ResolvePython`/`DiscoverPython` (`--python` > `TALETTY_PYTHON` > `python3.12` >
 `python3`, never scanning `~/.config/audible-tui` or mutating system Python), adds
@@ -37,16 +50,19 @@ release (`engine/v0.1.0`, `ContractVersion = "v0.1.0"`, `BridgeProtocolVersion =
 temp-dir `go install ./cmd/taletty-engine` plus an ephemeral external consumer
 module outside the workspace. See [the engine README](../engine/README.md) for
 prerequisites (Go `1.26.0+`, CPython `3.12` +
-[`requirements.txt`](../engine/connectors/audible/internal/bridge/adapter/requirements.txt),
+[`requirements.txt`](../engine/connectors/audible/internal/bridge/adapter/requirements.txt) /
+[`requirements.lock`](../engine/connectors/audible/internal/bridge/adapter/requirements.lock),
 `ffmpeg`/`ffprobe`), source install steps, and post-merge maintainer tagging
 (`git tag -a engine/v0.1.0 ...`). Keep runtime discovery overrideable, report
 missing/incompatible tools in doctor and never expose credentials in diagnostics.
 
 ## Packaging and upgrades
 
-- #27: versioned Linux archives/source installer, checksums and dependency manifest/SBOM.
+- #27: versioned Linux archives/source installer, SHA-256 `SHA256SUMS` checksums,
+  SPDX/CycloneDX SBOMs, and build provenance attestations.
 - #28: deb/rpm packages with declared dependencies, architecture checks and install/
-  upgrade/remove/purge tests. Keep user auth/history/notes/media on removal.
+  upgrade/remove/purge tests. Keep user auth/history/notes/media under `~/.config/taletty/`
+  on upgrade and removal; explicit purge remains separate and never sweeps user home directories.
 - #29: macOS audit, archives and explicit formula-versus-cask/signing decisions.
   A CLI normally uses a formula; an app bundle must be intentional. Disclose unsigned
   status rather than promising notarization that does not exist.

@@ -349,7 +349,8 @@ accounts, protected media and full app release remain open.
 
 - Contract and runtime pinning constants (`ContractVersion = "v0.1.0"`,
   `BridgeProtocolVersion = 1`, `PinnedPythonVersion = "3.12"`,
-  `PinnedAudibleVersion = "0.13.1"`) matching `requirements.txt` and `doctor.py`.
+  `PinnedAudibleVersion = "0.13.1"`) matching `requirements.txt`,
+  `requirements.lock`, and `doctor.py`.
 - `ResolvePython` / `DiscoverPython` strict precedence (`explicit` >
   `TALETTY_PYTHON` > `python3.12` > `python3`), clean rejection of invalid
   explicit/env overrides without fallback, `ErrRuntimeMissing` when absent, and
@@ -506,6 +507,34 @@ faults retaining drafts/state, and `-race` concurrency. See
 [the bookmarks README](../app/internal/bookmarks/README.md); UI modal/key wiring
 (`#19`), full J09 UI journeys, and global bookmark search/export (`#23`) remain
 open.
+
+## Runtime packaging and platform matrix (#26)
+
+[ADR 003](adr/003-runtime-and-platform-matrix.md) defines the OS/architecture
+support matrix, tested-evidence minimum versions, isolated managed CPython 3.12
+venv packaging strategy, offline vs network boundaries, `~/.config/taletty/`
+preservation rules, and checksum/SBOM/provenance requirements for `#27`–`#29`.
+
+[`tests/tooling/test_packaging_contract.py`](../tests/tooling/test_packaging_contract.py)
+runs under the `coverage-tooling` gate (without adding unmeasured production
+Python source) and verifies:
+
+- [`requirements.lock`](../engine/connectors/audible/internal/bridge/adapter/requirements.lock)
+  pins exact `==` versions for `audible==0.13.1` and its 14 runtime transitive
+  dependencies with no unpinned, VCS, or local-path entries, and excludes
+  test-only `coverage` and `pip`.
+- [`tools/requirements.txt`](../tools/requirements.txt) pins `coverage==7.6.1`.
+- `doctor.py` (`PROTOCOL`, `AUDIBLE_VERSION`, CPython `3.12`) and
+  `engine/connectors/audible/version.go` (`ContractVersion`,
+  `BridgeProtocolVersion`, `PinnedPythonVersion`, `PinnedAudibleVersion`) agree
+  with `requirements.txt` and `requirements.lock`.
+- Cross-references and relative links across ADR 003 and
+  [the distribution plan](distribution.md) remain consistent.
+
+`GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build ./...` verifies `engine` and
+`app` source cross-compilation only; it does **not** prove `linux/arm64` runtime
+support, which remains gated on native or emulated runtime verification in
+`#27`/`#28`.
 
 ## Release evidence
 

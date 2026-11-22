@@ -17,20 +17,20 @@ Exposed in [`connectors/audible`](connectors/audible/README.md):
 
 ## Prerequisites
 
-- **OS**: Linux (`amd64` / `arm64` source builds; runtime-verified on Linux `amd64` in CI).
-- **Go**: `1.26.0+` (CI verified on Go `1.26.x` and `1.27.x`).
-- **Python**: CPython `3.12` with [`connectors/audible/internal/bridge/adapter/requirements.txt`](connectors/audible/internal/bridge/adapter/requirements.txt) (`audible==0.13.1`) installed in an explicit virtual environment.
-- **Media tools**: `ffmpeg` and `ffprobe` on `PATH` for `download` preparation/validation and full `doctor` readiness (`login` and `sync` require only Python + `audible`).
+- **OS**: Linux (`amd64` runtime-verified in CI on Ubuntu 24.04 / `glibc 2.39`; `arm64` source cross-build verified only — native/emulated runtime verification required in `#27`/`#28`). See [ADR 003](../docs/adr/003-runtime-and-platform-matrix.md).
+- **Go**: `1.26.0+` (CI verified on Go `1.26.11` and `1.27.4`).
+- **Python**: CPython `3.12` (CI `3.12.16`, local `3.12.3`) with [`connectors/audible/internal/bridge/adapter/requirements.lock`](connectors/audible/internal/bridge/adapter/requirements.lock) (reproducible transitive pins for [`requirements.txt`](connectors/audible/internal/bridge/adapter/requirements.txt), `audible==0.13.1`) installed in an explicit isolated virtual environment.
+- **Media tools**: `ffmpeg` (`7:6.1.1` evidenced in CI) and `ffprobe` on `PATH` for `download` preparation/validation and full `doctor` readiness (`login` and `sync` require only Python + `audible`).
 
 Taletty never runs `pip`, never mutates system Python, and never scans `~/.config/audible-tui` or legacy paths.
 
 ## Source installation
 
-1. Prepare an explicit CPython 3.12 virtual environment:
+1. Prepare an explicit isolated CPython 3.12 virtual environment using the pinned lockfile:
 
 ```sh
 python3.12 -m venv ~/.local/share/taletty-venv
-~/.local/share/taletty-venv/bin/python -m pip install -r engine/connectors/audible/internal/bridge/adapter/requirements.txt
+~/.local/share/taletty-venv/bin/python -m pip install --no-deps -r engine/connectors/audible/internal/bridge/adapter/requirements.lock
 ```
 
 2. Install `taletty-engine` from source (or from the module-scoped tag once published):
@@ -73,7 +73,7 @@ Empty, whitespace-only, or NUL-containing explicit overrides (and invalid `TALET
   - `OpenBorrowed(ctx, root *os.File, python)` — duplicates a caller-owned `0700` same-UID directory descriptor via `openat(".", O_RDONLY|O_DIRECTORY|O_NOFOLLOW|O_CLOEXEC)` and serializes `Login`/`Library`/`Download` without acquiring or unlocking `.auth.lock`. Callers (such as `app/internal/store.Owner` / `RootLease`) must retain exclusive cooperative root ownership until `Client.Close` returns.
   - `Client.Login`, [`Client.Library`](connectors/audible/library.md), [`Client.Download`](connectors/audible/download.md), `Client.Close`.
 
-See [the CLI guide](cmd/taletty-engine/README.md), [ADR 001](../docs/adr/001-engine-api-and-bridge-contract.md), [distribution plan](../docs/distribution.md), [testing strategy](../docs/testing.md), and [security policy](../SECURITY.md).
+See [the CLI guide](cmd/taletty-engine/README.md), [ADR 001](../docs/adr/001-engine-api-and-bridge-contract.md), [ADR 003](../docs/adr/003-runtime-and-platform-matrix.md), [distribution plan](../docs/distribution.md), [testing strategy](../docs/testing.md), and [security policy](../SECURITY.md).
 
 ## Post-merge maintainer release tagging
 
