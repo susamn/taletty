@@ -105,6 +105,7 @@ type Options struct {
 	Namespace       string
 	Account         AccountClient
 	Handoff         TerminalHandoff
+	SuspendForLogin bool
 	Clock           func() time.Time
 	WorkspaceCloser func(context.Context) error
 }
@@ -138,6 +139,7 @@ type Coordinator struct {
 	namespace       string
 	account         AccountClient
 	handoff         TerminalHandoff
+	suspendForLogin bool
 	clock           func() time.Time
 	workspaceCloser func(context.Context) error
 
@@ -150,6 +152,7 @@ type Coordinator struct {
 	accountClosed bool
 	workspaceDone bool
 	accountBusy   bool
+	pendingLogin  bool
 	syncSeq       uint64
 	activeSyncID  string
 	viewState     store.ViewState
@@ -220,6 +223,7 @@ func NewCoordinator(ctx context.Context, st CatalogStore, opts Options) (*Coordi
 		namespace:       namespace,
 		account:         opts.Account,
 		handoff:         opts.Handoff,
+		suspendForLogin: opts.SuspendForLogin,
 		clock:           clock,
 		workspaceCloser: opts.WorkspaceCloser,
 		ctx:             lifeCtx,
@@ -477,11 +481,16 @@ func toStoreFocus(focus ui.Pane) store.FocusPane {
 	}
 }
 
-// InitialSnapshot returns the initial cached UI snapshot (never autoplaying).
-func (c *Coordinator) InitialSnapshot() ui.SnapshotMsg {
+// Snapshot returns the latest projected UI snapshot.
+func (c *Coordinator) Snapshot() ui.SnapshotMsg {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	return c.snapshot
+}
+
+// InitialSnapshot returns the initial cached UI snapshot (never autoplaying).
+func (c *Coordinator) InitialSnapshot() ui.SnapshotMsg {
+	return c.Snapshot()
 }
 
 // InitialAppearance returns the initial persisted glyph/palette appearance.
@@ -527,6 +536,20 @@ func (c *Coordinator) Dispatch(action ui.Action) tea.Cmd {
 			return c.runDoctor()
 		}
 	case ui.AccountLogin:
+		if c.suspendForLogin {
+			c.mu.Lock()
+			canSuspend := !c.closed && !c.accountBusy
+			if canSuspend {
+				c.pendingLogin = true
+			}
+			c.mu.Unlock()
+			if canSuspend {
+				return tea.Quit
+			}
+			return func() tea.Msg {
+				return c.busyOrClosedMsg()
+			}
+		}
 		return func() tea.Msg {
 			return c.runLogin()
 		}
@@ -618,6 +641,57 @@ func (c *Coordinator) runDoctor() tea.Msg {
 		func() tea.Msg { return ui.AccountStatusMsg{Account: state} },
 		func() tea.Msg { return ui.NoticeMsg{Activity: status} },
 	}
+}
+
+// TakePendingLogin reports and clears whether the UI requested a terminal
+// suspension for interactive login.
+func (c *Coordinator) TakePendingLogin() bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	pending := c.pendingLogin
+	c.pendingLogin = false
+	return pending
+}
+
+// ExecutePendingLogin runs interactive login on an already-suspended controlling
+// TTY and updates AccountState with the sanitized outcome.
+func (c *Coordinator) ExecutePendingLogin(ctx context.Context, tty *os.File) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	opCtx, _, ok := c.beginAccountOp(false)
+	if !ok {
+		_ = c.busyOrClosedMsg()
+		return
+	}
+	defer c.wg.Done()
+
+	if c.account == nil {
+		_ = c.accountErrorMsg("Offline", "Account runtime unavailable.", errors.New("runtime_missing"))
+		return
+	}
+	if tty == nil {
+		_ = c.accountErrorMsg("", "Sign-in requires an owned terminal.", ErrTerminalRequired)
+		return
+	}
+	runCtx, cancel := context.WithCancel(opCtx)
+	stop := context.AfterFunc(ctx, cancel)
+	defer func() {
+		stop()
+		cancel()
+	}()
+	if err := c.account.Login(runCtx, tty); err != nil {
+		_ = c.accountErrorMsg("", "Sign-in did not complete.", err)
+		return
+	}
+	c.finishAccountState(func(s *ui.AccountState) {
+		s.SignedIn = true
+		s.Onboarding = false
+		s.Offline = false
+		s.Status = "Signed in"
+		s.Detail = "Signed in; select Sync library to refresh catalog."
+		s.Error = ""
+	})
 }
 
 func (c *Coordinator) runLogin() tea.Msg {

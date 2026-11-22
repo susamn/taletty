@@ -2,8 +2,10 @@ package app_test
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -20,19 +22,95 @@ import (
 	"github.com/susamn/taletty/app/internal/ui"
 	"github.com/tetratelabs/wazero"
 	"github.com/tetratelabs/wazero/api"
+	"golang.org/x/sys/unix"
 )
 
 func TestMain(m *testing.M) {
-	if path := os.Getenv("TALETTY_SQLITE_TEST_CACHE"); path != "" {
-		cache, err := wazero.NewCompilationCacheWithDir(path)
+	if os.Getenv("TALETTY_ENGINE_BRIDGE_HELPER") == "1" {
+		runBridgeHelper()
+		os.Exit(0)
+	}
+	path := os.Getenv("TALETTY_SQLITE_TEST_CACHE")
+	owned := path == ""
+	if owned {
+		var err error
+		path, err = os.MkdirTemp("", "taletty-app-sqlite-compiler-")
 		if err != nil {
 			fmt.Fprintln(os.Stderr, err)
 			os.Exit(1)
 		}
-		sqlite3.RuntimeConfig = wazero.NewRuntimeConfig().WithMemoryLimitPages(4096).
-			WithCoreFeatures(api.CoreFeaturesV2).WithCompilationCache(cache)
+		os.Setenv("TALETTY_SQLITE_TEST_CACHE", path)
 	}
-	os.Exit(m.Run())
+	code := runAppTests(m, path)
+	if owned {
+		os.RemoveAll(path)
+	}
+	os.Exit(code)
+}
+
+func runAppTests(m *testing.M, path string) int {
+	cache, err := wazero.NewCompilationCacheWithDir(path)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 1
+	}
+	sqlite3.RuntimeConfig = wazero.NewRuntimeConfig().WithMemoryLimitPages(4096).
+		WithCoreFeatures(api.CoreFeaturesV2).WithCompilationCache(cache)
+	return m.Run()
+}
+
+func runBridgeHelper() {
+	raw, err := io.ReadAll(os.Stdin)
+	if err != nil {
+		os.Exit(1)
+	}
+	var req struct {
+		Protocol    int    `json:"protocol"`
+		OperationID string `json:"operation_id"`
+		Action      string `json:"action"`
+	}
+	if err := json.Unmarshal(raw, &req); err != nil {
+		os.Exit(1)
+	}
+	mode := os.Getenv("TALETTY_BRIDGE_MODE")
+	switch req.Action {
+	case "doctor":
+		if mode == "doctor-incompatible" {
+			fmt.Printf(`{"protocol":1,"operation_id":%q,"seq":1,"type":"result","python":"runtime_incompatible","audible":"not_checked","ffmpeg":"not_checked","ffprobe":"not_checked"}`+"\n", req.OperationID)
+			return
+		}
+		if mode == "doctor-malformed" {
+			fmt.Println("not-json")
+			return
+		}
+		fmt.Printf(`{"protocol":1,"operation_id":%q,"seq":1,"type":"result","python":"ready","audible":"ready","ffmpeg":"ready","ffprobe":"ready"}`+"\n", req.OperationID)
+	case "login":
+		if mode == "login-fail" {
+			fmt.Printf(`{"protocol":1,"operation_id":%q,"seq":1,"type":"error","failure":{"code":"login_failed"}}`+"\n", req.OperationID)
+			return
+		}
+		// Write a fresh 0600 auth.json inside borrowed root FD 3 via atomic renameat.
+		tmpName := ".auth-helper.tmp"
+		fd, err := unix.Openat(3, tmpName, unix.O_WRONLY|unix.O_CREAT|unix.O_TRUNC|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0o600)
+		if err != nil {
+			os.Exit(1)
+		}
+		_, _ = unix.Write(fd, []byte(`{"synthetic":"fixture"}`))
+		_ = unix.Close(fd)
+		if err := unix.Renameat(3, tmpName, 3, "auth.json"); err != nil {
+			os.Exit(1)
+		}
+		fmt.Printf(`{"protocol":1,"operation_id":%q,"seq":1,"type":"result","status":"signed_in"}`+"\n", req.OperationID)
+	case "library":
+		if mode == "library-throttled" {
+			fmt.Printf(`{"protocol":1,"operation_id":%q,"seq":1,"type":"error","failure":{"code":"throttled","message":"Rate limited.","retry":"wait"}}`+"\n", req.OperationID)
+			return
+		}
+		fmt.Printf(`{"protocol":1,"operation_id":%q,"seq":1,"type":"stage","stage":"library_page","books":[{"id":{"provider":"audible","namespace":"us","id":"B000000001"},"title":"Engine Book","subtitle":"Sub","authors":[{"name":"Engine Author"}],"narrators":[{"name":"Engine Narrator"}],"duration_ms":3600000}]}`+"\n", req.OperationID)
+		fmt.Printf(`{"protocol":1,"operation_id":%q,"seq":2,"type":"result","count":1}`+"\n", req.OperationID)
+	default:
+		os.Exit(1)
+	}
 }
 
 type fakeAccount struct {

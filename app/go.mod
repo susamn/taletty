@@ -7,6 +7,7 @@ require (
 	charm.land/bubbletea/v2 v2.0.0
 	github.com/charmbracelet/x/ansi v0.11.9
 	github.com/ncruces/go-sqlite3 v0.32.0
+	github.com/susamn/taletty/engine v0.1.0
 	github.com/tetratelabs/wazero v1.11.0
 	golang.org/x/sys v0.47.0
 )
