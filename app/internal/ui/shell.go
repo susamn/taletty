@@ -86,16 +86,20 @@ type DismissFailureMsg struct{}
 type ActionKind string
 
 const (
-	PlayBook       ActionKind = "play-book"
-	TogglePlayback ActionKind = "toggle-playback"
-	SeekBackward   ActionKind = "seek-backward"
-	SeekForward    ActionKind = "seek-forward"
-	VolumeDown     ActionKind = "volume-down"
-	VolumeUp       ActionKind = "volume-up"
-	SpeedDown      ActionKind = "speed-down"
-	SpeedUp        ActionKind = "speed-up"
-	RequestQuit    ActionKind = "request-quit"
-	SaveNote       ActionKind = "save-note"
+	PlayBook               ActionKind = "play-book"
+	TogglePlayback         ActionKind = "toggle-playback"
+	SeekBackward           ActionKind = "seek-backward"
+	SeekForward            ActionKind = "seek-forward"
+	VolumeDown             ActionKind = "volume-down"
+	VolumeUp               ActionKind = "volume-up"
+	SpeedDown              ActionKind = "speed-down"
+	SpeedUp                ActionKind = "speed-up"
+	RequestQuit            ActionKind = "request-quit"
+	SaveNote               ActionKind = "save-note"
+	AccountLogin           ActionKind = "account-login"
+	AccountSync            ActionKind = "account-sync"
+	AccountDoctor          ActionKind = "account-doctor"
+	AccountContinueOffline ActionKind = "account-continue-offline"
 )
 
 // Current-audio actions carry the source session so the coordinator can reject
@@ -112,20 +116,23 @@ type Action struct {
 // Model owns presentation only. Dispatch creates commands; it must not perform
 // blocking I/O. Playback is authoritative only when a coordinator sends a snapshot.
 type Model struct {
-	data         SnapshotMsg
-	appearance   AppearanceMsg
-	layout       Layout
-	focus        Pane
-	content      Pane
-	selected     string
-	control      int
-	failure      string
-	help         bool
-	helpOffset   int
-	note         *noteEditor
-	confirmation *confirmation
-	quitWarning  bool
-	dispatch     func(Action) tea.Cmd
+	data          SnapshotMsg
+	appearance    AppearanceMsg
+	layout        Layout
+	focus         Pane
+	content       Pane
+	selected      string
+	control       int
+	failure       string
+	help          bool
+	helpOffset    int
+	accountOpen   bool
+	accountCursor int
+	account       AccountState
+	note          *noteEditor
+	confirmation  *confirmation
+	quitWarning   bool
+	dispatch      func(Action) tea.Cmd
 }
 
 func NewModel(data SnapshotMsg, dispatch func(Action) tea.Cmd) Model {
@@ -187,6 +194,14 @@ func (m Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 		if m.layout.Mode != ResizeOnly && m.note != nil && m.confirmation == nil && !m.note.pending && m.note.focus == 0 {
 			m.note.field, _ = m.note.field.Update(tea.PasteMsg{Content: safeNote(msg.Content)})
 		}
+	case OpenAccountMsg:
+		m.openAccount(msg.Account)
+	case CloseAccountMsg:
+		m.accountOpen = false
+	case AccountStatusMsg:
+		m.account = msg.Account
+	case RestoreSessionMsg:
+		m.restoreSession(msg)
 	case SnapshotMsg:
 		m.accept(msg)
 	case AppearanceMsg:
@@ -221,10 +236,20 @@ func (m Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 		if m.help {
 			return m.helpKey(key)
 		}
+		if m.accountOpen {
+			next, action, send := m.accountKey(key)
+			if send {
+				return next.request(action)
+			}
+			return next, nil
+		}
 		if key == "q" || key == "ctrl+c" {
 			return m.request(Action{Kind: RequestQuit})
 		}
 		switch key {
+		case "a":
+			m.openAccount(nil)
+			return m, nil
 		case "?":
 			m.help, m.helpOffset = true, 0
 		case "tab":
