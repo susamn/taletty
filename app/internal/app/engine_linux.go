@@ -108,6 +108,7 @@ func OpenEngineWorkspace(ctx context.Context, home, pythonExplicit string, opts 
 	opts.Account = NewEngineAccount(ws.Owner(), pythonExplicit)
 	opts.Player = player
 	opts.MediaChecker = NewRootMediaChecker(ws.Owner())
+	opts.RootOwner = ws.Owner()
 	opts.ChapterReader = FFprobeChapterReader{}
 	opts.DownloadsMgr = dlMgr
 	opts.RootOwner = ws.Owner()
