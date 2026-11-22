@@ -152,6 +152,10 @@ scroll bounds, long safe errors, resize/repaint and failed-shutdown recovery.
 local buttons, default-safe/nested confirmations, frozen submissions, pending and
 stale replies, failed-submit/retry, one-layer close, theme/snapshot preservation,
 long Unicode scrolling, cell bounds and two-step tiny-terminal quit recovery.
+[`bookmarks_test.go`](bookmarks_test.go) exercises `b`/`B` explicit targeting,
+the dedicated Bookmarks Manager view, multiline note scrolling, local `/`
+filtering, row action menus with frozen IDs and stale-target invalidation,
+query-failure retry, and `Tab`/`1-5`/`Esc` focus restoration.
 Pure geometry tests include the boundary grid and extreme integer dimensions;
 actual rendered views are checked at supported/minimum/tiny sizes in terminal cells.
 This is partial J13 (and the browse-target portion of J07), not complete app journeys.

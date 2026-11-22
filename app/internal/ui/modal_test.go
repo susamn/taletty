@@ -258,3 +258,41 @@ func TestLongConfirmationScrollsAndClampsWithinDialog(t *testing.T) {
 	}
 	send(t, r, key("up"), key("esc"))
 }
+
+func TestNoteEditAndChapterBoundaryHeaders(t *testing.T) {
+	r := start(t, fixture(), nil)
+	screen(t, r, 80, 20)
+	send(t, r, ui.OpenNoteEditorMsg{
+		ID: "boundary-1",
+		Target: ui.NoteTarget{
+			Key:         "A",
+			Title:       "River",
+			Chapter:     "Ch 2",
+			JumpChapter: "Ch 1",
+			Captured:    61 * time.Second,
+			Jump:        59 * time.Second,
+		},
+	})
+	view := screen(t, r, 80, 20)
+	if !strings.Contains(view, "Cap: Ch 2 -> Jump: Ch 1") || !strings.Contains(view, "Captured 00:01:01 | Jump 00:00:59") {
+		t.Fatalf("missing chapter boundary header:\n%s", view)
+	}
+	send(t, r, key("esc"))
+
+	send(t, r, ui.OpenNoteEditorMsg{
+		ID: "edit-1",
+		Target: ui.NoteTarget{
+			Key:        "A",
+			BookmarkID: "bm-1",
+			Title:      "River",
+			Chapter:    "Ch 1",
+			Captured:   59 * time.Second,
+			Jump:       59 * time.Second,
+		},
+		Text: "Existing note",
+	})
+	view = screen(t, r, 80, 20)
+	if !strings.Contains(view, "Edit bookmark | Jump 00:00:59") || !strings.Contains(view, "Existing note") {
+		t.Fatalf("missing edit bookmark header:\n%s", view)
+	}
+}

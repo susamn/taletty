@@ -618,6 +618,30 @@ exercise J04–J06/J12/J13 download and deletion journeys over real
   `O_NOFOLLOW`/`unlinkat`, and preserves `ListeningState`, `Favorite`,
   `Bookmark`, and `CatalogBook` metadata.
 
+## Bookmark editor and manager UI (#19)
+
+[`bookmarks_test.go`](../app/internal/ui/bookmarks_test.go),
+[`modal_test.go`](../app/internal/ui/modal_test.go), and
+[`bookmarks_linux_test.go`](../app/internal/app/bookmarks_linux_test.go)
+exercise J07/J08/J09/J12/J13 bookmark journeys over real `*store.Store`,
+`*profile.Workspace`, `*bookmarks.Service`, `*playback.Controller`,
+`NewRootMediaChecker`, and `testkit.Runner`:
+
+- `b` capture of loaded current audio (playing or paused, never falling back to
+  highlighted books), pre-roll zero clamping and chapter-boundary distinction,
+  delayed save after playback advances/switches books, multiline `Alt+Enter` and
+  ANSI-sanitized paste, save failure/retry, and duplicate-submit suppression.
+- `B` explicit fixed targeting (`Books`/`Details`/`Chapters`/`Library` ->
+  highlighted book; `PlayerPane` -> loaded current audio; named `Library`
+  sidebar entry), query-failure retry, local `/` filter, multiline note scroller,
+  row action menu (`x`) with frozen IDs and stale-target invalidation, edit
+  without recapture/re-rewind, and default-safe `Keep bookmark` / `Delete bookmark`
+  preserving audio, history, and favorites.
+- Same-book paused jump without double rewind, B3 `Stay` / `Switch and play`
+  cross-book confirmation with checkpoint preservation and stale-session
+  invalidation, and missing-audio `Queue download` prompt without touching
+  current audio.
+
 ## Runtime packaging and platform matrix (#26)
 
 [ADR 003](adr/003-runtime-and-platform-matrix.md) defines the OS/architecture

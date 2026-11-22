@@ -250,6 +250,8 @@ func (m Model) downloadsKey(key string) (tea.Model, tea.Cmd) {
 	case "enter", "x":
 		m.openDownloadMenu()
 		return m, nil
+	case "b":
+		return m.triggerCaptureBookmark()
 	case "space", ",", ".":
 		if action, ok := transportKeys[key]; ok {
 			return m.transport(action)

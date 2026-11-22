@@ -13,6 +13,7 @@ import (
 	"time"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/susamn/taletty/app/internal/bookmarks"
 	"github.com/susamn/taletty/app/internal/profile"
 	"github.com/susamn/taletty/app/internal/store"
 	"github.com/susamn/taletty/app/internal/ui"
@@ -116,6 +117,8 @@ type Options struct {
 	Downloads       DownloadEnqueuer
 	DownloadsMgr    DownloadManager
 	RootOwner       RootLeaseOwner
+	Bookmarks       BookmarkManager
+	PreRoll         *time.Duration
 	Clock           func() time.Time
 	WorkspaceCloser func(context.Context) error
 }
@@ -156,6 +159,8 @@ type Coordinator struct {
 	downloads       DownloadEnqueuer
 	downloadsMgr    DownloadManager
 	rootOwner       RootLeaseOwner
+	bookmarks       BookmarkManager
+	preRoll         time.Duration
 	clock           func() time.Time
 	workspaceCloser func(context.Context) error
 
@@ -163,28 +168,32 @@ type Coordinator struct {
 	cancel context.CancelFunc
 	wg     sync.WaitGroup
 
-	mu            sync.Mutex
-	closed        bool
-	downloadsDone bool
-	playerClosed  bool
-	accountClosed bool
-	workspaceDone bool
-	accountBusy   bool
-	pendingLogin  bool
-	syncSeq       uint64
-	dialogSeq     uint64
-	activeSyncID  string
-	speedJobID    string
-	speedBytes    int64
-	speedAt       time.Time
-	viewState     store.ViewState
-	settings      store.Settings
-	durations     map[store.BookKey]time.Duration
-	chapters      map[store.BookKey][]Chapter
-	accountState  ui.AccountState
-	snapshot      ui.SnapshotMsg
-	appearance    ui.AppearanceMsg
-	restore       ui.RestoreSessionMsg
+	mu              sync.Mutex
+	closed          bool
+	downloadsDone   bool
+	playerClosed    bool
+	accountClosed   bool
+	workspaceDone   bool
+	accountBusy     bool
+	pendingLogin    bool
+	syncSeq         uint64
+	dialogSeq       uint64
+	activeSyncID    string
+	speedJobID      string
+	speedBytes      int64
+	speedAt         time.Time
+	viewState       store.ViewState
+	settings        store.Settings
+	durations       map[store.BookKey]time.Duration
+	chapters        map[store.BookKey][]Chapter
+	pendingDrafts   map[string]bookmarks.Draft
+	draftOrder      []string
+	committedDrafts map[string]store.Bookmark
+	committedOrder  []string
+	accountState    ui.AccountState
+	snapshot        ui.SnapshotMsg
+	appearance      ui.AppearanceMsg
+	restore         ui.RestoreSessionMsg
 }
 
 // OpenWorkspace initializes the private ~/.config/taletty/ workspace for home,
@@ -240,6 +249,28 @@ func NewCoordinator(ctx context.Context, st CatalogStore, opts Options) (*Coordi
 		return nil, err
 	}
 
+	preRoll := bookmarks.DefaultPreRoll
+	if opts.PreRoll != nil {
+		if *opts.PreRoll < 0 {
+			return nil, ErrInvalidInput
+		}
+		preRoll = *opts.PreRoll
+	}
+	bmSvc := opts.Bookmarks
+	if bmSvc == nil && opts.Player != nil {
+		if bmStore, ok := st.(bookmarks.BookmarkStore); ok {
+			svc, svcErr := bookmarks.NewService(bookmarks.Options{
+				Store:        bmStore,
+				Player:       opts.Player,
+				MediaChecker: opts.MediaChecker,
+			})
+			if svcErr != nil {
+				return nil, svcErr
+			}
+			bmSvc = svc
+		}
+	}
+
 	lifeCtx, cancel := context.WithCancel(context.Background())
 	return &Coordinator{
 		store:           st,
@@ -254,6 +285,8 @@ func NewCoordinator(ctx context.Context, st CatalogStore, opts Options) (*Coordi
 		downloads:       opts.Downloads,
 		downloadsMgr:    opts.DownloadsMgr,
 		rootOwner:       opts.RootOwner,
+		bookmarks:       bmSvc,
+		preRoll:         preRoll,
 		clock:           clock,
 		workspaceCloser: opts.WorkspaceCloser,
 		ctx:             lifeCtx,
@@ -698,6 +731,11 @@ func (c *Coordinator) Dispatch(action ui.Action) tea.Cmd {
 		ui.DownloadMoveUp, ui.DownloadMoveDown, ui.DownloadDeleteAudio:
 		return func() tea.Msg {
 			return c.handleDownloadAction(action)
+		}
+	case ui.CaptureBookmark, ui.SaveNote, ui.OpenBookmarks,
+		ui.DeleteBookmark, ui.JumpBookmark, ui.ConfirmSwitchBookmark:
+		return func() tea.Msg {
+			return c.handleBookmarkAction(action)
 		}
 	default:
 		return func() tea.Msg {
