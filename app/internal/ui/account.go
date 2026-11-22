@@ -81,7 +81,7 @@ func (m *Model) restoreSession(msg RestoreSessionMsg) {
 	}
 	if msg.View != nil {
 		switch *msg.View {
-		case ViewAll, ViewContinue, ViewDownloaded, ViewFinished:
+		case ViewAll, ViewContinue, ViewDownloaded, ViewFavorites, ViewFinished:
 			m.libraryView = *msg.View
 			rows := m.librarySidebarRows()
 			for i, row := range rows {

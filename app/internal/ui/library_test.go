@@ -103,7 +103,7 @@ func TestJ03LibraryViewsDecorativeSkipAndSelectionPreservation(t *testing.T) {
 	for i := range emptyDL.Books {
 		emptyDL.Books[i].Availability = ui.NotDownloaded
 	}
-	send(t, r, emptyDL, key("1"), key("k"), key("enter")) // Downloaded (0)
+	send(t, r, emptyDL, key("1"), key("k"), key("k"), key("enter")) // Downloaded (0)
 	view = screen(t, r, 80, 20)
 	if !strings.Contains(view, "No books in Downloaded") || r.Model.(ui.Model).Selection() != "" {
 		t.Fatalf("expected empty Downloaded message:\n%s", view)
@@ -223,7 +223,7 @@ func TestJ03StableSortingMissingAcquisitionAndAsyncRefresh(t *testing.T) {
 			t.Fatalf("sort %v failed: got=%v sel=%q", wantSort, gotSort, r.Model.(ui.Model).Selection())
 		}
 	}
-	for _, v := range []ui.LibraryView{ui.ViewAll, ui.ViewContinue, ui.ViewDownloaded, ui.ViewFinished} {
+	for _, v := range []ui.LibraryView{ui.ViewAll, ui.ViewContinue, ui.ViewDownloaded, ui.ViewFavorites, ui.ViewFinished} {
 		if v.Label() == "" {
 			t.Fatalf("empty label for %v", v)
 		}

@@ -17,6 +17,7 @@ const (
 	ViewAll        LibraryView = "all"
 	ViewContinue   LibraryView = "continue"
 	ViewDownloaded LibraryView = "downloaded"
+	ViewFavorites  LibraryView = "favorites"
 	ViewFinished   LibraryView = "finished"
 )
 
@@ -27,6 +28,8 @@ func (v LibraryView) Label() string {
 		return "Continue Listening"
 	case ViewDownloaded:
 		return "Downloaded"
+	case ViewFavorites:
+		return "Favorites"
 	case ViewFinished:
 		return "Finished"
 	default:
@@ -81,6 +84,7 @@ func (m Model) librarySidebarRows() []librarySidebarRow {
 		ViewAll:        len(m.data.Books),
 		ViewContinue:   0,
 		ViewDownloaded: 0,
+		ViewFavorites:  0,
 		ViewFinished:   0,
 	}
 	for _, book := range m.data.Books {
@@ -89,6 +93,9 @@ func (m Model) librarySidebarRows() []librarySidebarRow {
 		}
 		if book.Availability == Ready {
 			counts[ViewDownloaded]++
+		}
+		if book.Favorite {
+			counts[ViewFavorites]++
 		}
 		if book.Finished {
 			counts[ViewFinished]++
@@ -103,6 +110,7 @@ func (m Model) librarySidebarRows() []librarySidebarRow {
 		{label: fmt.Sprintf("All (%d)", counts[ViewAll]), view: ViewAll, selectable: true},
 		{label: fmt.Sprintf("Continue (%d)", counts[ViewContinue]), view: ViewContinue, selectable: true},
 		{label: fmt.Sprintf("Downloaded (%d)", counts[ViewDownloaded]), view: ViewDownloaded, selectable: true},
+		{label: fmt.Sprintf("Favorites (%d)", counts[ViewFavorites]), view: ViewFavorites, selectable: true},
 		{label: fmt.Sprintf("Finished (%d)", counts[ViewFinished]), view: ViewFinished, selectable: true},
 		{label: "VIEWS / OVERLAYS", selectable: false},
 		{label: bmLabel, action: OpenBookmarks, selectable: true},
@@ -148,6 +156,8 @@ func matchesView(book Book, view LibraryView) bool {
 		return book.InProgress
 	case ViewDownloaded:
 		return book.Availability == Ready
+	case ViewFavorites:
+		return book.Favorite
 	case ViewFinished:
 		return book.Finished
 	default:
