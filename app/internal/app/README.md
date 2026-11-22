@@ -37,7 +37,24 @@ module.
   - Persists `ViewState` via `SaveViewState` and cancels/joins active workers
     before closing `AccountClient` and `Workspace` in `Close(ctx)`.
 
+- **Playback, chapter inspection, and miniplayer actions (`#15`)**:
+  - Connects `*playback.Controller` and `*playback.MPVProcess` (`app/internal/playback`)
+    behind `PlaybackController`, `NewRootMediaChecker` (anchored `openat`/
+    `O_NOFOLLOW`/`0700`/`0600`/`Nlink==1` verification), and `FFprobeChapterReader`.
+  - `PlayBook` loads verified local `.m4b` audio at saved position/speed;
+    missing or unsafe audio opens a download confirmation without touching
+    current audio.
+  - `LoadChapters` inspects downloaded books without replacing current audio;
+    `ActivateChapter` seeks directly (preserving pause) on the same loaded book
+    and opens the B3 `Stay` / `Switch and play` confirmation on a different
+    loaded book (checkpointing the prior book on switch and rejecting stale
+    confirmations).
+  - `TogglePlayback` (`Space`), `SeekRelative` (`,`/`.`, `±15s`), `StepSpeed`
+    (`[`/`]`, `±0.1x`), `StepVolume` (`-`/`=`, `±5%` persisted to `Settings`),
+    and `RunSession` periodic `PollPlayback` keep the miniplayer and chapter
+    timeline synchronized, and `Close` saves the final checkpoint and reaps `mpv`.
+
 ## Scope boundaries
 
-- Library filtering/sorting (`#14`), playback wiring (`#15`), download manager
-  UI (`#17`), and bookmark UI (`#19`) remain separate downstream issues.
+- Library filtering/sorting (`#14`), download manager UI (`#17`), and bookmark
+  UI (`#19`) remain separate downstream issues.
