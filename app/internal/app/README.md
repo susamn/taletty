@@ -62,8 +62,20 @@ module.
     `SortOrder`, `FilterText`, `Focus`, `Selected`) across restarts via
     `RestoreSessionMsg` and `SaveFullViewState`.
 
+- **Download manager and safe audio deletion (`#17`)**:
+  - Connects `*downloads.Coordinator` (`app/internal/downloads`) and
+    `EngineDownloader` (`audible.OpenBorrowed` + `Client.Download` under
+    `*store.RootLease`) into `Coordinator` and `RunSession` (`WatchDownloads`
+    streaming live `ui.DownloadsMsg` and `ui.SnapshotMsg` updates with measured
+    transfer speed when actively downloading).
+  - Supports `d` enqueue, `D` Downloads view, `CancelActive`, `Retry`,
+    `RemoveWaiting`, `MoveWaiting`, and anchored `DeleteAudio` (stopping/
+    checkpointing active playback first if loaded, aborting deletion if `Stop`
+    fails, unlinking via `openat`/`O_NOFOLLOW`/`unlinkat` under `downloads/`,
+    and preserving `book_identity`, `listening_state`, `favorite`, `bookmark`,
+    and `download_job` history).
+
 ## Scope boundaries
 
-- Download manager UI (`#17`), bookmark UI (`#19`), completion/smart-rewind
-  (`#20`), sleep timer (`#21`), and favorites UI (`#42`) remain separate
-  downstream issues.
+- Bookmark UI (`#19`), completion/smart-rewind (`#20`), sleep timer (`#21`),
+  and favorites UI (`#42`) remain separate downstream issues.
