@@ -308,10 +308,60 @@ func TestRunSessionSIGUSR1AndThemeEdgeCases(t *testing.T) {
 		_ = sanitizeThemeError(errCase)
 	}
 
+	// Failing RootOwner.Lease in initTheme, applyTheme, and HandleThemeSignal falls back safely.
+	failOwner := &failingLeaseOwner{err: errors.New("lease failed")}
+	leaseCoord, err := NewCoordinator(ctx, st, Options{RootOwner: failOwner})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer leaseCoord.Close(context.Background())
+	if leaseCoord.InitialAppearance().Palette != theme.DefaultPalette() {
+		t.Fatal("expected DefaultPalette fallback on Lease failure")
+	}
+	leaseCoord.themeMgr = theme.OpenManager(nil)
+	if msg := leaseCoord.Dispatch(ui.Action{Kind: ui.ApplyTheme, Text: "colors"})(); !strings.Contains(msg.(ui.NoticeMsg).Error, "failed") {
+		t.Fatalf("expected Lease error on ApplyTheme: %#v", msg)
+	}
+	if msg := leaseCoord.HandleThemeSignal(ctx, 0); !strings.Contains(msg.(ui.NoticeMsg).Error, "failed") {
+		t.Fatalf("expected Lease error on HandleThemeSignal: %#v", msg)
+	}
+
 	_ = coord.Close(ctx)
 	for _, kind := range []ui.ActionKind{ui.ApplyTheme, ui.SetGlyphMode, ui.CycleSmartRewind, ui.CyclePreRoll} {
 		if msg := coord.Dispatch(ui.Action{Kind: kind, Text: "colors"})(); !strings.Contains(msg.(ui.NoticeMsg).Error, "closed") {
 			t.Fatalf("expected closed error for %v: %#v", kind, msg)
 		}
 	}
+
+	// Malformed colors.toml on startup records ThemeError and falls back to DefaultPalette.
+	badHome := t.TempDir()
+	badDir := filepath.Join(badHome, ".config", "taletty")
+	_ = os.MkdirAll(badDir, 0o700)
+	_ = os.WriteFile(filepath.Join(badDir, "colors.toml"), []byte("focus = \"not-hex\"\n"), 0o600)
+	badCoord, err := OpenWorkspace(ctx, badHome, Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer badCoord.Close(context.Background())
+	if badCoord.SettingsState().ThemeError == "" || badCoord.InitialAppearance().Palette != theme.DefaultPalette() {
+		t.Fatalf("expected fallback diagnostic on malformed startup colors.toml: %+v", badCoord.SettingsState())
+	}
+
+	// sessionModel.applyDispatchedMsg handles single non-batch messages and closed waitThemeSignalCmd.
+	sm := sessionModel{inner: ui.NewModel(ui.SnapshotMsg{}, nil)}
+	_, _ = sm.applyDispatchedMsg(ui.NoticeMsg{Activity: "ok"})
+	closedCh := make(chan uint64)
+	close(closedCh)
+	if msg := waitThemeSignalCmd(closedCh)(); msg != nil {
+		t.Fatalf("expected nil from closed theme signal channel, got %#v", msg)
+	}
+	if waitThemeSignalCmd(nil) != nil {
+		t.Fatal("expected nil cmd for nil theme signal channel")
+	}
+}
+
+type failingLeaseOwner struct{ err error }
+
+func (f *failingLeaseOwner) Lease(context.Context) (*store.RootLease, error) {
+	return nil, f.err
 }

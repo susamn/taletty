@@ -453,4 +453,35 @@ func TestThemeEdgeCasesAndConfigRendering(t *testing.T) {
 	if _, err := LoadConfig(root); !errors.Is(err, ErrUnsafeFile) {
 		t.Fatalf("expected ErrUnsafeFile for directory config.toml, got %v", err)
 	}
+	// Symlink config.toml rejected by SaveThemeSelection.
+	_ = os.RemoveAll(filepath.Join(dir, "config.toml"))
+	_ = os.Symlink("colors.toml", filepath.Join(dir, "config.toml"))
+	if err := SaveThemeSelection(root, "colors"); !errors.Is(err, ErrUnsafeFile) {
+		t.Fatalf("expected ErrUnsafeFile on symlink SaveThemeSelection, got %v", err)
+	}
+	// themes as regular file rejected by Catalog.
+	_ = os.RemoveAll(filepath.Join(dir, "themes"))
+	if err := os.WriteFile(filepath.Join(dir, "themes"), []byte("not-dir"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Catalog(root); err == nil {
+		t.Fatal("expected Catalog error when themes is a file")
+	}
+	// ReloadOnSignal with empty theme defaults to colors.toml; HandleSignal with expectedGen=0 reloads.
+	_ = os.RemoveAll(filepath.Join(dir, "themes"))
+	_ = os.RemoveAll(filepath.Join(dir, "config.toml"))
+	_ = os.RemoveAll(filepath.Join(dir, "colors.toml"))
+	if err := SeedDefaults(root); err != nil {
+		t.Fatal(err)
+	}
+	if _, reloaded, err := ReloadOnSignal(root, ""); err != nil || !reloaded {
+		t.Fatalf("expected ReloadOnSignal(\"\") reload, got reloaded=%v err=%v", reloaded, err)
+	}
+	mgr := OpenManager(root)
+	if err := os.WriteFile(filepath.Join(dir, "colors.toml"), []byte("focus = \"#654321\"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if p, reloaded, err := mgr.HandleSignal(root, 0); err != nil || !reloaded || FormatHexColor(p.Focus) != "#654321" {
+		t.Fatalf("HandleSignal(0) failed: reloaded=%v err=%v p=%+v", reloaded, err, p)
+	}
 }

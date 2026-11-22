@@ -77,12 +77,18 @@ func TestSettingsViewThemeSelectionPreferencesAndKeyOwnership(t *testing.T) {
 	}
 	send(t, r, key("k"), key("k"), key("tab")) // back to Theme section
 
-	// Compact 80x20 stacks Theme and Preferences cleanly without overflow.
+	// Compact 80x20 stacks Theme and Preferences cleanly without overflow (both sections).
 	send(t, r, ui.AppearanceMsg{Glyphs: ui.Plain, Palette: ui.Palette{Background: color.Black, Text: color.White, Focus: color.White, Error: color.White}})
 	compact := screen(t, r, 80, 20)
 	if !strings.Contains(compact, "[Focus] Settings - Theme & Preferences") {
 		t.Fatalf("missing compact Settings header:\n%s", compact)
 	}
+	send(t, r, key("tab"), key("j"), key("j"))
+	compactPref := screen(t, r, 80, 20)
+	if !strings.Contains(compactPref, "Glyph mode: Plain") {
+		t.Fatalf("compact Settings did not scroll to Preferences:\n%s", compactPref)
+	}
+	send(t, r, key("tab"))
 
 	// Esc closes Settings and restores exact origin (Books, selection B).
 	send(t, r, key("esc"))
@@ -90,12 +96,22 @@ func TestSettingsViewThemeSelectionPreferencesAndKeyOwnership(t *testing.T) {
 		t.Fatal("Esc from Settings did not restore origin")
 	}
 
-	// OpenSettingsMsg opens directly; nil coordinator shows unavailable notice on Enter.
+	// OpenSettingsMsg blocked while Help is open; opens directly when clear; nil coordinator shows unavailable notice on Enter.
+	send(t, r, key("?"), ui.OpenSettingsMsg{Settings: &ui.SettingsState{ActiveTheme: "colors"}})
+	if r.Model.(ui.Model).SettingsOpen() {
+		t.Fatal("OpenSettingsMsg should not open over Help")
+	}
+	send(t, r, key("esc"))
 	noCoord := start(t, fixture(), nil)
 	screen(t, noCoord, 80, 20)
 	send(t, noCoord, ui.OpenSettingsMsg{Settings: &ui.SettingsState{ActiveTheme: "colors"}}, key("enter"))
 	if !strings.Contains(noCoord.Model.View().Content, "Settings unavailable: no coordinator") {
 		t.Fatal("expected no-coordinator Settings notice")
 	}
-	send(t, noCoord, key("esc"))
+	// Modal over Settings removes [Focus] from Settings.
+	send(t, noCoord, ui.OpenConfirmationMsg{ID: "c1", Title: "Confirm", Prompt: "Test", Keep: "Keep", Confirm: "Ok", Action: ui.Action{Kind: ui.RequestQuit}})
+	if strings.Contains(noCoord.Model.View().Content, "[Focus] Settings") {
+		t.Fatal("Settings kept [Focus] behind modal")
+	}
+	send(t, noCoord, key("esc"), key("esc"))
 }
