@@ -31,10 +31,13 @@ type OpenAccountMsg struct {
 // CloseAccountMsg closes the Account/onboarding overlay and restores prior focus.
 type CloseAccountMsg struct{}
 
-// RestoreSessionMsg restores persisted focus, selection by BookKey, and optional
-// onboarding/account state without starting playback.
+// RestoreSessionMsg restores persisted focus, view, sort, filter, selection
+// by BookKey, and optional onboarding/account state without starting playback.
 type RestoreSessionMsg struct {
 	Focus       *Pane
+	View        *LibraryView
+	Sort        *SortOrder
+	Filter      *string
 	Selected    string
 	OpenAccount bool
 	Account     *AccountState
@@ -76,6 +79,31 @@ func (m *Model) restoreSession(msg RestoreSessionMsg) {
 	if msg.Account != nil {
 		m.account = *msg.Account
 	}
+	if msg.View != nil {
+		switch *msg.View {
+		case ViewAll, ViewContinue, ViewDownloaded, ViewFinished:
+			m.libraryView = *msg.View
+			rows := m.librarySidebarRows()
+			for i, row := range rows {
+				if row.selectable && row.view == m.libraryView {
+					m.libraryCursor = i
+					break
+				}
+			}
+		}
+	}
+	if msg.Sort != nil {
+		for _, opt := range sortOptions {
+			if opt.order == *msg.Sort {
+				m.sortOrder = *msg.Sort
+				break
+			}
+		}
+	}
+	if msg.Filter != nil {
+		m.filterQuery = cleanLine(*msg.Filter)
+		m.filterDraft = m.filterQuery
+	}
 	if msg.Focus != nil && *msg.Focus >= Library && *msg.Focus <= PlayerPane {
 		m.focus = *msg.Focus
 		if m.focus != PlayerPane {
@@ -83,13 +111,15 @@ func (m *Model) restoreSession(msg RestoreSessionMsg) {
 		}
 	}
 	if msg.Selected != "" {
-		for _, book := range m.data.Books {
+		visible := m.visibleBooks()
+		for _, book := range visible {
 			if book.Key == msg.Selected {
 				m.selected = msg.Selected
 				break
 			}
 		}
 	}
+	m.reconcileSelection()
 	if msg.OpenAccount && !m.ownsModal() && !m.help {
 		m.accountOpen = true
 		m.accountCursor = 0

@@ -60,8 +60,16 @@ const (
 // identity supplied by the coordinator, never a title, row number or file path.
 type Book struct {
 	Key, Title, Author, Description string
+	Subtitle, Narrator              string
 	Chapters                        []string
 	ChapterStarts                   []time.Duration
+	Duration                        time.Duration
+	HasDuration                     bool
+	RecentAtMS                      int64
+	InProgress                      bool
+	Finished                        bool
+	AcquisitionAtMS                 *int64
+	CatalogOrder                    int
 	Availability                    Availability
 	Favorite                        bool
 }
@@ -130,6 +138,15 @@ type Model struct {
 	content       Pane
 	selected      string
 	chapterCursor int
+	libraryView   LibraryView
+	libraryCursor int
+	sortOrder     SortOrder
+	sortOpen      bool
+	sortCursor    int
+	filterQuery   string
+	filterDraft   string
+	filterPrev    string
+	filterEditing bool
 	control       int
 	failure       string
 	help          bool
@@ -144,7 +161,14 @@ type Model struct {
 }
 
 func NewModel(data SnapshotMsg, dispatch func(Action) tea.Cmd) Model {
-	m := Model{focus: Books, content: Books, dispatch: dispatch}
+	m := Model{
+		focus:         Books,
+		content:       Books,
+		libraryView:   ViewAll,
+		libraryCursor: 1,
+		sortOrder:     SortTitle,
+		dispatch:      dispatch,
+	}
 	m.accept(data)
 	return m
 }
@@ -154,22 +178,14 @@ func (m Model) Focus() Pane       { return m.focus }
 func (m Model) Selection() string { return m.selected }
 
 func (m *Model) accept(data SnapshotMsg) {
-	data.Books = slices.Clone(data.Books)
-	for i := range data.Books {
-		data.Books[i].Chapters = slices.Clone(data.Books[i].Chapters)
-		data.Books[i].ChapterStarts = slices.Clone(data.Books[i].ChapterStarts)
+	books := make([]Book, len(data.Books))
+	for i, book := range data.Books {
+		books[i] = cloneBook(book)
 	}
+	data.Books = books
 	data.Player.ChapterTicks = slices.Clone(data.Player.ChapterTicks)
 	m.data = data
-	if m.bookIndex() < 0 {
-		m.selected = ""
-		m.chapterCursor = 0
-		if len(data.Books) > 0 {
-			m.selected = data.Books[0].Key
-		}
-	} else {
-		m.chapterCursor = max(0, m.clampedChapterCursor(m.data.Books[m.bookIndex()]))
-	}
+	m.reconcileSelection()
 	if data.Error != "" {
 		m.failure = data.Error
 	}
@@ -206,6 +222,10 @@ func (m Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.PasteMsg:
 		if m.layout.Mode != ResizeOnly && m.note != nil && m.confirmation == nil && !m.note.pending && m.note.focus == 0 {
 			m.note.field, _ = m.note.field.Update(tea.PasteMsg{Content: safeNote(msg.Content)})
+		} else if m.layout.Mode != ResizeOnly && m.filterEditing {
+			m.filterDraft += cleanLine(msg.Content)
+			m.filterQuery = m.filterDraft
+			m.reconcileSelection()
 		}
 	case OpenAccountMsg:
 		m.openAccount(msg.Account)
@@ -258,10 +278,29 @@ func (m Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return next, nil
 		}
+		if m.sortOpen {
+			return m.sortKey(key), nil
+		}
+		if m.filterEditing {
+			return m.filterKey(key, msg.Text), nil
+		}
 		if key == "q" || key == "ctrl+c" {
 			return m.request(Action{Kind: RequestQuit})
 		}
 		switch key {
+		case "esc":
+			if m.filterQuery != "" {
+				m.filterQuery = ""
+				m.filterDraft = ""
+				m.reconcileSelection()
+			}
+			return m, nil
+		case "/":
+			m.openFilter()
+			return m, nil
+		case "s":
+			m.openSortMenu()
+			return m, nil
 		case "a":
 			m.openAccount(nil)
 			return m, nil
@@ -274,12 +313,18 @@ func (m Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 		case "1", "2", "3", "4", "5":
 			m.focus = Pane(key[0] - '1')
 		case "j", "down", "k", "up", "g", "home", "G", "end", "pgdown", "pgup", "ctrl+d", "ctrl+u":
-			if m.focus == Books && len(m.data.Books) > 0 {
-				prev := m.selected
-				index := moveListCursor(max(0, m.bookIndex()), len(m.data.Books), key, m.listPageSize())
-				m.selected = m.data.Books[index].Key
-				if m.selected != prev {
-					m.chapterCursor = 0
+			if m.focus == Library {
+				rows := m.librarySidebarRows()
+				m.libraryCursor = moveSidebarCursor(m.clampedLibraryCursor(rows), rows, key, m.listPageSize())
+			} else if m.focus == Books {
+				visible := m.visibleBooks()
+				if len(visible) > 0 {
+					prev := m.selected
+					index := moveListCursor(max(0, m.visibleBookIndex(visible)), len(visible), key, m.listPageSize())
+					m.selected = visible[index].Key
+					if m.selected != prev {
+						m.chapterCursor = 0
+					}
 				}
 			} else if m.focus == Chapters {
 				if idx := m.bookIndex(); idx >= 0 && len(m.data.Books[idx].Chapters) > 0 {
@@ -295,6 +340,16 @@ func (m Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 				m.control = (m.control + delta + 3) % 3
 			}
 		case "enter":
+			if m.focus == Library {
+				rows := m.librarySidebarRows()
+				if cur := m.clampedLibraryCursor(rows); cur >= 0 && rows[cur].selectable {
+					m.libraryView = rows[cur].view
+					m.reconcileSelection()
+					m.focus = Books
+					m.content = Books
+				}
+				return m, nil
+			}
 			if (m.focus == Books || m.focus == Details) && m.selected != "" {
 				return m.request(Action{Kind: PlayBook, Key: m.selected})
 			}

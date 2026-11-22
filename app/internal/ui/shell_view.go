@@ -55,11 +55,34 @@ func title(text string) string {
 func (m Model) paneRows(pane Pane, width int) (string, []string, int) {
 	name := paneNames[pane]
 	if pane == Library {
-		return name, []string{"All audiobooks", "Destinations unavailable in shell"}, -1
+		sidebar := m.librarySidebarRows()
+		rows := make([]string, len(sidebar))
+		for i, item := range sidebar {
+			label := item.label
+			if item.selectable && item.view == m.libraryView {
+				label = "* " + label
+			}
+			rows[i] = label
+		}
+		return name, rows, m.clampedLibraryCursor(sidebar)
 	}
 	if pane == Books {
-		rows := make([]string, 0, len(m.data.Books))
-		for _, book := range m.data.Books {
+		visible := m.visibleBooks()
+		var tags []string
+		if m.libraryView != ViewAll {
+			tags = append(tags, m.libraryView.Label())
+		}
+		if m.sortOrder != SortTitle {
+			tags = append(tags, "Sort: "+string(m.sortOrder))
+		}
+		if m.filterQuery != "" {
+			tags = append(tags, fmt.Sprintf("Filter: %q", cleanLine(m.filterQuery)))
+		}
+		if len(tags) > 0 {
+			name += " [" + strings.Join(tags, " | ") + "]"
+		}
+		rows := make([]string, 0, len(visible))
+		for _, book := range visible {
 			favorite := ""
 			if book.Favorite {
 				favorite = "[Fav] "
@@ -73,9 +96,16 @@ func (m Model) paneRows(pane Pane, width int) (string, []string, int) {
 			rows = append(rows, metadata+" | "+status)
 		}
 		if len(rows) == 0 {
-			rows = []string{"No books cached"}
+			switch {
+			case len(m.data.Books) == 0:
+				rows = []string{"No books cached"}
+			case m.filterQuery != "":
+				rows = []string{"No matches for filter (Esc clears)"}
+			default:
+				rows = []string{"No books in " + m.libraryView.Label() + " (press 1 for All)"}
+			}
 		}
-		return name, rows, m.bookIndex()
+		return name, rows, m.visibleBookIndex(visible)
 	}
 	index := m.bookIndex()
 	if index < 0 {
@@ -89,18 +119,29 @@ func (m Model) paneRows(pane Pane, width int) (string, []string, int) {
 		}
 		return name, book.Chapters, m.clampedChapterCursor(book)
 	}
-	rows := []string{title(book.Title), "Author: " + book.Author, m.availability(book.Availability)}
-	return name, append(rows, strings.Split(book.Description, "\n")...), -1
+	rows := []string{title(book.Title)}
+	if book.Subtitle != "" {
+		rows = append(rows, book.Subtitle)
+	}
+	rows = append(rows, "Author: "+book.Author)
+	if book.Narrator != "" {
+		rows = append(rows, "Narrator: "+book.Narrator)
+	}
+	rows = append(rows, formatDurationLabel(book.Duration, book.HasDuration), m.availability(book.Availability))
+	if book.Description != "" {
+		rows = append(rows, strings.Split(book.Description, "\n")...)
+	}
+	return name, rows, -1
 }
 
 // frame owns borders, a cursor gutter and one-cell inner padding. It never clips
 // renderer styles as untrusted metadata: raw text is fitted before paint is added.
 func (m Model) frame(pane Pane, size Rect, name string, rows []string, selected int) []string {
-	focused := pane == m.focus && !m.help && !m.ownsModal() && !m.accountOpen
+	focused := pane == m.focus && !m.help && !m.ownsModal() && !m.accountOpen && !m.sortOpen
 	if focused {
 		name = "[Focus] " + name
 	}
-	return m.box(size, fmt.Sprintf(" %d %s ", pane+1, name), rows, selected, focused, pane == Books || (pane == Chapters && selected >= 0))
+	return m.box(size, fmt.Sprintf(" %d %s ", pane+1, name), rows, selected, focused, pane == Library || pane == Books || (pane == Chapters && selected >= 0))
 }
 
 // box is shared by root panes and the dedicated Help view. Fitting precedes style.
@@ -169,6 +210,8 @@ func (m Model) View() tea.View {
 		lines = m.modalLines(lines)
 	} else if m.accountOpen {
 		lines = m.accountLines(lines)
+	} else if m.sortOpen {
+		lines = m.sortLines(lines)
 	}
 	lines = append(lines, m.playerLines(g.Player)...)
 	activity, tint := m.data.Activity, m.appearance.Palette.Muted
@@ -178,6 +221,8 @@ func (m Model) View() tea.View {
 	lines = append(lines, m.paint(PadLine(activity, g.Activity.Width, m.tail()), tint))
 	hints := "? Help | q quit | Tab/1-5 panes | "
 	switch m.focus {
+	case Library:
+		hints += "j/k views | Enter open | / filter | s sort"
 	case Books:
 		hints += "j/k browse | Enter play"
 	case Details:
@@ -186,8 +231,6 @@ func (m Model) View() tea.View {
 		hints += "j/k chapters | Enter jump/switch"
 	case PlayerPane:
 		hints += "Left/Right controls | Enter activate"
-	default:
-		hints += "Domain actions unavailable in shell"
 	}
 	if m.data.Player.transportAvailable() {
 		hints += " | Space current audio"
@@ -197,11 +240,20 @@ func (m Model) View() tea.View {
 	if m.dispatch == nil {
 		hints = "? Help | Tab/1-5 panes | Requests disabled: no coordinator"
 	}
+	if m.filterQuery != "" && !m.filterEditing {
+		hints += " | Esc clear filter"
+	}
+	if m.filterEditing {
+		hints = "Filter: " + cleanLine(m.filterDraft) + "_ | Enter apply | Esc cancel"
+	}
 	if m.help {
 		hints = "Esc Back | j/k scroll | PgUp/PgDown | g/G bounds | " + m.helpTransport()
 	}
 	if m.accountOpen {
 		hints = "j/k/Tab choose | Enter act | Esc back | Transport disabled in Account"
+	}
+	if m.sortOpen {
+		hints = "j/k/Tab choose | Enter sort | Esc cancel | Transport disabled in Sort"
 	}
 	if m.ownsModal() {
 		hints = "Enter/Ctrl+S save | Alt+Enter newline | Tab local focus | Esc back"
