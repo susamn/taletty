@@ -476,6 +476,10 @@ func (m Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 			if m.focus == Library {
 				rows := m.librarySidebarRows()
 				if cur := m.clampedLibraryCursor(rows); cur >= 0 && rows[cur].selectable {
+					if rows[cur].action == "open-downloads" {
+						m.openDownloads()
+						return m, nil
+					}
 					if rows[cur].action == OpenBookmarks {
 						return m.triggerOpenBookmarks()
 					}

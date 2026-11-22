@@ -261,23 +261,103 @@ func (m Model) downloadsKey(key string) (tea.Model, tea.Cmd) {
 }
 
 func (m Model) downloadsLines() []string {
-	rows := make([]string, 0, len(m.downloads))
+	c := m.layout.Content
 	selected := -1
 	if len(m.downloads) > 0 {
 		selected = min(len(m.downloads)-1, max(0, m.downloadsCursor))
 	}
-	innerWidth := max(1, m.layout.Content.Width-5)
-	for _, job := range m.downloads {
-		rows = append(rows, m.formatDownloadRow(job, innerWidth))
+	focused := m.dlMenu == nil && !m.ownsModal()
+	var lines []string
+	if m.layout.Mode == Wide && len(m.downloads) > 0 {
+		leftWidth := max(48, c.Width*2/3)
+		rightWidth := c.Width - leftWidth
+		leftRect := Rect{X: c.X, Y: c.Y, Width: leftWidth, Height: c.Height}
+		rightRect := Rect{X: c.X + leftWidth, Y: c.Y, Width: rightWidth, Height: c.Height}
+		innerWidth := max(1, leftRect.Width-6)
+		rows := make([]string, 0, len(m.downloads)+1)
+		const stateCol = 16
+		titleCol := max(12, (innerWidth-stateCol-6)/2)
+		detailCol := max(12, innerWidth-titleCol-stateCol-6)
+		rows = append(rows, PadLine("BOOK", titleCol, m.tail())+" | "+PadLine("STATE", stateCol, m.tail())+" | "+PadLine("TRANSFER / QUEUE", detailCol, m.tail()))
+		for _, job := range m.downloads {
+			rows = append(rows, m.formatDownloadRow(job, innerWidth))
+		}
+		boxSelected := selected
+		if boxSelected >= 0 {
+			boxSelected++
+		}
+		leftTitle := " 1 Downloads "
+		if focused {
+			leftTitle = " 1 [Focus] Downloads "
+		}
+		leftBox := m.box(leftRect, leftTitle, rows, boxSelected, focused, true)
+		job := m.downloads[selected]
+		rightRows := m.downloadDetailRows(job)
+		rightBox := m.box(rightRect, " Details - "+title(job.Title)+" ", rightRows, -1, false, false)
+		lines = make([]string, c.Height)
+		for y := range c.Height {
+			lines[y] = leftBox[y] + rightBox[y]
+		}
+	} else {
+		rows := make([]string, 0, len(m.downloads))
+		innerWidth := max(1, c.Width-6)
+		for _, job := range m.downloads {
+			rows = append(rows, m.formatDownloadRow(job, innerWidth))
+		}
+		if len(rows) == 0 {
+			rows = []string{"No download jobs. Press d on a book in Library to queue a download."}
+		}
+		lines = m.box(c, " 1 [Focus] Downloads ", rows, selected, focused, selected >= 0)
 	}
-	if len(rows) == 0 {
-		rows = []string{"No download jobs. Press d on a book in Library to queue a download."}
-	}
-	lines := m.box(m.layout.Content, " 1 [Focus] Downloads ", rows, selected, m.dlMenu == nil && !m.ownsModal(), selected >= 0)
 	if m.dlMenu != nil {
 		lines = m.downloadMenuLines(lines)
 	}
 	return lines
+}
+
+func (m Model) downloadDetailRows(job DownloadJob) []string {
+	status := m.availability(job.State)
+	if job.Canceling {
+		status += " (Canceling)"
+	}
+	rows := []string{
+		title(job.Title),
+		"State: " + status,
+	}
+	switch job.State {
+	case Queued:
+		rows = append(rows, fmt.Sprintf("Queue position: #%d", max(1, job.QueuePosition)), "Actions: Enter / x to reorder or remove")
+	case Downloading:
+		if job.Stage == "licensing" {
+			rows = append(rows, "Stage: Licensing entitlement")
+		} else if job.BytesTotal != nil && *job.BytesTotal > 0 {
+			pct := min(100, max(0, int(job.BytesReceived*100 / *job.BytesTotal)))
+			rows = append(rows, fmt.Sprintf("Transfer: %s / %s (%d%%)", formatBytes(job.BytesReceived), formatBytes(*job.BytesTotal), pct))
+		} else {
+			rows = append(rows, fmt.Sprintf("Transfer: %s / unknown total", formatBytes(job.BytesReceived)))
+		}
+		if job.SpeedBPS > 0 && job.Stage != "licensing" {
+			rows = append(rows, fmt.Sprintf("Speed: %s/s", formatBytes(int64(job.SpeedBPS))))
+		}
+		rows = append(rows, "Actions: Enter / x to cancel download")
+	case Preparing:
+		if job.Stage == "publishing" {
+			rows = append(rows, "Stage: Publishing local audio")
+		} else {
+			rows = append(rows, "Stage: Preparing playable audio (indeterminate)")
+		}
+		rows = append(rows, "Actions: Enter / x to cancel preparation")
+	case Ready:
+		rows = append(rows, "Completed local audio ready.", "Actions: Enter / x to show in Library or delete audio")
+	case Failed:
+		if errText := cleanLine(job.Error); errText != "" {
+			rows = append(rows, "Failure: "+errText)
+		}
+		rows = append(rows, "No automatic retry.", "Actions: Enter / x to retry download")
+	case Canceled:
+		rows = append(rows, "Canceled before publication.", "Actions: Enter / x to retry from scratch")
+	}
+	return rows
 }
 
 func (m Model) downloadMenuLines(lines []string) []string {
@@ -306,7 +386,7 @@ func (m Model) formatDownloadRow(job DownloadJob, width int) string {
 	var detail string
 	switch job.State {
 	case Queued:
-		detail = fmt.Sprintf("#%d", max(1, job.QueuePosition))
+		detail = fmt.Sprintf("Queued (#%d)", max(1, job.QueuePosition))
 	case Downloading:
 		if job.Stage == "licensing" {
 			detail = "Licensing"
@@ -325,10 +405,20 @@ func (m Model) formatDownloadRow(job DownloadJob, width int) string {
 		} else {
 			detail = "Preparing (indeterminate)"
 		}
+	case Ready:
+		detail = "Completed local audio"
+	case Canceled:
+		detail = "Retry from scratch"
 	case Failed:
 		if errText := cleanLine(job.Error); errText != "" {
 			detail = errText
 		}
+	}
+	if m.layout.Mode == Wide && width >= 48 {
+		const stateCol = 16
+		titleCol := max(12, (width-stateCol-6)/2)
+		detailCol := max(12, width-titleCol-stateCol-6)
+		return PadLine(title(job.Title), titleCol, m.tail()) + " | " + PadLine(status, stateCol, m.tail()) + " | " + PadLine(detail, detailCol, m.tail())
 	}
 	right := status
 	if detail != "" {

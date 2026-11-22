@@ -31,12 +31,12 @@ func playbackLabel(state PlaybackState) string {
 
 func (m Model) timeline(width int) string {
 	p := m.data.Player
-	duration := "unknown duration"
+	leftLabel := clock(p.Position)
+	rightLabel := "unknown duration"
 	if p.Duration > 0 {
-		duration = clock(p.Duration)
+		rightLabel = clock(p.Duration)
 	}
-	labels := clock(p.Position) + " / " + duration
-	trackWidth := max(1, width-ansi.StringWidth(labels)-3)
+	trackWidth := max(1, width-ansi.StringWidth(leftLabel)-ansi.StringWidth(rightLabel)-4)
 	line, dot, tick := "-", "o", "|"
 	if m.appearance.Glyphs != Plain {
 		line, dot, tick = "─", "●", "│"
@@ -58,7 +58,7 @@ func (m Model) timeline(width int) string {
 		position := int(float64(trackWidth-1) * ratio)
 		cells[position] = dot
 	}
-	return labels + " [" + strings.Join(cells, "") + "]"
+	return leftLabel + " [" + strings.Join(cells, "") + "] " + rightLabel
 }
 
 func spread(left, right string, width int) string {
