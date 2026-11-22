@@ -656,6 +656,29 @@ exercise J17 favorites journeys over real `*store.Store`, `*profile.Workspace`,
   `★` / `[Fav]` indicators in `Books` and `Details`, retains authoritative
   prior state with a recoverable error on save failure, and keeps selection/focus
   valid when unfavoriting rows including the final visible row.
+## Completion state, smart rewind, and remaining time (#20)
+
+[`playback_linux_test.go`](../app/internal/playback/playback_linux_test.go),
+[`completion_test.go`](../app/internal/ui/completion_test.go), and
+[`completion_linux_test.go`](../app/internal/app/completion_linux_test.go)
+exercise J08/J11 fake-clock playback, UI, and coordinator journeys:
+
+- Natural EOF in `Poll` / `PollPlayback` marks `CompletionFinished` and updates
+  `Player - Finished` and `Books` state, while deliberate `Stop`, book switch,
+  and seeks never mark finished.
+- `x` Book Context Action Menu (`Mark as finished`, `Mark as unfinished`,
+  `Replay from start` confirmation, `Delete downloaded audio`) with frozen
+  target state and stale-target invalidation; manual completion updates metadata
+  without interrupting active audio; `Enter` on a finished book offers explicit
+  `Replay from start` (resetting position to `0` and `CompletionUnfinished`
+  while preserving saved speed).
+- Fake-clock `SmartRewindPolicy` (`DefaultSmartRewindPolicy()` = 10s pause
+  threshold / 5s rewind, clamped at `0`, configurable/disableable): applies on
+  pause resume and restart `PlayBook` when elapsed `>= Threshold`, never applies
+  below threshold or after deliberate seeks/bookmark/chapter jumps.
+- Speed-adjusted book and chapter remaining time (`Player.ChapterEnd`), handling
+  unknown durations/speeds safely and hiding secondary remaining time in compact
+  `80x20` mode.
 
 ## Runtime packaging and platform matrix (#26)
 

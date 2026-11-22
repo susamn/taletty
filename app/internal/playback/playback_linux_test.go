@@ -1584,3 +1584,223 @@ func TestControllerConcurrentSerialization(t *testing.T) {
 	}
 	must(t, ctrl.Close(ctx))
 }
+
+func TestControllerSmartRewindCompletionAndReplay(t *testing.T) {
+	ctx := context.Background()
+	s := openTestStore(t)
+	bookA := store.BookKey{Provider: "audible", Namespace: "us", ID: "B000000001"}
+	bookB := store.BookKey{Provider: "audible", Namespace: "us", ID: "B000000002"}
+	mediaA := filepath.Join(t.TempDir(), "a.m4b")
+	mediaB := filepath.Join(t.TempDir(), "b.m4b")
+
+	// Invalid SmartRewindPolicy rejected.
+	for _, bad := range []SmartRewindPolicy{
+		{Threshold: -time.Second, Rewind: time.Second},
+		{Threshold: time.Second, Rewind: -time.Second},
+	} {
+		if _, err := NewController(&mockBackend{}, Options{SmartRewind: &bad}); !errors.Is(err, ErrInvalidInput) {
+			t.Fatalf("expected ErrInvalidInput for %+v, got %v", bad, err)
+		}
+	}
+
+	now := time.Unix(1_700_000_000, 0)
+	policy := DefaultSmartRewindPolicy()
+	mb := &mockBackend{dur: 120 * time.Second}
+	ctrl, err := NewController(mb, Options{
+		Store:       s,
+		Clock:       func() time.Time { return now },
+		SmartRewind: &policy,
+	})
+	must(t, err)
+	defer func() { _ = ctrl.Close(ctx) }()
+
+	if err := ctrl.SetSmartRewind(SmartRewindPolicy{Threshold: -1}); !errors.Is(err, ErrInvalidInput) {
+		t.Fatalf("expected ErrInvalidInput on SetSmartRewind, got %v", err)
+	}
+
+	// Load bookA at 0, advance to 30s, pause, resume after 9s (< 10s threshold) -> NO rewind.
+	snap, err := ctrl.Load(ctx, Track{Key: bookA, Title: "A", Path: mediaA, Duration: 120 * time.Second}, true)
+	must(t, err)
+	mb.mu.Lock()
+	mb.pos = 30 * time.Second
+	mb.mu.Unlock()
+	snap, err = ctrl.Pause(ctx, snap.Session)
+	must(t, err)
+	now = now.Add(9 * time.Second)
+	snap, err = ctrl.Play(ctx, snap.Session)
+	must(t, err)
+	if snap.Position != 30*time.Second {
+		t.Fatalf("expected no rewind below threshold, got %v", snap.Position)
+	}
+
+	// Pause at 30s, advance 10s (>= threshold) -> Play rewinds 5s to 25s and persists checkpoint.
+	snap, err = ctrl.Pause(ctx, snap.Session)
+	must(t, err)
+	now = now.Add(10 * time.Second)
+	snap, err = ctrl.Play(ctx, snap.Session)
+	must(t, err)
+	if snap.Position != 25*time.Second {
+		t.Fatalf("expected 5s smart rewind to 25s, got %v", snap.Position)
+	}
+	saved, found, err := s.ListeningState(ctx, bookA)
+	must(t, err)
+	if !found || saved.PositionNS != int64(25*time.Second) {
+		t.Fatalf("expected rewound checkpoint 25s, got %+v", saved)
+	}
+
+	// Deliberate seek while paused clears pause timer -> NO smart rewind on subsequent Play!
+	snap, err = ctrl.Pause(ctx, snap.Session)
+	must(t, err)
+	now = now.Add(30 * time.Second)
+	snap, err = ctrl.SeekAbsolute(ctx, snap.Session, 40*time.Second)
+	must(t, err)
+	snap, err = ctrl.Play(ctx, snap.Session)
+	must(t, err)
+	if snap.Position != 40*time.Second {
+		t.Fatalf("deliberate seek while paused triggered smart rewind: %v", snap.Position)
+	}
+
+	// Clamp at 0 when position < Rewind.
+	snap, err = ctrl.SeekAbsolute(ctx, snap.Session, 2*time.Second)
+	must(t, err)
+	snap, err = ctrl.Pause(ctx, snap.Session)
+	must(t, err)
+	now = now.Add(20 * time.Second)
+	snap, err = ctrl.Play(ctx, snap.Session)
+	must(t, err)
+	if snap.Position != 0 {
+		t.Fatalf("expected smart rewind clamped at 0, got %v", snap.Position)
+	}
+
+	// Restart restoration: Stop does NOT mark finished; Load after >= threshold rewinds 5s.
+	snap, err = ctrl.SeekAbsolute(ctx, snap.Session, 50*time.Second)
+	must(t, err)
+	snap, err = ctrl.Stop(ctx)
+	must(t, err)
+	saved, _, _ = s.ListeningState(ctx, bookA)
+	if saved.Completion != store.CompletionUnfinished {
+		t.Fatalf("deliberate Stop marked book finished: %+v", saved)
+	}
+	now = now.Add(60 * time.Second)
+	snap, err = ctrl.Load(ctx, Track{Key: bookA, Title: "A", Path: mediaA, Duration: 120 * time.Second}, true)
+	must(t, err)
+	if snap.Position != 45*time.Second {
+		t.Fatalf("expected restart smart rewind to 45s, got %v", snap.Position)
+	}
+
+	// Poll detects external pause -> smart rewind applies on Play; Poll EOF marks CompletionFinished.
+	mb.mu.Lock()
+	mb.paused = true
+	mb.pos = 45 * time.Second
+	mb.mu.Unlock()
+	snap, err = ctrl.Poll(ctx)
+	must(t, err)
+	now = now.Add(15 * time.Second)
+	snap, err = ctrl.Play(ctx, snap.Session)
+	must(t, err)
+	if snap.Position != 40*time.Second {
+		t.Fatalf("expected smart rewind after Poll-detected pause, got %v", snap.Position)
+	}
+
+	// Natural EOF marks CompletionFinished and persists it.
+	mb.mu.Lock()
+	mb.eof = true
+	mb.mu.Unlock()
+	snap, err = ctrl.Poll(ctx)
+	must(t, err)
+	if snap.Completion != store.CompletionFinished || snap.Position != 120*time.Second {
+		t.Fatalf("expected CompletionFinished at EOF, got %+v", snap)
+	}
+	mb.mu.Lock()
+	mb.eof = false
+	mb.mu.Unlock()
+
+	// SetCompletion marks unfinished/finished without interrupting playback or changing position/speed.
+	snap, err = ctrl.SetSpeed(ctx, snap.Session, 1_500_000)
+	must(t, err)
+	snap, err = ctrl.SetCompletion(ctx, bookA, store.CompletionUnfinished)
+	must(t, err)
+	if snap.Completion != store.CompletionUnfinished || snap.Position != 120*time.Second || snap.SpeedMilli != 1_500_000 {
+		t.Fatalf("SetCompletion altered position/speed: %+v", snap)
+	}
+	// SetCompletion on inactive bookB preserves its saved state or defaults.
+	_, err = ctrl.SetCompletion(ctx, bookB, store.CompletionFinished)
+	must(t, err)
+	savedB, foundB, _ := s.ListeningState(ctx, bookB)
+	if !foundB || savedB.Completion != store.CompletionFinished || savedB.PositionNS != 0 {
+		t.Fatalf("inactive SetCompletion failed: found=%v %+v", foundB, savedB)
+	}
+
+	// Replay resets position to 0 and CompletionUnfinished while preserving saved speed (1.5x).
+	snap, err = ctrl.Replay(ctx, Track{Key: bookA, Title: "A", Path: mediaA, Duration: 120 * time.Second})
+	must(t, err)
+	if snap.State != StatePlaying || snap.Position != 0 || snap.Completion != store.CompletionUnfinished || snap.SpeedMilli != 1_500_000 {
+		t.Fatalf("Replay failed: %+v", snap)
+	}
+
+	// Disable smart rewind via SetSmartRewind(SmartRewindPolicy{}).
+	must(t, ctrl.SetSmartRewind(SmartRewindPolicy{}))
+	snap, err = ctrl.SeekAbsolute(ctx, snap.Session, 30*time.Second)
+	must(t, err)
+	snap, err = ctrl.Pause(ctx, snap.Session)
+	must(t, err)
+	now = now.Add(time.Hour)
+	snap, err = ctrl.Play(ctx, snap.Session)
+	must(t, err)
+	if snap.Position != 30*time.Second {
+		t.Fatalf("disabled smart rewind still rewound: %v", snap.Position)
+	}
+
+	// Error paths for SetCompletion and Replay.
+	canceled, cancel := context.WithCancel(ctx)
+	cancel()
+	for _, call := range []func() error{
+		func() error { _, e := ctrl.SetCompletion(nil, bookA, store.CompletionFinished); return e },
+		func() error { _, e := ctrl.SetCompletion(ctx, store.BookKey{}, store.CompletionFinished); return e },
+		func() error { _, e := ctrl.SetCompletion(ctx, bookA, "bad"); return e },
+		func() error { _, e := ctrl.SetCompletion(canceled, bookA, store.CompletionFinished); return e },
+		func() error { _, e := ctrl.Replay(nil, Track{Key: bookA, Title: "A", Path: mediaA}); return e },
+		func() error { _, e := ctrl.Replay(ctx, Track{}); return e },
+		func() error { _, e := ctrl.Replay(canceled, Track{Key: bookA, Title: "A", Path: mediaA}); return e },
+	} {
+		if err := call(); err == nil {
+			t.Fatal("expected error for invalid SetCompletion/Replay call")
+		}
+	}
+
+	// Backend/store error paths on smart rewind seek, Replay, and SetCompletion.
+	fs := &faultStore{inner: s}
+	mbErr := &mockBackend{dur: 60 * time.Second}
+	pOn := DefaultSmartRewindPolicy()
+	ctrlFault, err := NewController(mbErr, Options{Store: fs, Clock: func() time.Time { return now }, SmartRewind: &pOn})
+	must(t, err)
+	snapF, err := ctrlFault.Load(ctx, Track{Key: bookA, Title: "A", Path: mediaA, Duration: 60 * time.Second}, true)
+	must(t, err)
+	snapF, err = ctrlFault.SeekAbsolute(ctx, snapF.Session, 20*time.Second)
+	must(t, err)
+	snapF, err = ctrlFault.Pause(ctx, snapF.Session)
+	must(t, err)
+	now = now.Add(20 * time.Second)
+	mbErr.seekErr = ErrIPC
+	if _, err := ctrlFault.Play(ctx, snapF.Session); err == nil {
+		t.Fatal("expected SeekExact error during smart rewind")
+	}
+	mbErr.seekErr = nil
+	fs.putErr = errors.New("disk full")
+	if _, err := ctrlFault.SetCompletion(ctx, bookB, store.CompletionUnfinished); err == nil {
+		t.Fatal("expected store error on SetCompletion")
+	}
+	fs.getErr = errors.New("read err")
+	if _, err := ctrlFault.Replay(ctx, Track{Key: bookB, Title: "B", Path: mediaB}); err == nil {
+		t.Fatal("expected store read error on Replay")
+	}
+	fs.getErr = nil
+	fs.putErr = nil
+	must(t, ctrlFault.Close(ctx))
+	if _, err := ctrlFault.SetCompletion(ctx, bookA, store.CompletionFinished); !errors.Is(err, ErrClosed) {
+		t.Fatalf("expected ErrClosed on SetCompletion, got %v", err)
+	}
+	if _, err := ctrlFault.Replay(ctx, Track{Key: bookA, Title: "A", Path: mediaA}); !errors.Is(err, ErrClosed) {
+		t.Fatalf("expected ErrClosed on Replay, got %v", err)
+	}
+}

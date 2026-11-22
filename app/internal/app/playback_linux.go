@@ -38,6 +38,9 @@ const (
 type PlaybackController interface {
 	Snapshot() playback.Snapshot
 	Load(ctx context.Context, track playback.Track, autoPlay bool) (playback.Snapshot, error)
+	Replay(ctx context.Context, track playback.Track) (playback.Snapshot, error)
+	SetCompletion(ctx context.Context, key store.BookKey, completion store.Completion) (playback.Snapshot, error)
+	SetSmartRewind(policy playback.SmartRewindPolicy) error
 	Toggle(ctx context.Context, session uint64) (playback.Snapshot, error)
 	SeekRelative(ctx context.Context, session uint64, delta time.Duration) (playback.Snapshot, error)
 	SeekAbsolute(ctx context.Context, session uint64, target time.Duration) (playback.Snapshot, error)
@@ -289,6 +292,12 @@ func (c *Coordinator) handlePlaybackAction(action ui.Action) tea.Msg {
 	switch action.Kind {
 	case ui.PlayBook:
 		return c.playBook(action.Key)
+	case ui.ReplayBook:
+		return c.replayBook(action)
+	case ui.MarkFinished:
+		return c.setBookCompletion(action.Key, store.CompletionFinished)
+	case ui.MarkUnfinished:
+		return c.setBookCompletion(action.Key, store.CompletionUnfinished)
 	case ui.ActivateChapter:
 		return c.activateChapter(action)
 	case ui.ConfirmSwitchPlay:
@@ -456,6 +465,21 @@ func (c *Coordinator) missingAudioPrompt(encodedKey, title string) tea.Msg {
 	}
 }
 
+func (c *Coordinator) replayConfirmation(encodedKey, title string) tea.Msg {
+	c.mu.Lock()
+	c.dialogSeq++
+	id := fmt.Sprintf("replay-%d", c.dialogSeq)
+	c.mu.Unlock()
+	return ui.OpenConfirmationMsg{
+		ID:      id,
+		Title:   "Replay finished book",
+		Prompt:  fmt.Sprintf("Replay %q from the beginning (00:00:00)? This resets its position and marks it unfinished.", title),
+		Keep:    "Cancel",
+		Confirm: "Replay from start",
+		Action:  ui.Action{Kind: ui.ReplayBook, Key: encodedKey},
+	}
+}
+
 func (c *Coordinator) playBook(encodedKey string) tea.Msg {
 	ctx, ok := c.beginWorker()
 	if !ok {
@@ -474,6 +498,9 @@ func (c *Coordinator) playBook(encodedKey string) tea.Msg {
 	if !ready {
 		return c.missingAudioPrompt(encodedKey, title)
 	}
+	if ls, found, err := c.store.ListeningState(ctx, key); err == nil && found && ls.Completion == store.CompletionFinished {
+		return c.replayConfirmation(encodedKey, title)
+	}
 	chapters := c.ensureChapters(ctx, key, absPath)
 	snap, err := c.player.Load(ctx, playback.Track{
 		Key:      key,
@@ -485,6 +512,114 @@ func (c *Coordinator) playBook(encodedKey string) tea.Msg {
 		return ui.NoticeMsg{Error: sanitizePlaybackError(err)}
 	}
 	return c.refreshPlaybackSnapshot(snap, chapters, "Playing "+title)
+}
+
+func (c *Coordinator) replayBook(action ui.Action) tea.Msg {
+	ctx, ok := c.beginWorker()
+	if !ok {
+		return ui.ModalResultMsg{ID: action.RequestID, Attempt: action.Attempt, Error: SanitizeError(ErrClosed)}
+	}
+	defer c.wg.Done()
+
+	if c.player == nil {
+		return ui.ModalResultMsg{ID: action.RequestID, Attempt: action.Attempt, Error: "Playback unavailable."}
+	}
+	key, err := DecodeBookKey(action.Key)
+	if err != nil {
+		return ui.ModalResultMsg{ID: action.RequestID, Attempt: action.Attempt, Error: SanitizeError(ErrInvalidInput)}
+	}
+	absPath, title, dur, ready := c.verifyBookMedia(ctx, key)
+	if !ready {
+		return ui.ModalResultMsg{ID: action.RequestID, Attempt: action.Attempt, Error: "Local audio file is missing or unsafe."}
+	}
+	chapters := c.ensureChapters(ctx, key, absPath)
+	snap, err := c.player.Replay(ctx, playback.Track{
+		Key:      key,
+		Title:    title,
+		Path:     absPath,
+		Duration: dur,
+	})
+	if err != nil {
+		return ui.ModalResultMsg{ID: action.RequestID, Attempt: action.Attempt, Error: sanitizePlaybackError(err)}
+	}
+	updated := c.refreshPlaybackSnapshot(snap, chapters, "Replaying "+title)
+	return tea.BatchMsg{
+		func() tea.Msg { return ui.ModalResultMsg{ID: action.RequestID, Attempt: action.Attempt} },
+		func() tea.Msg { return updated },
+	}
+}
+
+type listeningStateWriter interface {
+	PutListeningState(ctx context.Context, state store.ListeningState) error
+}
+
+func (c *Coordinator) setBookCompletion(encodedKey string, completion store.Completion) tea.Msg {
+	ctx, ok := c.beginWorker()
+	if !ok {
+		return ui.NoticeMsg{Error: SanitizeError(ErrClosed)}
+	}
+	defer c.wg.Done()
+
+	key, err := DecodeBookKey(encodedKey)
+	if err != nil {
+		return ui.NoticeMsg{Error: SanitizeError(ErrInvalidInput)}
+	}
+	activity := "Marked unfinished"
+	if completion == store.CompletionFinished {
+		activity = "Marked finished"
+	}
+
+	if c.player != nil {
+		snap, err := c.player.SetCompletion(ctx, key, completion)
+		if err != nil {
+			return ui.NoticeMsg{Error: sanitizePlaybackError(err)}
+		}
+		if snap.Book != nil && *snap.Book == key {
+			return c.refreshPlaybackSnapshot(snap, c.cachedChaptersFor(snap.Book), activity)
+		}
+	} else if writer, ok := c.store.(listeningStateWriter); ok {
+		posNS := int64(0)
+		speedMilli := playback.DefaultSpeedMilli
+		if saved, found, err := c.store.ListeningState(ctx, key); err != nil {
+			return ui.NoticeMsg{Error: SanitizeError(err)}
+		} else if found {
+			posNS = max(saved.PositionNS, 0)
+			if saved.SpeedMilli > 0 {
+				speedMilli = saved.SpeedMilli
+			}
+		}
+		if err := writer.PutListeningState(ctx, store.ListeningState{
+			Key:         key,
+			PositionNS:  posNS,
+			SpeedMilli:  speedMilli,
+			Completion:  completion,
+			UpdatedAtMS: max(c.clock().UnixMilli(), 0),
+		}); err != nil {
+			return ui.NoticeMsg{Error: SanitizeError(err)}
+		}
+	} else {
+		return ui.NoticeMsg{Error: "Completion persistence unavailable."}
+	}
+
+	c.mu.Lock()
+	for i := range c.snapshot.Books {
+		if c.snapshot.Books[i].Key == encodedKey {
+			c.snapshot.Books[i].Finished = completion == store.CompletionFinished
+			c.snapshot.Books[i].InProgress = c.snapshot.Books[i].InProgress && completion != store.CompletionFinished
+			break
+		}
+	}
+	if c.snapshot.Player.Key == encodedKey && c.snapshot.Player.Session == "" {
+		if completion == store.CompletionFinished {
+			c.snapshot.Player.State = ui.Finished
+		} else {
+			c.snapshot.Player.State = ui.Stopped
+		}
+	}
+	c.snapshot.Activity = activity
+	out := c.snapshot
+	c.mu.Unlock()
+	return out
 }
 
 func (c *Coordinator) activateChapter(action ui.Action) tea.Msg {
@@ -720,13 +855,20 @@ func (c *Coordinator) refreshPlaybackSnapshot(snap playback.Snapshot, chapters [
 	if activity != "" {
 		c.snapshot.Activity = activity
 	}
-	if snap.Book != nil && len(chapters) > 0 {
+	if snap.Book != nil {
 		if encoded, err := EncodeBookKey(*snap.Book); err == nil {
 			titles, starts := splitChapters(chapters)
 			for i := range c.snapshot.Books {
 				if c.snapshot.Books[i].Key == encoded {
-					c.snapshot.Books[i].Chapters = slices.Clone(titles)
-					c.snapshot.Books[i].ChapterStarts = slices.Clone(starts)
+					c.snapshot.Books[i].Finished = snap.Completion == store.CompletionFinished
+					c.snapshot.Books[i].InProgress = snap.Position > 0 && snap.Completion != store.CompletionFinished
+					if snap.State == playback.StatePlaying || snap.State == playback.StatePaused {
+						c.snapshot.Books[i].RecentAtMS = max(c.snapshot.Books[i].RecentAtMS, c.clock().UnixMilli())
+					}
+					if len(chapters) > 0 {
+						c.snapshot.Books[i].Chapters = slices.Clone(titles)
+						c.snapshot.Books[i].ChapterStarts = slices.Clone(starts)
+					}
 					break
 				}
 			}
@@ -750,24 +892,42 @@ func projectActivePlayer(snap playback.Snapshot, chapters []Chapter) ui.Player {
 	case playback.StatePlaying:
 		state = ui.Playing
 	case playback.StatePaused:
-		state = ui.Paused
+		if snap.Completion == store.CompletionFinished && snap.Duration > 0 && snap.Position >= snap.Duration {
+			state = ui.Finished
+		} else {
+			state = ui.Paused
+		}
 	case playback.StateFailed:
 		state = ui.PlaybackFailed
 	default:
 		state = ui.Stopped
 	}
 	session := ""
-	if snap.Session > 0 && (snap.State == playback.StatePlaying || snap.State == playback.StatePaused) {
+	if snap.Session > 0 && (state == ui.Playing || state == ui.Paused) {
 		session = strconv.FormatUint(snap.Session, 10)
 	}
 	chapterTitle := ""
+	var chapterEnd time.Duration
 	var ticks []time.Duration
 	if len(chapters) > 0 {
 		ticks = make([]time.Duration, len(chapters))
+		activeIdx := -1
 		for i, ch := range chapters {
 			ticks[i] = ch.Start
 			if snap.Position >= ch.Start {
-				chapterTitle = ch.Title
+				activeIdx = i
+			}
+		}
+		if activeIdx >= 0 {
+			ch := chapters[activeIdx]
+			chapterTitle = ch.Title
+			switch {
+			case ch.End > ch.Start:
+				chapterEnd = ch.End
+			case activeIdx+1 < len(chapters) && chapters[activeIdx+1].Start > ch.Start:
+				chapterEnd = chapters[activeIdx+1].Start
+			case snap.Duration > ch.Start:
+				chapterEnd = snap.Duration
 			}
 		}
 	}
@@ -779,6 +939,7 @@ func projectActivePlayer(snap playback.Snapshot, chapters []Chapter) ui.Player {
 		State:        state,
 		Position:     snap.Position,
 		Duration:     snap.Duration,
+		ChapterEnd:   chapterEnd,
 		ChapterTicks: ticks,
 		Speed:        float64(snap.SpeedMilli) / float64(playback.DefaultSpeedMilli),
 		Volume:       snap.VolumePercent,

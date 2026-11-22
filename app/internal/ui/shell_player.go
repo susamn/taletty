@@ -65,6 +65,18 @@ func spread(left, right string, width int) string {
 	return left + strings.Repeat(" ", max(1, width-ansi.StringWidth(cleanLine(left))-ansi.StringWidth(cleanLine(right)))) + right
 }
 
+func adjustedRemaining(pos, total time.Duration, speed float64) (time.Duration, bool) {
+	if total <= 0 || speed <= 0 || math.IsNaN(speed) || math.IsInf(speed, 0) {
+		return 0, false
+	}
+	rem := total - min(total, max(0, pos))
+	seconds := float64(rem) / float64(time.Second) / speed
+	if seconds > float64(math.MaxInt64/int64(time.Second)) {
+		return 0, false
+	}
+	return time.Duration(seconds) * time.Second, true
+}
+
 func (m Model) playerLines(size Rect) []string {
 	p := m.data.Player
 	state := playbackLabel(p.State)
@@ -100,12 +112,14 @@ func (m Model) playerLines(size Rect) []string {
 	rows = append(rows, spread(transport, speed+" | "+volume+" | Sleep "+sleep, size.Width-4))
 	if size.Height == 6 {
 		remaining := "Remaining unknown"
-		if p.Duration > 0 && p.Speed > 0 && !math.IsInf(p.Speed, 0) {
-			// Use floating seconds to avoid duration overflow at tiny valid speeds.
-			remainingBook := p.Duration - min(p.Duration, max(0, p.Position))
-			seconds := float64(remainingBook) / float64(time.Second) / p.Speed
-			if seconds <= float64(math.MaxInt64/int64(time.Second)) {
-				remaining = "Remaining " + clock(time.Duration(seconds)*time.Second) + " at speed"
+		if bookRem, ok := adjustedRemaining(p.Position, p.Duration, p.Speed); ok {
+			remaining = "Remaining " + clock(bookRem) + " at speed"
+		}
+		if strings.TrimSpace(cleanLine(p.Chapter)) != "" {
+			if chRem, ok := adjustedRemaining(p.Position, p.ChapterEnd, p.Speed); ok {
+				remaining += " | Chapter left " + clock(chRem)
+			} else {
+				remaining += " | Chapter left unknown"
 			}
 		}
 		rows = append(rows, remaining)

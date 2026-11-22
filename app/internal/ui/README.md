@@ -160,6 +160,11 @@ query-failure retry, and `Tab`/`1-5`/`Esc` focus restoration.
 destination, `f` highlighted-book targeting (unavailable in `PlayerPane`),
 accent-tinted `★` / `[Fav]` indicators in `Books` and `Details`, empty
 `Favorites` guidance, and `RestoreSessionMsg` restoration.
+[`completion_test.go`](completion_test.go) exercises speed-adjusted book and
+chapter remaining time (including unknown durations/speeds and compact hiding)
+and the `x` Book Context Action Menu (`Mark as finished`, `Mark as unfinished`,
+`Replay from start` confirmation, `Delete downloaded audio`, and stale-target
+invalidation).
 Pure geometry tests include the boundary grid and extreme integer dimensions;
 actual rendered views are checked at supported/minimum/tiny sizes in terminal cells.
 This is partial J13 (and the browse-target portion of J07), not complete app journeys.

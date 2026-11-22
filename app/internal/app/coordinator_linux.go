@@ -15,6 +15,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/susamn/taletty/app/internal/bookmarks"
+	"github.com/susamn/taletty/app/internal/playback"
 	"github.com/susamn/taletty/app/internal/profile"
 	"github.com/susamn/taletty/app/internal/store"
 	"github.com/susamn/taletty/app/internal/ui"
@@ -120,6 +121,7 @@ type Options struct {
 	RootOwner       RootLeaseOwner
 	Bookmarks       BookmarkManager
 	PreRoll         *time.Duration
+	SmartRewind     *playback.SmartRewindPolicy
 	Clock           func() time.Time
 	WorkspaceCloser func(context.Context) error
 }
@@ -250,6 +252,16 @@ func NewCoordinator(ctx context.Context, st CatalogStore, opts Options) (*Coordi
 		return nil, err
 	}
 
+	if opts.SmartRewind != nil {
+		if err := opts.SmartRewind.Validate(); err != nil {
+			return nil, err
+		}
+		if opts.Player != nil {
+			if err := opts.Player.SetSmartRewind(*opts.SmartRewind); err != nil {
+				return nil, err
+			}
+		}
+	}
 	preRoll := bookmarks.DefaultPreRoll
 	if opts.PreRoll != nil {
 		if *opts.PreRoll < 0 {
@@ -726,7 +738,8 @@ func (c *Coordinator) Dispatch(action ui.Action) tea.Cmd {
 		return func() tea.Msg {
 			return c.runSync()
 		}
-	case ui.PlayBook, ui.ActivateChapter, ui.ConfirmSwitchPlay,
+	case ui.PlayBook, ui.ReplayBook, ui.MarkFinished, ui.MarkUnfinished,
+		ui.ActivateChapter, ui.ConfirmSwitchPlay,
 		ui.TogglePlayback, ui.SeekBackward, ui.SeekForward,
 		ui.SpeedDown, ui.SpeedUp, ui.VolumeDown, ui.VolumeUp:
 		return func() tea.Msg {

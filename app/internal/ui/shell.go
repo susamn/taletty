@@ -77,7 +77,7 @@ type Book struct {
 type Player struct {
 	Key, Session, Title, Chapter, Sleep string
 	State                               PlaybackState
-	Position, Duration                  time.Duration
+	Position, Duration, ChapterEnd      time.Duration
 	ChapterTicks                        []time.Duration
 	Speed                               float64
 	Volume                              int
@@ -125,6 +125,9 @@ const (
 	ConfirmSwitchBookmark  ActionKind = "confirm-switch-bookmark"
 	DeleteBookmark         ActionKind = "delete-bookmark"
 	ToggleFavorite         ActionKind = "toggle-favorite"
+	MarkFinished           ActionKind = "mark-finished"
+	MarkUnfinished         ActionKind = "mark-unfinished"
+	ReplayBook             ActionKind = "replay-book"
 )
 
 // Current-audio actions carry the source session so the coordinator can reject
@@ -166,6 +169,7 @@ type Model struct {
 	downloadsOpen    bool
 	downloadsCursor  int
 	dlMenu           *downloadActionMenu
+	bookMenu         *bookActionMenu
 	dialogSeq        uint64
 	control          int
 	failure          string
@@ -343,6 +347,9 @@ func (m Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 		if m.bookmarksOpen {
 			return m.bookmarksKey(key, msg.Text)
 		}
+		if m.bookMenu != nil {
+			return m.bookMenuKey(key)
+		}
 		if key == "q" || key == "ctrl+c" {
 			return m.request(Action{Kind: RequestQuit})
 		}
@@ -357,10 +364,7 @@ func (m Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		case "x":
 			if (m.focus == Books || m.focus == Details) && m.selected != "" {
-				if idx := m.bookIndex(); idx >= 0 && m.data.Books[idx].Availability == Ready {
-					return m.Update(m.deleteAudioConfirmation(m.data.Books[idx].Key, m.data.Books[idx].Title, ""))
-				}
-				m.data.Activity = "No downloaded audio to delete for highlighted book"
+				m.openBookMenu()
 			}
 			return m, nil
 		case "esc":

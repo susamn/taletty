@@ -18,6 +18,12 @@ decoupled from media process management and checkpoint persistence.
     `*store.Store`), preserving existing `Completion`.
   - Persists final checkpoints on book switch, pause, paused/playing exact seek,
     speed change, EOF, `Stop` and `Close`.
+  - Marks `CompletionFinished` on natural EOF in `Poll` (never on deliberate
+    `Stop`, book switch, or seek), exposes `SetCompletion` (updating metadata
+    without interrupting active audio) and `Replay` (resetting position to `0`
+    and `CompletionUnfinished` while preserving saved speed), and enforces
+    configurable `SmartRewindPolicy` (`DefaultSmartRewindPolicy()` = 10s pause
+    threshold / 5s rewind, clamped at `0`, cleared on deliberate seeks/jumps).
   - Clamps `VolumePercent` to `[0, 100]`.
   - Reaps broken `ErrIPC` backends immediately and exposes sanitized failure
     messages (`ErrRuntimeMissing`, `ErrIPC`, cancellation, timeout).
@@ -62,5 +68,5 @@ podmutt contributors).
   chaptered `.m4b` fixtures via `ffmpeg` and runs real `mpv --ao=null` tests
   (skipped locally only when `mpv`/`ffmpeg` are absent; mandatory fail in CI
   when `TALETTY_REQUIRE_MEDIA_TOOLS=1`, repeated 3x under `-race`).
-- Chapter lists, smart rewind, completion thresholds, sleep timer policies and UI
-  coordinator wiring remain later dependent tasks (`#15`, `#18`, `#20`, `#21`).
+- Sleep timer policies (`#21`) and desktop media adapters (`#30`) remain
+  separate downstream tasks.
