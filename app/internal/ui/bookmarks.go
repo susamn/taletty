@@ -304,9 +304,6 @@ func (m Model) bookmarkBookTitle(bm Bookmark) string {
 func (m Model) bookmarksLayout() (Rect, Rect) {
 	c := m.layout.Content
 	listHeight := max(5, c.Height*2/3)
-	if c.Height-listHeight < 4 {
-		listHeight = max(4, c.Height-4)
-	}
 	noteHeight := max(1, c.Height-listHeight)
 	return Rect{X: c.X, Y: c.Y, Width: c.Width, Height: listHeight},
 		Rect{X: c.X, Y: c.Y + listHeight, Width: c.Width, Height: noteHeight}

@@ -346,7 +346,7 @@ func TestGlobalBookmarkSearchAndExportTrigger(t *testing.T) {
 		t.Fatalf("expected OpenGlobalBookmarks action, got %+v", actions)
 	}
 
-	// Error + retry in global mode, then populate across books A and B.
+	// Error + retry in global mode (both 'r' and 'enter'), then populate across books A and B.
 	send(t, r, ui.OpenBookmarksMsg{Global: true, Error: "Query failed"})
 	send(t, r, key("e"))
 	if !strings.Contains(r.Model.View().Content, "Reload bookmarks before exporting") {
@@ -356,10 +356,19 @@ func TestGlobalBookmarkSearchAndExportTrigger(t *testing.T) {
 	if actions[len(actions)-1].Kind != ui.OpenGlobalBookmarks {
 		t.Fatalf("r did not retry OpenGlobalBookmarks: %+v", actions)
 	}
+	send(t, r, key("enter"))
+	if actions[len(actions)-1].Kind != ui.OpenGlobalBookmarks {
+		t.Fatalf("enter on error did not retry OpenGlobalBookmarks: %+v", actions)
+	}
+	// Mismatched single-book OpenBookmarksMsg / BookmarksMsg ignored while in global mode.
+	send(t, r, ui.OpenBookmarksMsg{Key: "A", Title: "River"}, ui.BookmarksMsg{Key: "A"})
+	if !r.Model.(ui.Model).BookmarksGlobal() {
+		t.Fatal("single-book message altered global mode")
+	}
 	send(t, r, ui.OpenBookmarksMsg{
 		Global: true,
 		Bookmarks: []ui.Bookmark{
-			{ID: "bm-a", Key: "A", BookTitle: "River", Position: 15 * time.Second, ChapterTitle: "Ch 1", Note: "River note"},
+			{ID: "bm-a", Key: "A", Position: 15 * time.Second, ChapterTitle: "Ch 1", Note: "River note"},
 			{ID: "bm-b", Key: "B", BookTitle: "Stars", Position: 45 * time.Second, ChapterTitle: "Ch 2", Note: "Stars note"},
 		},
 	})
@@ -390,5 +399,17 @@ func TestGlobalBookmarkSearchAndExportTrigger(t *testing.T) {
 	send(t, r, ui.BookmarksMsg{Global: true, Bookmarks: nil})
 	if !strings.Contains(r.Model.View().Content, "No bookmarks across library") {
 		t.Fatalf("missing empty global bookmarks message:\n%s", r.Model.View().Content)
+	}
+
+	// Nil coordinator guards for global open and export.
+	noCoord := start(t, fixture(), nil)
+	screen(t, noCoord, 80, 20)
+	send(t, noCoord, key("1"), key("G"), key("enter"))
+	if noCoord.Model.(ui.Model).BookmarksOpen() || !strings.Contains(noCoord.Model.View().Content, "Bookmarks unavailable: no coordinator") {
+		t.Fatal("expected no-coordinator global bookmarks message")
+	}
+	send(t, noCoord, ui.OpenBookmarksMsg{Global: true}, key("e"))
+	if !strings.Contains(noCoord.Model.View().Content, "Export unavailable: no coordinator") {
+		t.Fatal("expected no-coordinator export message")
 	}
 }

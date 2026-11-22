@@ -136,18 +136,18 @@ const (
 // Current-audio actions carry the source session so the coordinator can reject
 // stale commands after replacement, including a reload of the same book.
 type Action struct {
-	Kind         ActionKind
-	Key, Session string
-	JobID        string
-	Target       NoteTarget
-	Text         string
-	RequestID    string
-	Attempt      uint64
-	ChapterIndex int
-	ChapterStart time.Duration
-	BookmarkID   string
-	BookmarkPos  time.Duration
-	Overwrite    bool
+	Kind          ActionKind
+	Key, Session  string
+	JobID         string
+	Target        NoteTarget
+	Text          string
+	RequestID     string
+	Attempt       uint64
+	ChapterIndex  int
+	ChapterStart  time.Duration
+	BookmarkID    string
+	BookmarkPos   time.Duration
+	Overwrite     bool
 	SleepMode     string
 	SleepDuration time.Duration
 }

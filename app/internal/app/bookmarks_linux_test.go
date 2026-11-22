@@ -584,10 +584,18 @@ func TestBookmarkCoordinatorEdgeCasesAndErrors(t *testing.T) {
 		bookmarks.ErrStaleSession,
 		bookmarks.ErrBookmarkNotFound,
 		bookmarks.ErrMediaMissing,
+		bookmarks.ErrExportExists,
+		bookmarks.ErrUnsafeExportTarget,
 		bookmarks.ErrInvalidInput,
 		playback.ErrIPC,
 	} {
 		_ = sanitizeBookmarkError(errCase)
+	}
+	if got := coord.bookAuthor(store.BookKey{}); got != "" {
+		t.Fatalf("expected empty author for invalid key, got %q", got)
+	}
+	if got := coord.bookAuthor(store.BookKey{Provider: "audible", Namespace: "us", ID: "B00UNKNOWN"}); got != "" {
+		t.Fatalf("expected empty author for unknown key, got %q", got)
 	}
 
 	// Coordinator without Player/Bookmarks handles bookmark actions gracefully.

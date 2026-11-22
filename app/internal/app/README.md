@@ -110,10 +110,6 @@ module.
     (`Keep existing file` / `Overwrite export`) and sanitized write-failure
     recovery.
 
-## Scope boundaries
-
-- Sleep timer (`#21`), local audiobook import (`#22`), Settings/themes (`#34`),
-  and Linux MPRIS (`#30`) remain separate downstream issues.
 - **Sleep timer by duration and chapter end (`#21`)**:
   - Implements in-memory `sleepTimerState` (`15/30/45/60 min`, `End of current
     chapter`, `Turn off`) driven by `Coordinator.clock` in `PollPlayback`:
@@ -125,6 +121,5 @@ module.
 
 ## Scope boundaries
 
-- Global bookmark search/export (`#23`), local audiobook import (`#22`),
-  Settings/themes (`#34`), and Linux MPRIS (`#30`) remain separate downstream
-  issues.
+- Local audiobook import (`#22`), Settings/themes (`#34`), and Linux MPRIS
+  (`#30`) remain separate downstream issues.

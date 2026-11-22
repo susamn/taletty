@@ -55,6 +55,9 @@ func TestListAllAndSafeMarkdownExport(t *testing.T) {
 	if got := SafeExportFilename("!!!"); got != "bookmarks-export.md" {
 		t.Fatalf("expected fallback filename, got %q", got)
 	}
+	if got := SafeExportFilename(strings.Repeat("word-", 20)); len(got) > 64 {
+		t.Fatalf("expected bounded SafeExportFilename, got %q", got)
+	}
 
 	// Export with malicious title/chapter/note (including ANSI escapes) escapes Markdown/HTML and strips ANSI.
 	all[0].Note += "\x1b[2J"
@@ -197,4 +200,11 @@ func TestListAllAndSafeMarkdownExport(t *testing.T) {
 		t.Fatalf("expected ErrUnsafeExportTarget for 0755 root dir, got %v", err)
 	}
 	must(t, os.Chmod(f.rootDir, 0o700))
+
+	// exports as a regular file (not directory) fails closed.
+	must(t, os.RemoveAll(filepath.Join(f.rootDir, "exports")))
+	must(t, os.WriteFile(filepath.Join(f.rootDir, "exports"), []byte("not-a-dir"), 0o600))
+	if _, err := f.service.ExportMarkdown(ctx, ExportOptions{Filename: "new.md"}); err == nil {
+		t.Fatal("expected error when exports is a regular file")
+	}
 }
