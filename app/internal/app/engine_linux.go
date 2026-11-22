@@ -75,9 +75,19 @@ func OpenEngineWorkspace(ctx context.Context, home, pythonExplicit string, opts 
 		_ = ws.Close(context.Background())
 		return nil, err
 	}
+	smartRewind := playback.DefaultSmartRewindPolicy()
+	if opts.SmartRewind != nil {
+		if err := opts.SmartRewind.Validate(); err != nil {
+			_ = ws.Close(context.Background())
+			return nil, err
+		}
+		smartRewind = *opts.SmartRewind
+	}
 	player, err := playback.NewController(playback.NewMPVProcess(playback.MPVConfig{}), playback.Options{
-		Store:  ws.Store(),
-		Volume: &settings.VolumePercent,
+		Store:       ws.Store(),
+		Clock:       clock,
+		Volume:      &settings.VolumePercent,
+		SmartRewind: &smartRewind,
 	})
 	if err != nil {
 		_ = ws.Close(context.Background())

@@ -89,7 +89,15 @@ module.
     download prompts, and B3 `Stay` / `Switch and play` cross-book switches with
     stale-session invalidation.
 
+- **Completion state, smart rewind, and speed-adjusted remaining time (`#20`)**:
+  - Wires `playback.DefaultSmartRewindPolicy()` in `OpenEngineWorkspace` (and
+    optional `Options.SmartRewind`), `ReplayBook` confirmation on `PlayBook` for
+    finished books, `MarkFinished`/`MarkUnfinished` (`SetCompletion`), live
+    `Finished`/`InProgress` updates on natural EOF in `PollPlayback`, and
+    `Player.ChapterEnd` projection for speed-adjusted book and chapter remaining
+    time.
+
 ## Scope boundaries
 
-- Completion/smart-rewind (`#20`), sleep timer (`#21`), favorites UI (`#42`),
-  and global bookmark search/export (`#23`) remain separate downstream issues.
+- Sleep timer (`#21`), favorites UI (`#42`), and global bookmark search/export
+  (`#23`) remain separate downstream issues.

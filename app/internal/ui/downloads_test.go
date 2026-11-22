@@ -180,15 +180,21 @@ func TestDownloadsRowActionsFrozenTargetAndSafeAudioDeletion(t *testing.T) {
 		t.Fatalf("Show in Library failed: open=%v sel=%q", r.Model.(ui.Model).DownloadsOpen(), r.Model.(ui.Model).Selection())
 	}
 
-	// 'x' in Books on Ready book A opens audio deletion confirmation; on Queued book B shows unavailable.
+	// 'x' in Books on Ready book A opens Book Actions menu -> Delete downloaded audio opens confirmation;
+	// on Queued book B opens Book Actions without Delete downloaded audio.
 	send(t, r, key("x"))
+	if !strings.Contains(r.Model.View().Content, "[Focus] Book Actions") || !strings.Contains(r.Model.View().Content, "Stop and delete audio") {
+		t.Fatalf("expected Book Actions menu with Stop and delete audio:\n%s", r.Model.View().Content)
+	}
+	send(t, r, key("j"), key("enter"))
 	if !strings.Contains(r.Model.View().Content, "Delete downloaded audio") {
-		t.Fatal("expected 'x' on Ready book to open delete confirmation")
+		t.Fatal("expected Delete downloaded audio confirmation")
 	}
 	send(t, r, key("esc"), key("j"), key("x"))
-	if !strings.Contains(r.Model.View().Content, "No downloaded audio to delete") {
-		t.Fatal("expected unavailable message for non-Ready book")
+	if !strings.Contains(r.Model.View().Content, "Mark as finished") || strings.Contains(r.Model.View().Content, "Delete downloaded audio") {
+		t.Fatalf("expected Book Actions without delete for non-Ready book:\n%s", r.Model.View().Content)
 	}
+	send(t, r, key("esc"))
 
 	// Empty Downloads list and formatBytes coverage.
 	send(t, r, key("D"), ui.DownloadsMsg{Jobs: nil})
