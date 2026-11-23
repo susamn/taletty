@@ -12,10 +12,10 @@ func TestApprovedReferenceBudgets(t *testing.T) {
 	want := ui.Layout{
 		Mode: ui.Wide, Screen: ui.Rect{Width: 144, Height: 42},
 		Content:  ui.Rect{Width: 144, Height: 34},
-		Library:  ui.Rect{Width: 24, Height: 34},
-		Books:    ui.Rect{X: 24, Width: 78, Height: 22},
-		Details:  ui.Rect{X: 24, Y: 22, Width: 78, Height: 12},
-		Chapters: ui.Rect{X: 102, Width: 42, Height: 34},
+		Library:  ui.Rect{Width: 28, Height: 34},
+		Books:    ui.Rect{X: 28, Width: 66, Height: 17},
+		Details:  ui.Rect{X: 28, Y: 17, Width: 66, Height: 17},
+		Chapters: ui.Rect{X: 94, Width: 50, Height: 34},
 		Player:   ui.Rect{Y: 34, Width: 144, Height: 6},
 		Activity: ui.Rect{Y: 40, Width: 144, Height: 1},
 		Hints:    ui.Rect{Y: 41, Width: 144, Height: 1},
@@ -51,7 +51,7 @@ func TestEveryResponsiveBoundaryStaysBoundedAndDisjoint(t *testing.T) {
 			}
 			regions := []ui.Rect{layout.Player, layout.Activity, layout.Hints}
 			if width >= 144 && height >= 42 {
-				if layout.Mode != ui.Wide || layout.Books.Width != width-66 || layout.Details.Height+layout.Books.Height != layout.Content.Height {
+				if layout.Mode != ui.Wide || layout.Library.Width+layout.Books.Width+layout.Chapters.Width != width || layout.Details.Height+layout.Books.Height != layout.Content.Height {
 					t.Fatalf("wide budget at %dx%d: %+v", width, height, layout)
 				}
 				regions = append(regions, layout.Library, layout.Books, layout.Details, layout.Chapters)

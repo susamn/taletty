@@ -497,7 +497,9 @@ func isMutedHeaderRow(text string) bool {
 func (m Model) View() tea.View {
 	g := m.layout
 	if g.Screen.Width == 0 || g.Screen.Height == 0 {
-		return tea.NewView("")
+		v := tea.NewView("")
+		v.AltScreen = true
+		return v
 	}
 	if g.Mode == ResizeOnly {
 		message := fmt.Sprintf("Resize to %dx%d (now %dx%d); q quit", MinWidth, MinHeight, g.Screen.Width, g.Screen.Height)
@@ -506,7 +508,9 @@ func (m Model) View() tea.View {
 			message = "Unsaved draft: q again quits; Esc keeps draft"
 			tint = m.appearance.Palette.Error
 		}
-		return tea.NewView(m.paint(PadLine(message, g.Screen.Width, m.tail()), tint))
+		v := tea.NewView(m.paint(PadLine(message, g.Screen.Width, m.tail()), tint))
+		v.AltScreen = true
+		return v
 	}
 	var lines []string
 	if m.help {
@@ -618,6 +622,7 @@ func (m Model) View() tea.View {
 	}
 	lines = append(lines, m.paint(PadLine(hints, g.Hints.Width, m.tail()), m.appearance.Palette.Muted))
 	view := tea.NewView(strings.Join(lines, "\n"))
+	view.AltScreen = true
 	view.Cursor = m.noteCursor()
 	return view
 }
