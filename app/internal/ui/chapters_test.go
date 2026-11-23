@@ -32,6 +32,11 @@ func TestChapterBrowsingActivationAndTimelineTicks(t *testing.T) {
 
 	// Focus Chapters pane (4) and navigate with j/k/g/G/pgup/pgdown/ctrl+u/ctrl+d.
 	send(t, r, key("4"))
+	_ = screen(t, r, 144, 42)
+	data.Books[0].HasDuration = true
+	data.Books[0].Duration = 50 * time.Minute
+	send(t, r, data)
+	_ = screen(t, r, 144, 42)
 	send(t, r, key("j"), key("down"), key("k"), key("up"), key("G"), key("g"), key("pgdown"), key("ctrl+d"), key("ctrl+u"), key("pgup"), key("end"), key("home"), key("j"))
 	send(t, r, key("enter"))
 	if len(actions) != 1 || actions[0].Kind != ui.ActivateChapter || actions[0].Key != "A" || actions[0].ChapterIndex != 1 || actions[0].ChapterStart != 10*time.Minute {

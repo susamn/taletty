@@ -540,18 +540,26 @@ func (m *Manager) HandleSignal(root *os.File, expectedGen uint64) (ui.Palette, b
 
 // WatchSIGUSR1 invokes onSignal whenever SIGUSR1 arrives until ctx is canceled.
 func WatchSIGUSR1(ctx context.Context, onSignal func()) {
+	WatchSIGUSR1Ready(ctx, onSignal)()
+}
+
+// WatchSIGUSR1Ready registers the SIGUSR1 handler synchronously before returning
+// a blocking loop function so callers/tests never race signal.Notify startup.
+func WatchSIGUSR1Ready(ctx context.Context, onSignal func()) func() {
 	if ctx == nil || onSignal == nil {
-		return
+		return func() {}
 	}
 	ch := make(chan os.Signal, 1)
 	signal.Notify(ch, unix.SIGUSR1)
-	defer signal.Stop(ch)
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-ch:
-			onSignal()
+	return func() {
+		defer signal.Stop(ch)
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ch:
+				onSignal()
+			}
 		}
 	}
 }

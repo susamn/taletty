@@ -90,8 +90,8 @@ func TestJ03LibraryViewsDecorativeSkipAndSelectionPreservation(t *testing.T) {
 	}
 
 	// Switch to Finished (only k2) -> selection updates cleanly to k2.
-	// G lands on All bookmarks; k skips to Bookmarks: ..., k skips VIEWS / OVERLAYS heading to Finished.
-	send(t, r, key("1"), key("G"), key("k"), key("k"), key("enter"))
+	// G lands on All bookmarks; k skips to Bookmarks: ..., k to Downloads, k skips VIEWS / OVERLAYS heading to Finished.
+	send(t, r, key("1"), key("G"), key("k"), key("k"), key("k"), key("enter"))
 	model = r.Model.(ui.Model)
 	v, _, _ = model.ViewState()
 	if v != ui.ViewFinished || model.Selection() != "k2" {
@@ -108,6 +108,12 @@ func TestJ03LibraryViewsDecorativeSkipAndSelectionPreservation(t *testing.T) {
 	if !strings.Contains(view, "No books in Downloaded") || r.Model.(ui.Model).Selection() != "" {
 		t.Fatalf("expected empty Downloaded message:\n%s", view)
 	}
+	// Open Downloads from Library sidebar (VIEWS / OVERLAYS -> Downloads (0)) and close with Esc.
+	send(t, r, key("1"), key("G"), key("k"), key("k"), key("enter"))
+	if !r.Model.(ui.Model).DownloadsOpen() {
+		t.Fatal("expected Library sidebar Downloads entry to open Downloads view")
+	}
+	send(t, r, key("esc"))
 	if len(actions) != 0 {
 		t.Fatalf("library view navigation leaked actions: %+v", actions)
 	}

@@ -101,6 +101,12 @@ func (m Model) librarySidebarRows() []librarySidebarRow {
 			counts[ViewFinished]++
 		}
 	}
+	dlCount := 0
+	for _, job := range m.downloads {
+		if job.State == Queued || job.State == Downloading || job.State == Preparing {
+			dlCount++
+		}
+	}
 	bmLabel := "Bookmarks (no book)"
 	if m.selected != "" {
 		bmLabel = "Bookmarks: " + title(m.bookTitleByKey(m.selected))
@@ -113,6 +119,7 @@ func (m Model) librarySidebarRows() []librarySidebarRow {
 		{label: fmt.Sprintf("Favorites (%d)", counts[ViewFavorites]), view: ViewFavorites, selectable: true},
 		{label: fmt.Sprintf("Finished (%d)", counts[ViewFinished]), view: ViewFinished, selectable: true},
 		{label: "VIEWS / OVERLAYS", selectable: false},
+		{label: fmt.Sprintf("Downloads (%d)", dlCount), action: "open-downloads", selectable: true},
 		{label: bmLabel, action: OpenBookmarks, selectable: true},
 		{label: "All bookmarks (search & export)", action: OpenGlobalBookmarks, selectable: true},
 	}

@@ -249,15 +249,16 @@ func RunSession(ctx context.Context, coord *Coordinator, tty *os.File, output io
 		sigDone := make(chan struct{})
 		if coord.themeMgr != nil {
 			sigCh = make(chan uint64, 1)
+			runWatch := theme.WatchSIGUSR1Ready(sigCtx, func() {
+				gen := coord.ThemeGeneration()
+				select {
+				case sigCh <- gen:
+				default:
+				}
+			})
 			go func() {
 				defer close(sigDone)
-				theme.WatchSIGUSR1(sigCtx, func() {
-					gen := coord.ThemeGeneration()
-					select {
-					case sigCh <- gen:
-					default:
-					}
-				})
+				runWatch()
 			}()
 		} else {
 			close(sigDone)

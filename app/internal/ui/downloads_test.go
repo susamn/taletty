@@ -82,8 +82,14 @@ func TestDownloadsViewProgressStagesAndKeyOwnership(t *testing.T) {
 			{ID: "j-prep", BookKey: "B", Title: "Prep Book", State: ui.Preparing, Stage: "preparing"},
 			{ID: "j-lic", BookKey: "B", Title: "Lic Book", State: ui.Downloading, Stage: "licensing"},
 			{ID: "j-pub", BookKey: "B", Title: "Pub Book", State: ui.Preparing, Stage: "publishing"},
+			{ID: "j-canc", BookKey: "B", Title: "Canceled Book", State: ui.Canceled},
 		},
 	})
+	for range 5 {
+		_ = screen(t, r, 144, 42)
+		send(t, r, key("j"))
+	}
+	send(t, r, key("g"))
 	view = screen(t, r, 80, 20)
 	for _, want := range []string{"5.0 MiB / unknown total", "Canceling…", "Preparing (indeterminate)", "Licensing", "Publishing"} {
 		if !strings.Contains(view, want) {
@@ -127,10 +133,14 @@ func TestDownloadsRowActionsFrozenTargetAndSafeAudioDeletion(t *testing.T) {
 	// Open Downloads with active, queued, ready, and failed jobs.
 	send(t, r, key("D"), downloadsFixture())
 
-	// Active job -> Enter opens menu -> Cancel download opens default-safe confirmation.
+	// Active job -> Enter opens menu -> render menu -> Cancel download opens default-safe confirmation.
 	send(t, r, key("enter"))
 	if !r.Model.(ui.Model).DownloadMenuOpen() {
 		t.Fatal("expected DownloadMenuOpen true")
+	}
+	menuView := screen(t, r, 144, 42)
+	if !strings.Contains(menuView, "[Focus] Download Actions") {
+		t.Fatalf("expected Download Actions menu:\n%s", menuView)
 	}
 	// Menu blocks transport keys.
 	before := len(actions)

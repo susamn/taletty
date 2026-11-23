@@ -303,6 +303,12 @@ func (m Model) bookmarkBookTitle(bm Bookmark) string {
 
 func (m Model) bookmarksLayout() (Rect, Rect) {
 	c := m.layout.Content
+	if m.layout.Mode == Wide {
+		leftWidth := max(48, c.Width*2/3)
+		rightWidth := max(16, c.Width-leftWidth)
+		return Rect{X: c.X, Y: c.Y, Width: leftWidth, Height: c.Height},
+			Rect{X: c.X + leftWidth, Y: c.Y, Width: rightWidth, Height: c.Height}
+	}
 	listHeight := max(5, c.Height*2/3)
 	noteHeight := max(1, c.Height-listHeight)
 	return Rect{X: c.X, Y: c.Y, Width: c.Width, Height: listHeight},
@@ -634,15 +640,24 @@ func (m Model) bookmarksLines() []string {
 		if len(visible) == 0 {
 			listRows = []string{"No bookmarks match filter (Esc clears)"}
 		} else {
-			listRows = make([]string, len(visible))
-			for i, bm := range visible {
+			if m.layout.Mode == Wide {
+				header := "TIME     | CHAPTER | NOTE"
+				if m.bookmarksGlobal {
+					header = "BOOK | " + header
+				}
+				listRows = append(listRows, header)
+			}
+			for _, bm := range visible {
 				row := clock(bm.Position) + " | " + bookmarkChapterLabel(bm) + " | " + cleanLine(bm.Note)
 				if m.bookmarksGlobal {
 					row = title(m.bookmarkBookTitle(bm)) + " | " + row
 				}
-				listRows[i] = row
+				listRows = append(listRows, row)
 			}
 			selectedRow = min(len(visible)-1, max(0, m.bookmarkCursor))
+			if m.layout.Mode == Wide {
+				selectedRow++
+			}
 		}
 	}
 	lines := m.box(listRect, listTitle, listRows, selectedRow, listFocused, selectedRow >= 0)
@@ -661,7 +676,16 @@ func (m Model) bookmarksLines() []string {
 	if noteFocused {
 		noteTitle = " [Focus]" + noteTitle
 	}
-	lines = append(lines, m.box(noteRect, noteTitle, noteRows, -1, noteFocused, false)...)
+	noteBox := m.box(noteRect, noteTitle, noteRows, -1, noteFocused, false)
+	if m.layout.Mode == Wide {
+		combined := make([]string, len(lines))
+		for y := range lines {
+			combined[y] = lines[y] + noteBox[y]
+		}
+		lines = combined
+	} else {
+		lines = append(lines, noteBox...)
+	}
 
 	if m.bmMenuOpen {
 		lines = m.bookmarkMenuLines(lines)
