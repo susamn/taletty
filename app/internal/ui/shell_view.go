@@ -341,15 +341,32 @@ func (m Model) paneRows(pane Pane, width int) (string, []string, int) {
 // frame owns borders, a cursor gutter and one-cell inner padding. It never clips
 // renderer styles as untrusted metadata: raw text is fitted before paint is added.
 func (m Model) frame(pane Pane, size Rect, name string, rows []string, selected int) []string {
-	focused := pane == m.focus && !m.help && !m.ownsModal() && !m.accountOpen && !m.sortOpen && !m.downloadsOpen && m.bookMenu == nil && !m.sleepOpen && !m.settingsOpen
-	if m.bookmarksOpen {
-		focused = pane == PlayerPane && m.bookmarkFocus == bmFocusPlayer && !m.help && !m.ownsModal() && !m.accountOpen && !m.sortOpen && !m.bmMenuOpen && !m.bmFilterEditing
-	}
 	titlePrefix := m.paneIcon(pane)
+	focused := m.paneFocused(pane)
 	if focused {
 		name = "[Focus] " + name
 	}
-	return m.boxTagged(size, " "+titlePrefix+name+" ", fmt.Sprintf("[%d]", pane+1), rows, selected, focused, pane == Library || pane == Books || (pane == Chapters && selected >= 0))
+	tag := fmt.Sprintf("[%d]", pane+1)
+	if pane == Chapters {
+		if idx := m.bookIndex(); idx >= 0 && len(m.data.Books[idx].Chapters) > 0 && size.Width >= 28 {
+			cur := m.clampedChapterCursor(m.data.Books[idx])
+			tag = fmt.Sprintf("[%d]──%d/%d", pane+1, cur+1, len(m.data.Books[idx].Chapters))
+			if m.appearance.Glyphs == Plain {
+				tag = fmt.Sprintf("[%d]--%d/%d", pane+1, cur+1, len(m.data.Books[idx].Chapters))
+			}
+		}
+	}
+	return m.boxTagged(size, " "+titlePrefix+name+" ", tag, rows, selected, focused, pane == Library || pane == Books || (pane == Chapters && selected >= 0))
+}
+
+func (m Model) paneFocused(pane Pane) bool {
+	if m.help || m.ownsModal() || m.accountOpen || m.sortOpen || m.downloadsOpen || m.bookMenu != nil || m.sleepOpen || m.settingsOpen {
+		return false
+	}
+	if m.bookmarksOpen {
+		return pane == PlayerPane && m.bookmarkFocus == bmFocusPlayer && !m.bmMenuOpen && !m.bmFilterEditing
+	}
+	return pane == m.focus
 }
 
 // box is shared by root panes and the dedicated Help view. Fitting precedes style.
@@ -409,7 +426,7 @@ func (m Model) boxTagged(size Rect, name, tag string, rows []string, selected in
 		fitted := PadLine(text, size.Width-4-len(gutter), m.tail())
 		body := m.paintBg(" "+gutter+fitted+" ", textTint, rowBg)
 		if m.appearance.Palette.Focus != nil {
-			for _, prefix := range []string{"+ ★ ", "+ [Fav] ", "◉ ★ ", "◉ [Fav] ", "* [Fav] ", "+ ", "★ ", "[Fav] ", "  ★ ", "  [Fav] "} {
+			for _, prefix := range []string{"[●] ", "[*] ", "+ ★ ", "+ [Fav] ", "◉ ★ ", "◉ [Fav] ", "* [Fav] ", "+ ", "★ ", "[Fav] ", "  ★ ", "  [Fav] ", "  Active:", "  Source:", "  Diagnostic:", "  Omarchy hook:", "  Font:"} {
 				if strings.HasPrefix(fitted, prefix) {
 					rest := strings.TrimPrefix(fitted, prefix)
 					body = m.paintBg(" "+gutter, textTint, rowBg) + m.paintBg(prefix, m.appearance.Palette.Focus, rowBg) + m.paintBg(rest+" ", textTint, rowBg)
@@ -451,18 +468,33 @@ func (m Model) bookProgressLabel(book Book) string {
 	}
 }
 
+// formatChapterStart renders a chapter start timestamp like podmutt's chapter view:
+// "0:00", "2:19", "19:22", or "1:05:38".
+func formatChapterStart(d time.Duration) string {
+	seconds := int64(max(0, d) / time.Second)
+	if seconds >= 3600 {
+		return fmt.Sprintf("%d:%02d:%02d", seconds/3600, seconds/60%60, seconds%60)
+	}
+	return fmt.Sprintf("%d:%02d", seconds/60, seconds%60)
+}
+
 func (m Model) formatChapterRows(book Book, width int) []string {
 	rows := make([]string, 0, len(book.Chapters)+1)
 	if m.layout.Mode == Wide && width >= 20 {
 		const durCol = 6
-		titleCol := max(4, width-4-durCol-2)
-		rows = append(rows, "    "+PadLine("Chapter", titleCol, m.tail())+"  "+PadLine("Length", durCol, m.tail()))
+		titleCol := max(4, width-8-durCol-2)
+		rows = append(rows, PadLine("   Start", 8, m.tail())+"  "+PadLine("Chapter", titleCol, m.tail())+"  "+PadLine("Length", durCol, m.tail()))
 	}
 	for i, ch := range book.Chapters {
-		prefix := fmt.Sprintf("%02d. ", i+1)
+		startStamp := fmt.Sprintf("%02d.", i+1)
+		var start time.Duration
+		if i < len(book.ChapterStarts) {
+			start = max(0, book.ChapterStarts[i])
+			startStamp = formatChapterStart(start)
+		}
+		prefix := fmt.Sprintf("%7s  ", startStamp)
 		durLabel := ""
 		if i < len(book.ChapterStarts) {
-			start := max(0, book.ChapterStarts[i])
 			var end time.Duration
 			if i+1 < len(book.ChapterStarts) && book.ChapterStarts[i+1] > start {
 				end = book.ChapterStarts[i+1]
@@ -488,10 +520,23 @@ func isMutedHeaderRow(text string) bool {
 	trimmed := strings.TrimSpace(text)
 	return strings.HasPrefix(trimmed, "LIBRARY VIEWS") || strings.HasPrefix(trimmed, "VIEWS / OVERLAYS") ||
 		strings.HasPrefix(trimmed, "TITLE / AUTHOR") ||
+		strings.HasPrefix(trimmed, "Start ") ||
 		strings.HasPrefix(trimmed, "Chapter ") ||
 		strings.HasPrefix(trimmed, "BOOK ") ||
 		strings.HasPrefix(trimmed, "TIME ") ||
+		strings.HasPrefix(trimmed, "Themes (") ||
+		trimmed == "Configuration:" ||
 		trimmed == "Palette candidates:" || trimmed == "Playback / display preferences:"
+}
+
+func (m Model) overlayBox(lines []string, r Rect, box []string) []string {
+	for y, row := range box {
+		if r.Y+y >= 0 && r.Y+y < len(lines) {
+			line := lines[r.Y+y]
+			lines[r.Y+y] = ansi.Cut(line, 0, r.X) + row + ansi.Cut(line, r.X+r.Width, m.layout.Content.Width)
+		}
+	}
+	return lines
 }
 
 func (m Model) View() tea.View {
@@ -513,14 +558,8 @@ func (m Model) View() tea.View {
 		return v
 	}
 	var lines []string
-	if m.help {
-		lines = m.helpLines()
-	} else if m.settingsOpen {
-		lines = m.settingsLines()
-	} else if m.downloadsOpen {
+	if m.downloadsOpen {
 		lines = m.downloadsLines()
-	} else if m.bookmarksOpen {
-		lines = m.bookmarksLines()
 	} else if g.Mode == Wide {
 		left, right := m.pane(Library, g.Library), m.pane(Chapters, g.Chapters)
 		middle := append(m.pane(Books, g.Books), m.pane(Details, g.Details)...)
@@ -530,15 +569,24 @@ func (m Model) View() tea.View {
 	} else {
 		lines = m.pane(m.content, g.Content)
 	}
+	if m.bookmarksOpen {
+		lines = m.bookmarksLines(lines)
+	}
+	if m.settingsOpen {
+		lines = m.settingsLines(lines)
+	}
+	if m.help {
+		lines = m.helpLines(lines)
+	}
 	if m.ownsModal() {
 		lines = m.modalLines(lines)
-	} else if m.accountOpen {
+	} else if m.accountOpen && !m.help {
 		lines = m.accountLines(lines)
-	} else if m.sortOpen {
+	} else if m.sortOpen && !m.help {
 		lines = m.sortLines(lines)
-	} else if m.bookMenu != nil && !m.help && !m.downloadsOpen && !m.bookmarksOpen {
+	} else if m.bookMenu != nil && !m.help && !m.downloadsOpen && !m.bookmarksOpen && !m.settingsOpen {
 		lines = m.bookMenuLines(lines)
-	} else if m.sleepOpen && !m.help && !m.downloadsOpen && !m.bookmarksOpen {
+	} else if m.sleepOpen && !m.help && !m.downloadsOpen && !m.bookmarksOpen && !m.settingsOpen {
 		lines = m.sleepLines(lines)
 	}
 	lines = append(lines, m.playerLines(g.Player)...)

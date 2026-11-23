@@ -302,17 +302,17 @@ func (m Model) bookmarkBookTitle(bm Bookmark) string {
 }
 
 func (m Model) bookmarksLayout() (Rect, Rect) {
-	c := m.layout.Content
-	if m.layout.Mode == Wide {
-		leftWidth := max(48, c.Width*2/3)
-		rightWidth := max(16, c.Width-leftWidth)
-		return Rect{X: c.X, Y: c.Y, Width: leftWidth, Height: c.Height},
-			Rect{X: c.X + leftWidth, Y: c.Y, Width: rightWidth, Height: c.Height}
+	d := m.layout.Dialog(96, 24)
+	if m.layout.Mode == Wide && d.Height >= 14 {
+		listHeight := max(8, d.Height*3/5)
+		noteHeight := max(4, d.Height-listHeight)
+		return Rect{X: d.X, Y: d.Y, Width: d.Width, Height: listHeight},
+			Rect{X: d.X, Y: d.Y + listHeight, Width: d.Width, Height: noteHeight}
 	}
-	listHeight := max(5, c.Height*2/3)
-	noteHeight := max(1, c.Height-listHeight)
-	return Rect{X: c.X, Y: c.Y, Width: c.Width, Height: listHeight},
-		Rect{X: c.X, Y: c.Y + listHeight, Width: c.Width, Height: noteHeight}
+	listHeight := max(5, d.Height*2/3)
+	noteHeight := max(1, d.Height-listHeight)
+	return Rect{X: d.X, Y: d.Y, Width: d.Width, Height: listHeight},
+		Rect{X: d.X, Y: d.Y + listHeight, Width: d.Width, Height: noteHeight}
 }
 
 func (m Model) bookmarkNoteRows(bm Bookmark, width int) []string {
@@ -604,7 +604,7 @@ func (m Model) bookmarkMenuKey(key string) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-func (m Model) bookmarksLines() []string {
+func (m Model) bookmarksLines(lines []string) []string {
 	listRect, noteRect := m.bookmarksLayout()
 	listFocused := m.bookmarkFocus == bmFocusList && !m.ownsModal() && !m.help && !m.bmMenuOpen && !m.bmFilterEditing
 	noteFocused := m.bookmarkFocus == bmFocusNote && !m.ownsModal() && !m.help && !m.bmMenuOpen && !m.bmFilterEditing
@@ -621,6 +621,7 @@ func (m Model) bookmarksLines() []string {
 
 	var listRows []string
 	selectedRow := -1
+	tag := ""
 	switch {
 	case m.bookmarksLoading:
 		listRows = []string{m.spinnerGlyph() + " Loading bookmarks..."}
@@ -654,13 +655,15 @@ func (m Model) bookmarksLines() []string {
 				}
 				listRows = append(listRows, row)
 			}
-			selectedRow = min(len(visible)-1, max(0, m.bookmarkCursor))
+			cur := min(len(visible)-1, max(0, m.bookmarkCursor))
+			tag = fmt.Sprintf("%d/%d", cur+1, len(visible))
+			selectedRow = cur
 			if m.layout.Mode == Wide {
 				selectedRow++
 			}
 		}
 	}
-	lines := m.box(listRect, listTitle, listRows, selectedRow, listFocused, selectedRow >= 0)
+	listBox := m.boxTagged(listRect, listTitle, tag, listRows, selectedRow, listFocused, selectedRow >= 0)
 
 	noteTitle := " Note "
 	var noteRows []string
@@ -677,15 +680,8 @@ func (m Model) bookmarksLines() []string {
 		noteTitle = " [Focus]" + noteTitle
 	}
 	noteBox := m.box(noteRect, noteTitle, noteRows, -1, noteFocused, false)
-	if m.layout.Mode == Wide {
-		combined := make([]string, len(lines))
-		for y := range lines {
-			combined[y] = lines[y] + noteBox[y]
-		}
-		lines = combined
-	} else {
-		lines = append(lines, noteBox...)
-	}
+	lines = m.overlayBox(lines, listRect, listBox)
+	lines = m.overlayBox(lines, noteRect, noteBox)
 
 	if m.bmMenuOpen {
 		lines = m.bookmarkMenuLines(lines)
