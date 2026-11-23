@@ -53,13 +53,18 @@ func ComputeLayout(width, height int) Layout {
 	layout.Activity = Rect{Y: height - 2, Width: width, Height: 1}
 	layout.Hints = Rect{Y: height - 1, Width: width, Height: 1}
 	if layout.Mode == Wide {
-		middleWidth := width - 24 - 42
-		// floor(2*rows/3), without overflowing for extreme resize messages.
-		bookRows := contentRows/3*2 + contentRows%3*2/3
-		layout.Library = Rect{Width: 24, Height: contentRows}
-		layout.Books = Rect{X: 24, Width: middleWidth, Height: bookRows}
-		layout.Details = Rect{X: 24, Y: bookRows, Width: middleWidth, Height: contentRows - bookRows}
-		layout.Chapters = Rect{X: width - 42, Width: 42, Height: contentRows}
+		// Podmutt-style proportional distribution:
+		// - Library [1]: min(28, width/5), at least 24 columns (~19%)
+		// - Chapters [3]: ~35% of width (width/3 + width/72), at least 42 columns (50 at 144)
+		// - Books [2] & Details [4]: remaining middle width (~46%), 50%/50% vertical split
+		libraryWidth := max(24, min(28, width/5))
+		chaptersWidth := max(42, width/3+width/72)
+		middleWidth := width - libraryWidth - chaptersWidth
+		bookRows := contentRows / 2
+		layout.Library = Rect{Width: libraryWidth, Height: contentRows}
+		layout.Books = Rect{X: libraryWidth, Width: middleWidth, Height: bookRows}
+		layout.Details = Rect{X: libraryWidth, Y: bookRows, Width: middleWidth, Height: contentRows - bookRows}
+		layout.Chapters = Rect{X: width - chaptersWidth, Width: chaptersWidth, Height: contentRows}
 	}
 	return layout
 }
