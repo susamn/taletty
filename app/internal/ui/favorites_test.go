@@ -17,35 +17,41 @@ func TestFavoritesViewToggleDetailsAndPlainUnicodeModes(t *testing.T) {
 	})
 	screen(t, r, 144, 42)
 
-	// Highlight B (Stars) while A (River) is playing; f targets B, never A.
-	send(t, r, key("j"), key("f"))
-	if len(actions) != 1 || actions[0] != (ui.Action{Kind: ui.ToggleFavorite, Key: "B"}) {
-		t.Fatalf("f did not target highlighted book B: %+v", actions)
+	// Highlight B (Stars) while A (River) is playing; f and m both target B, never A.
+	send(t, r, key("j"), key("f"), key("m"))
+	if len(actions) != 2 || actions[0] != (ui.Action{Kind: ui.ToggleFavorite, Key: "B"}) || actions[1] != (ui.Action{Kind: ui.ToggleFavorite, Key: "B"}) {
+		t.Fatalf("f/m did not target highlighted book B: %+v", actions)
 	}
 
 	// f in PlayerPane or with no highlighted book is unavailable.
 	send(t, r, key("5"), key("f"))
-	if len(actions) != 1 || !strings.Contains(r.Model.View().Content, "Favorite toggle unavailable in Player") {
+	if len(actions) != 2 || !strings.Contains(r.Model.View().Content, "Favorite toggle unavailable in Player") {
 		t.Fatalf("f should be unavailable in PlayerPane: %+v", actions)
 	}
 	send(t, r, ui.SnapshotMsg{}, key("2"), key("f"))
-	if len(actions) != 1 || !strings.Contains(r.Model.View().Content, "Favorite toggle unavailable: no highlighted book") {
+	if len(actions) != 2 || !strings.Contains(r.Model.View().Content, "Favorite toggle unavailable: no highlighted book") {
 		t.Fatalf("f should be unavailable with no highlighted book: %+v", actions)
 	}
 
-	// Restore fixture with B favorited; verify Unicode ★ and Plain [Fav] in Books and Details with accent color.
+	// Restore fixture with B favorited; verify FAV column, Unicode ★, and Plain [Fav] in Books and Details with accent color.
 	favData := fixture()
 	favData.Books[1].Favorite = true
 	send(t, r, favData, key("j"))
 	send(t, r, ui.AppearanceMsg{Glyphs: ui.Unicode, Palette: ui.Palette{Focus: color.White, Selection: color.White}})
 	view := screen(t, r, 144, 42)
-	if !strings.Contains(view, "★ Stars") || !strings.Contains(view, "★ Favorite") || !strings.Contains(view, "Queued") {
-		t.Fatalf("missing Unicode favorite indicator or preserved availability:\n%s", view)
+	if !strings.Contains(view, "| FAV") || !strings.Contains(view, "★ Stars") || !strings.Contains(view, "★ Favorite") || !strings.Contains(view, "Queued") {
+		t.Fatalf("missing FAV column, Unicode favorite indicator, or preserved availability:\n%s", view)
 	}
+	// Also verify Book Actions menu ('x') includes Remove from Favorites (f / m).
+	send(t, r, key("x"))
+	if !strings.Contains(r.Model.View().Content, "Remove from Favorites (f / m)") {
+		t.Fatalf("missing Remove from Favorites in Book Actions menu:\n%s", r.Model.View().Content)
+	}
+	send(t, r, key("esc"))
 	send(t, r, ui.AppearanceMsg{Glyphs: ui.Plain, Palette: ui.Palette{Focus: color.White}})
 	view = screen(t, r, 144, 42)
-	if !strings.Contains(view, "[Fav] Stars") || !strings.Contains(view, "[Fav] Favorite") || !strings.Contains(view, "Queued") {
-		t.Fatalf("missing Plain favorite indicator or preserved availability:\n%s", view)
+	if !strings.Contains(view, "| [Fav] |") || !strings.Contains(view, "[Fav] Stars") || !strings.Contains(view, "[Fav] Favorite") || !strings.Contains(view, "Queued") {
+		t.Fatalf("missing Plain FAV column, favorite indicator, or preserved availability:\n%s", view)
 	}
 
 	// Open Favorites view via Library sidebar (index 4: All, Continue, Downloaded, Favorites).

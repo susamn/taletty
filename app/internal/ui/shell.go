@@ -414,7 +414,7 @@ func (m Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 		case "t":
 			m.openSleepMenu()
 			return m, nil
-		case "f":
+		case "f", "m":
 			if m.focus == PlayerPane {
 				m.data.Activity = "Favorite toggle unavailable in Player"
 				return m, nil
