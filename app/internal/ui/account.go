@@ -174,6 +174,9 @@ func (m Model) accountLines(lines []string) []string {
 			status = "Offline"
 		}
 	}
+	if m.account.Busy {
+		status = m.spinnerGlyph() + " " + status
+	}
 	detail := cleanLine(m.account.Detail)
 	if detail == "" {
 		detail = "Fresh Taletty root (~/.config/taletty/). No password collected in UI."

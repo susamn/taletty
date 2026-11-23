@@ -17,6 +17,7 @@ func TestRawMetadataCannotInjectTerminalControls(t *testing.T) {
 		{"\x1b]8;;https://example.invalid\x1b\\Book\x1b]8;;\x1b\\", "Book"},
 		{"Line\nBreak\rTab\tEnd", "Line Break Tab End"},
 		{"\x00Book\x7f", " Book "},
+		{"अध्याय १ - विषादयोग", "अधयय १ - वषदयग"},
 	} {
 		if got := ui.ClipLine(sample.input, 100, "…"); got != sample.want {
 			t.Fatalf("sanitize %q: got %q, want %q", sample.input, got, sample.want)

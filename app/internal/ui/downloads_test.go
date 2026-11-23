@@ -66,7 +66,7 @@ func TestDownloadsViewProgressStagesAndKeyOwnership(t *testing.T) {
 		t.Fatal("expected DownloadsOpen true")
 	}
 	view := screen(t, r, 144, 42)
-	for _, want := range []string{"[Focus] Downloads", "40.0 MiB / 100.0 MiB (40%)", "2.0 MiB/s", "#1", "Disk full"} {
+	for _, want := range []string{"[Focus] Downloads", "[━━━─────] 40.0 MiB / 100.0 MiB (40%)", "Progress: [━━━━━━──────────]", "2.0 MiB/s", "#1", "Disk full"} {
 		if !strings.Contains(view, want) {
 			t.Fatalf("missing %q in Downloads view:\n%s", want, view)
 		}
@@ -96,6 +96,12 @@ func TestDownloadsViewProgressStagesAndKeyOwnership(t *testing.T) {
 			t.Fatalf("missing %q in compact Downloads view:\n%s", want, view)
 		}
 	}
+	send(t, r, ui.AppearanceMsg{Glyphs: ui.Plain})
+	plainDL := screen(t, r, 144, 42)
+	if !strings.Contains(plainDL, "[") {
+		t.Fatalf("expected plain progress bar in Downloads view:\n%s", plainDL)
+	}
+	send(t, r, ui.AppearanceMsg{Glyphs: ui.Unicode})
 	for _, line := range strings.Split(view, "\n") {
 		if strings.Contains(line, "Unknown Total") && strings.Contains(line, "%") {
 			t.Fatalf("unknown total invented percentage: %q", line)
@@ -115,8 +121,8 @@ func TestDownloadsViewProgressStagesAndKeyOwnership(t *testing.T) {
 		t.Fatalf("Esc did not restore origin: open=%v focus=%v", r.Model.(ui.Model).DownloadsOpen(), r.Model.(ui.Model).Focus())
 	}
 
-	// Numeric focus 3 from Downloads closes Downloads and focuses Details.
-	send(t, r, key("D"), key("3"))
+	// Numeric focus 4 from Downloads closes Downloads and focuses Details.
+	send(t, r, key("D"), key("4"))
 	if r.Model.(ui.Model).DownloadsOpen() || r.Model.(ui.Model).Focus() != ui.Details {
 		t.Fatalf("numeric focus from Downloads failed: open=%v focus=%v", r.Model.(ui.Model).DownloadsOpen(), r.Model.(ui.Model).Focus())
 	}

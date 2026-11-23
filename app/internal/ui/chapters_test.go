@@ -30,8 +30,8 @@ func TestChapterBrowsingActivationAndTimelineTicks(t *testing.T) {
 		t.Fatalf("expected Plain chapter ticks on timeline:\n%s", view)
 	}
 
-	// Focus Chapters pane (4) and navigate with j/k/g/G/pgup/pgdown/ctrl+u/ctrl+d.
-	send(t, r, key("4"))
+	// Focus Chapters pane (3) and navigate with j/k/g/G/pgup/pgdown/ctrl+u/ctrl+d.
+	send(t, r, key("3"))
 	_ = screen(t, r, 144, 42)
 	data.Books[0].HasDuration = true
 	data.Books[0].Duration = 50 * time.Minute
@@ -51,7 +51,7 @@ func TestChapterBrowsingActivationAndTimelineTicks(t *testing.T) {
 	})
 	send(t, r, ui.BookChaptersMsg{Key: ""})
 	send(t, r, key("2"), key("j")) // Select B; chapterCursor resets to 0.
-	send(t, r, key("4"), key("j"), key("enter"))
+	send(t, r, key("3"), key("j"), key("enter"))
 	if len(actions) != 2 || actions[1].Key != "B" || actions[1].ChapterIndex != 1 || actions[1].ChapterStart != 5*time.Minute {
 		t.Fatalf("unexpected B ActivateChapter action: %+v", actions)
 	}
@@ -75,7 +75,7 @@ func TestChapterBrowsingActivationAndTimelineTicks(t *testing.T) {
 	}
 
 	// Empty library Enter in Chapters is a safe no-op.
-	send(t, r, ui.SnapshotMsg{}, key("4"), key("enter"))
+	send(t, r, ui.SnapshotMsg{}, key("3"), key("enter"))
 	if len(actions) != 3 {
 		t.Fatalf("empty library Chapters Enter dispatched action: %+v", actions)
 	}

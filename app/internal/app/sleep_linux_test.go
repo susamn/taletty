@@ -180,7 +180,7 @@ func TestJ10SleepTimerDurationChapterEndPauseSeekSwitchAndRestart(t *testing.T) 
 		t.Fatalf("same-chapter seek canceled chapter-end timer:\n%s", r.Model.View().Content)
 	}
 	// Explicit chapter jump to Ch 02 -> cancels chapter-end timer!
-	sendUIKeys(t, r, "4", "j", "enter")
+	sendUIKeys(t, r, "3", "j", "enter")
 	if err := r.Drain(); err != nil {
 		t.Fatal(err)
 	}

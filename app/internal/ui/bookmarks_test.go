@@ -238,8 +238,8 @@ func TestBookmarksManagerNavigationFilterNoteScrollAndActions(t *testing.T) {
 		t.Fatalf("missing empty bookmarks guidance:\n%s", view)
 	}
 
-	// Numeric focus 3 closes manager and focuses Details; Esc from manager restores origin.
-	send(t, r, key("3"))
+	// Numeric focus 4 closes manager and focuses Details; Esc from manager restores origin.
+	send(t, r, key("4"))
 	if r.Model.(ui.Model).BookmarksOpen() || r.Model.(ui.Model).Focus() != ui.Details {
 		t.Fatal("numeric focus did not close manager and focus Details")
 	}
