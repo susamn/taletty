@@ -623,7 +623,7 @@ func (m Model) bookmarksLines() []string {
 	selectedRow := -1
 	switch {
 	case m.bookmarksLoading:
-		listRows = []string{"Loading bookmarks..."}
+		listRows = []string{m.spinnerGlyph() + " Loading bookmarks..."}
 	case m.bookmarksError != "":
 		listRows = []string{
 			"Failed to load bookmarks: " + m.bookmarksError,

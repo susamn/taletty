@@ -219,7 +219,7 @@ func (m Model) modalLines(lines []string) []string {
 		}
 		status := c.error
 		if c.pending {
-			status = "Working; waiting for confirmation"
+			status = m.spinnerGlyph() + " Working; waiting for confirmation"
 		}
 		keep, confirm := c.spec.Keep, c.spec.Confirm
 		if c.confirm {
@@ -244,7 +244,7 @@ func (m Model) modalLines(lines []string) []string {
 		rows = append(rows, strings.Split(n.field.View(), "\n")...)
 		status := n.error
 		if n.pending {
-			status = "Saving; waiting for durable confirmation"
+			status = m.spinnerGlyph() + " Saving; waiting for durable confirmation"
 		}
 		buttons := []string{"[Note]  Save  Cancel", "Note  [Save]  Cancel", "Note  Save  [Cancel]"}
 		rows = append(rows, status, buttons[n.focus], "Enter/Ctrl+S save | Alt+Enter newline | Tab | Esc back")

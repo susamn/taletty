@@ -46,6 +46,78 @@ func (m Model) tail() string {
 	return "…"
 }
 
+// bookRowMarker returns the podmutt-style leading item glyph for a book row:
+// - "+ " when ready locally or queued/downloading (already added/available)
+// - "◉ " when finished or ordinary catalog item ("* " in Plain mode)
+func (m Model) bookRowMarker(book Book) string {
+	switch book.Availability {
+	case Ready, Queued, Downloading, Preparing:
+		return "+ "
+	default:
+		if m.appearance.Glyphs == Plain {
+			return "* "
+		}
+		return "◉ "
+	}
+}
+
+// downloadProgressBar renders an inline progress bar for active downloads:
+// - determinate filled bar ("━━━━────" / "[====----]") when BytesTotal is known
+// - indeterminate animated spinner/bar when BytesTotal is unknown or preparing
+func (m Model) downloadProgressBar(job DownloadJob, width int) string {
+	width = max(4, min(16, width))
+	if job.State == Downloading && job.Stage != "licensing" && job.BytesTotal != nil && *job.BytesTotal > 0 {
+		filled := min(width, max(0, int(job.BytesReceived*int64(width)/(*job.BytesTotal))))
+		full, empty := "━", "─"
+		if m.appearance.Glyphs == Plain {
+			full, empty = "=", "-"
+		}
+		return "[" + strings.Repeat(full, filled) + strings.Repeat(empty, width-filled) + "]"
+	}
+	spin := m.spinnerGlyph()
+	line := "─"
+	if m.appearance.Glyphs == Plain {
+		line = "-"
+	}
+	pos := int(job.BytesReceived/4096) % max(1, width)
+	return spin + " [" + strings.Repeat(line, pos) + "•" + strings.Repeat(line, max(0, width-pos-1)) + "]"
+}
+
+func (m Model) spinnerGlyph() string {
+	if m.appearance.Glyphs == Plain {
+		frames := [...]string{"|", "/", "-", "\\"}
+		return frames[m.spinTick()%len(frames)]
+	}
+	frames := [...]string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"}
+	return frames[m.spinTick()%len(frames)]
+}
+
+func (m Model) spinTick() int {
+	total := int(m.data.Player.Position / (250 * time.Millisecond))
+	for _, j := range m.downloads {
+		total += int(j.BytesReceived / 16384)
+		if j.State == Downloading || j.State == Preparing {
+			total++
+		}
+	}
+	if m.account.Busy || m.bookmarksLoading || m.ownsModalPending() {
+		total++
+	}
+	return max(0, total)
+}
+
+func (m Model) hasActiveLoading() bool {
+	if m.account.Busy || m.bookmarksLoading || m.ownsModalPending() {
+		return true
+	}
+	for _, j := range m.downloads {
+		if j.State == Downloading || j.State == Preparing {
+			return true
+		}
+	}
+	return false
+}
+
 func (m Model) paint(text string, tint color.Color) string {
 	return m.paintBg(text, tint, m.appearance.Palette.Background)
 }
@@ -113,10 +185,23 @@ func (m Model) paneRows(pane Pane, width int) (string, []string, int) {
 		rows := make([]string, len(sidebar))
 		for i, item := range sidebar {
 			label := item.label
-			if item.selectable && item.action == "" && item.view == m.libraryView {
+			if !item.selectable {
+				dash := "─"
+				if m.appearance.Glyphs == Plain {
+					dash = "-"
+				}
+				fill := max(0, width-ansi.StringWidth(label)-1)
+				if fill > 0 {
+					label = label + " " + strings.Repeat(dash, fill)
+				}
+			} else if item.action == "" && item.view == m.libraryView {
 				label = "* " + label
-			} else if item.selectable {
-				label = "  " + label
+			} else {
+				marker := "◉ "
+				if m.appearance.Glyphs == Plain {
+					marker = "  "
+				}
+				label = marker + label
 			}
 			rows[i] = label
 		}
@@ -143,12 +228,13 @@ func (m Model) paneRows(pane Pane, width int) (string, []string, int) {
 			const stateCol = 16
 			const progCol = 8
 			titleCol := max(10, width-stateCol-progCol-6)
-			header := PadLine("TITLE / AUTHOR", titleCol, m.tail()) + " | " + PadLine("PROGRESS", progCol, m.tail()) + " | " + PadLine("LOCAL STATE", stateCol, m.tail())
+			header := PadLine("  TITLE / AUTHOR", titleCol, m.tail()) + " | " + PadLine("PROGRESS", progCol, m.tail()) + " | " + PadLine("LOCAL STATE", stateCol, m.tail())
 			rows = append(rows, header)
 			if selectedIdx >= 0 {
 				selectedIdx++
 			}
 			for _, book := range visible {
+				marker := m.bookRowMarker(book)
 				favorite := ""
 				if book.Favorite {
 					favorite = "[Fav] "
@@ -167,11 +253,15 @@ func (m Model) paneRows(pane Pane, width int) (string, []string, int) {
 				}
 				status := m.availability(book.Availability)
 				prog := m.bookProgressLabel(book)
-				metadata := PadLine(favorite+title(book.Title)+playing+" | "+book.Author, titleCol, m.tail())
+				metadata := PadLine(marker+favorite+title(book.Title)+playing+" | "+book.Author, titleCol, m.tail())
 				rows = append(rows, metadata+" | "+PadLine(prog, progCol, m.tail())+" | "+PadLine(status, stateCol, m.tail()))
 			}
 		} else {
 			for _, book := range visible {
+				marker := ""
+				if m.appearance.Glyphs != Plain {
+					marker = m.bookRowMarker(book)
+				}
 				favorite := ""
 				if book.Favorite {
 					favorite = "[Fav] "
@@ -181,7 +271,7 @@ func (m Model) paneRows(pane Pane, width int) (string, []string, int) {
 				}
 				status := m.availability(book.Availability)
 				metadataWidth := max(0, width-ansi.StringWidth(status)-3)
-				metadata := PadLine(favorite+title(book.Title)+" | "+book.Author, metadataWidth, m.tail())
+				metadata := PadLine(marker+favorite+title(book.Title)+" | "+book.Author, metadataWidth, m.tail())
 				rows = append(rows, metadata+" | "+status)
 			}
 		}
@@ -214,18 +304,18 @@ func (m Model) paneRows(pane Pane, width int) (string, []string, int) {
 		}
 		return name, rows, sel
 	}
-	rows := []string{title(book.Title)}
+	rows := []string{"  " + title(book.Title)}
 	if book.Favorite {
-		favLabel := "[Fav] Favorite"
+		favLabel := "  [Fav] Favorite"
 		if m.appearance.Glyphs != Plain {
-			favLabel = "★ Favorite"
+			favLabel = "  ★ Favorite"
 		}
 		rows = append(rows, favLabel)
 	}
 	if book.Subtitle != "" {
-		rows = append(rows, book.Subtitle)
+		rows = append(rows, "  "+book.Subtitle)
 	}
-	contributorLine := "Author: " + book.Author
+	contributorLine := "  Author: " + book.Author
 	if book.Narrator != "" {
 		contributorLine += "  |  Narrator: " + book.Narrator
 	}
@@ -237,10 +327,13 @@ func (m Model) paneRows(pane Pane, width int) (string, []string, int) {
 	case book.InProgress:
 		progressLabel = "In progress"
 	}
-	rows = append(rows, formatDurationLabel(book.Duration, book.HasDuration)+"  |  "+m.availability(book.Availability)+"  |  "+progressLabel)
-	rows = append(rows, "Actions: Enter play/resume  |  f favorite  |  B bookmarks  |  d download  |  x more")
+	rows = append(rows, "  "+formatDurationLabel(book.Duration, book.HasDuration)+"  |  "+m.availability(book.Availability)+"  |  "+progressLabel)
+	rows = append(rows, "  Actions: Enter play/resume  |  f favorite  |  B bookmarks  |  d download  |  x more")
 	if book.Description != "" && book.Description != book.Subtitle {
-		rows = append(rows, strings.Split(book.Description, "\n")...)
+		rows = append(rows, "")
+		for _, line := range strings.Split(book.Description, "\n") {
+			rows = append(rows, "  "+line)
+		}
 	}
 	return name, rows, -1
 }
@@ -316,7 +409,7 @@ func (m Model) boxTagged(size Rect, name, tag string, rows []string, selected in
 		fitted := PadLine(text, size.Width-4-len(gutter), m.tail())
 		body := m.paintBg(" "+gutter+fitted+" ", textTint, rowBg)
 		if m.appearance.Palette.Focus != nil {
-			for _, prefix := range []string{"★ ", "[Fav] "} {
+			for _, prefix := range []string{"+ ★ ", "+ [Fav] ", "◉ ★ ", "◉ [Fav] ", "* [Fav] ", "+ ", "★ ", "[Fav] ", "  ★ ", "  [Fav] "} {
 				if strings.HasPrefix(fitted, prefix) {
 					rest := strings.TrimPrefix(fitted, prefix)
 					body = m.paintBg(" "+gutter, textTint, rowBg) + m.paintBg(prefix, m.appearance.Palette.Focus, rowBg) + m.paintBg(rest+" ", textTint, rowBg)
@@ -393,7 +486,7 @@ func (m Model) formatChapterRows(book Book, width int) []string {
 
 func isMutedHeaderRow(text string) bool {
 	trimmed := strings.TrimSpace(text)
-	return trimmed == "LIBRARY VIEWS" || trimmed == "VIEWS / OVERLAYS" ||
+	return strings.HasPrefix(trimmed, "LIBRARY VIEWS") || strings.HasPrefix(trimmed, "VIEWS / OVERLAYS") ||
 		strings.HasPrefix(trimmed, "TITLE / AUTHOR") ||
 		strings.HasPrefix(trimmed, "Chapter ") ||
 		strings.HasPrefix(trimmed, "BOOK ") ||
@@ -446,6 +539,9 @@ func (m Model) View() tea.View {
 	}
 	lines = append(lines, m.playerLines(g.Player)...)
 	activity, tint := m.data.Activity, m.appearance.Palette.Muted
+	if m.hasActiveLoading() && activity != "" {
+		activity = m.spinnerGlyph() + " " + activity
+	}
 	if m.failure != "" {
 		activity, tint = "Error: "+m.failure, m.appearance.Palette.Error
 	}

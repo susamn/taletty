@@ -276,7 +276,7 @@ func (m Model) downloadsLines() []string {
 		innerWidth := max(1, leftRect.Width-6)
 		rows := make([]string, 0, len(m.downloads)+1)
 		const stateCol = 16
-		titleCol := max(12, (innerWidth-stateCol-6)/2)
+		titleCol := max(12, min(28, (innerWidth-stateCol-6)/3))
 		detailCol := max(12, innerWidth-titleCol-stateCol-6)
 		rows = append(rows, PadLine("BOOK", titleCol, m.tail())+" | "+PadLine("STATE", stateCol, m.tail())+" | "+PadLine("TRANSFER / QUEUE", detailCol, m.tail()))
 		for _, job := range m.downloads {
@@ -329,12 +329,14 @@ func (m Model) downloadDetailRows(job DownloadJob) []string {
 		rows = append(rows, fmt.Sprintf("Queue position: #%d", max(1, job.QueuePosition)), "Actions: Enter / x to reorder or remove")
 	case Downloading:
 		if job.Stage == "licensing" {
-			rows = append(rows, "Stage: Licensing entitlement")
+			rows = append(rows, "Stage: "+m.spinnerGlyph()+" Licensing entitlement")
 		} else if job.BytesTotal != nil && *job.BytesTotal > 0 {
 			pct := min(100, max(0, int(job.BytesReceived*100 / *job.BytesTotal)))
 			rows = append(rows, fmt.Sprintf("Transfer: %s / %s (%d%%)", formatBytes(job.BytesReceived), formatBytes(*job.BytesTotal), pct))
+			rows = append(rows, "Progress: "+m.downloadProgressBar(job, 16))
 		} else {
 			rows = append(rows, fmt.Sprintf("Transfer: %s / unknown total", formatBytes(job.BytesReceived)))
+			rows = append(rows, "Progress: "+m.downloadProgressBar(job, 16))
 		}
 		if job.SpeedBPS > 0 && job.Stage != "licensing" {
 			rows = append(rows, fmt.Sprintf("Speed: %s/s", formatBytes(int64(job.SpeedBPS))))
@@ -342,10 +344,11 @@ func (m Model) downloadDetailRows(job DownloadJob) []string {
 		rows = append(rows, "Actions: Enter / x to cancel download")
 	case Preparing:
 		if job.Stage == "publishing" {
-			rows = append(rows, "Stage: Publishing local audio")
+			rows = append(rows, "Stage: "+m.spinnerGlyph()+" Publishing local audio")
 		} else {
-			rows = append(rows, "Stage: Preparing playable audio (indeterminate)")
+			rows = append(rows, "Stage: "+m.spinnerGlyph()+" Preparing playable audio (indeterminate)")
 		}
+		rows = append(rows, "Progress: "+m.downloadProgressBar(job, 16))
 		rows = append(rows, "Actions: Enter / x to cancel preparation")
 	case Ready:
 		rows = append(rows, "Completed local audio ready.", "Actions: Enter / x to show in Library or delete audio")
@@ -389,21 +392,21 @@ func (m Model) formatDownloadRow(job DownloadJob, width int) string {
 		detail = fmt.Sprintf("Queued (#%d)", max(1, job.QueuePosition))
 	case Downloading:
 		if job.Stage == "licensing" {
-			detail = "Licensing"
+			detail = m.spinnerGlyph() + " Licensing"
 		} else if job.BytesTotal != nil && *job.BytesTotal > 0 {
 			pct := min(100, max(0, int(job.BytesReceived*100 / *job.BytesTotal)))
-			detail = fmt.Sprintf("%s / %s (%d%%)", formatBytes(job.BytesReceived), formatBytes(*job.BytesTotal), pct)
+			detail = fmt.Sprintf("%s %s / %s (%d%%)", m.downloadProgressBar(job, 8), formatBytes(job.BytesReceived), formatBytes(*job.BytesTotal), pct)
 		} else {
-			detail = fmt.Sprintf("%s / unknown total", formatBytes(job.BytesReceived))
+			detail = fmt.Sprintf("%s %s / unknown total", m.downloadProgressBar(job, 8), formatBytes(job.BytesReceived))
 		}
 		if job.SpeedBPS > 0 && job.Stage != "licensing" {
 			detail += fmt.Sprintf(" | %s/s", formatBytes(int64(job.SpeedBPS)))
 		}
 	case Preparing:
 		if job.Stage == "publishing" {
-			detail = "Publishing"
+			detail = m.spinnerGlyph() + " Publishing"
 		} else {
-			detail = "Preparing (indeterminate)"
+			detail = m.spinnerGlyph() + " Preparing (indeterminate)"
 		}
 	case Ready:
 		detail = "Completed local audio"
@@ -416,7 +419,7 @@ func (m Model) formatDownloadRow(job DownloadJob, width int) string {
 	}
 	if m.layout.Mode == Wide && width >= 48 {
 		const stateCol = 16
-		titleCol := max(12, (width-stateCol-6)/2)
+		titleCol := max(12, min(28, (width-stateCol-6)/3))
 		detailCol := max(12, width-titleCol-stateCol-6)
 		return PadLine(title(job.Title), titleCol, m.tail()) + " | " + PadLine(status, stateCol, m.tail()) + " | " + PadLine(detail, detailCol, m.tail())
 	}
