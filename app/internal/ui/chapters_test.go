@@ -12,7 +12,7 @@ import (
 func TestChapterBrowsingActivationAndTimelineTicks(t *testing.T) {
 	data := fixture()
 	data.Books[0].Chapters = []string{"Ch 1", "Ch 2", "Ch 3", "Ch 4", "Ch 5"}
-	data.Books[0].ChapterStarts = []time.Duration{0, 10 * time.Minute, 20 * time.Minute, 30 * time.Minute, 40 * time.Minute}
+	data.Books[0].ChapterStarts = []time.Duration{0, 10 * time.Minute, 20 * time.Minute, 30 * time.Minute, 75 * time.Minute}
 	data.Player.ChapterTicks = []time.Duration{0, 10 * time.Minute, 30 * time.Minute, 60 * time.Minute}
 
 	var actions []ui.Action

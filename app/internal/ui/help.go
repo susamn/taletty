@@ -73,16 +73,26 @@ func (m Model) helpRows() []string {
 		rows = append(rows, "No recorded failure")
 	}
 	var wrapped []string
+	r := m.helpRect()
 	for _, row := range rows {
 		// Strip metadata controls before wrapping, not after measuring its cells.
-		wrapped = append(wrapped, strings.Split(ansi.Wrap(cleanLine(row), max(1, m.layout.Content.Width-4), ""), "\n")...)
+		wrapped = append(wrapped, strings.Split(ansi.Wrap(cleanLine(row), max(1, r.Width-4), ""), "\n")...)
 	}
 	return wrapped
 }
 
+func (m Model) helpRect() Rect {
+	return m.layout.Dialog(76, 22)
+}
+
+func (m Model) helpCapacity() int {
+	return max(1, m.layout.Content.Height-2)
+}
+
 func (m Model) helpKey(key string) (tea.Model, tea.Cmd) {
-	capacity := m.layout.Content.Height - 2
-	limit := max(0, len(m.helpRows())-capacity)
+	capacity := m.helpCapacity()
+	visibleRows := max(1, m.helpRect().Height-2)
+	limit := max(0, len(m.helpRows())-visibleRows)
 	offset := min(m.helpOffset, limit)
 	switch key {
 	case "esc":
@@ -113,13 +123,16 @@ func (m Model) helpKey(key string) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-func (m Model) helpLines() []string {
+func (m Model) helpLines(lines []string) []string {
+	r := m.helpRect()
 	rows := m.helpRows()
-	capacity := m.layout.Content.Height - 2
-	offset := min(m.helpOffset, max(0, len(rows)-capacity))
+	capacity := m.helpCapacity()
+	visibleRows := max(1, r.Height-2)
+	offset := min(m.helpOffset, max(0, len(rows)-visibleRows))
 	label := fmt.Sprintf(" Help %d-%d/%d ", offset+1, min(len(rows), offset+capacity), len(rows))
 	if !m.ownsModal() {
 		label = " [Focus]" + label
 	}
-	return m.box(m.layout.Content, label, rows[offset:], -1, !m.ownsModal(), false)
+	box := m.box(r, label, rows[offset:], -1, !m.ownsModal(), false)
+	return m.overlayBox(lines, r, box)
 }

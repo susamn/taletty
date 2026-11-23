@@ -116,39 +116,48 @@ func (m Model) settingsKey(key string) (tea.Model, tea.Cmd) {
 	}
 }
 
-func (m Model) settingsLines() []string {
+func (m Model) settingsLines(lines []string) []string {
 	s := m.effectiveSettings()
 	glyphLabel := "Unicode"
 	if m.appearance.Glyphs == Plain {
 		glyphLabel = "Plain"
 	}
 
-	themeRows := []string{"Palette candidates:"}
+	mark := "●"
+	if m.appearance.Glyphs == Plain {
+		mark = "*"
+	}
+
+	var rows []string
+	rows = append(rows, "Themes (j/k select, Enter apply):")
 	themeSelectedRow := -1
 	for i, name := range s.Themes {
+		bullet := " "
 		status := ""
 		if name == s.ActiveTheme {
+			bullet = mark
 			status = "  (Active)"
 		} else if m.settingsSection == 0 && i == m.settingsCursor {
 			status = "  (Candidate, not applied)"
 		}
 		if m.settingsSection == 0 && i == m.settingsCursor {
-			themeSelectedRow = len(themeRows)
+			themeSelectedRow = len(rows)
 		}
-		themeRows = append(themeRows, name+status)
+		rows = append(rows, fmt.Sprintf("[%s] %s%s", bullet, name, status))
 	}
 	if m.settingsSection == 0 && m.settingsCursor == len(s.Themes) {
-		themeSelectedRow = len(themeRows)
+		themeSelectedRow = len(rows)
 	}
-	themeRows = append(themeRows, "[Reload active]", "")
-	themeRows = append(themeRows, "Active: "+cleanLine(s.ActiveTheme))
-	themeRows = append(themeRows, "Source: "+cleanLine(s.ThemeSource))
+	rows = append(rows, "[Reload active]", "")
+	rows = append(rows, "Configuration:")
+	rows = append(rows, "  Active: "+cleanLine(s.ActiveTheme))
+	rows = append(rows, "  Source: "+cleanLine(s.ThemeSource))
 	if errText := cleanLine(s.ThemeError); errText != "" {
-		themeRows = append(themeRows, "Diagnostic: "+errText)
+		rows = append(rows, "  Diagnostic: "+errText)
 	}
-	themeRows = append(themeRows, "Omarchy hook: explicit setup, never automatic.")
-
-	prefRows := []string{"Playback / display preferences:"}
+	rows = append(rows, "  Omarchy hook: explicit setup, never automatic.")
+	rows = append(rows, "")
+	rows = append(rows, "Playback / display preferences:")
 	prefSelectedRow := -1
 	prefs := []string{
 		"Smart rewind: " + cleanLine(s.SmartRewind),
@@ -157,53 +166,32 @@ func (m Model) settingsLines() []string {
 	}
 	for i, label := range prefs {
 		if m.settingsSection == 1 && i == m.settingsPrefCursor {
-			prefSelectedRow = len(prefRows)
+			prefSelectedRow = len(rows)
 		}
-		prefRows = append(prefRows, label)
+		rows = append(rows, label)
 	}
-	prefRows = append(prefRows,
-		"Font: use a terminal profile (e.g. Iosevka Slab)",
-		"",
-		"Invalid palette: last usable retained.",
-		"Esc returns to original focus.",
+	rows = append(rows,
+		"  Font: use a terminal profile (e.g. Iosevka Slab)",
+		"  Invalid palette: last usable retained.",
+		"  Esc returns to original focus.",
 	)
 
-	c := m.layout.Content
-	if m.layout.Mode == Wide {
-		leftWidth := c.Width / 2
-		rightWidth := c.Width - leftWidth
-		leftRect := Rect{X: c.X, Y: c.Y, Width: leftWidth, Height: c.Height}
-		rightRect := Rect{X: c.X + leftWidth, Y: c.Y, Width: rightWidth, Height: c.Height}
-		leftTitle := " Settings - Theme "
-		rightTitle := " Settings - Preferences "
-		if !m.ownsModal() && !m.help {
-			if m.settingsSection == 0 {
-				leftTitle = " [Focus] Settings - Theme "
-			} else {
-				rightTitle = " [Focus] Settings - Preferences "
-			}
-		}
-		leftBox := m.box(leftRect, leftTitle, themeRows, themeSelectedRow, m.settingsSection == 0 && !m.ownsModal() && !m.help, true)
-		rightBox := m.box(rightRect, rightTitle, prefRows, prefSelectedRow, m.settingsSection == 1 && !m.ownsModal() && !m.help, true)
-		lines := make([]string, c.Height)
-		for y := range c.Height {
-			lines[y] = leftBox[y] + rightBox[y]
-		}
-		return lines
-	}
-
-	// Compact mode stacks Theme and Preferences in one scrolling view.
-	combined := append([]string{}, themeRows...)
-	combined = append(combined, "")
-	prefOffset := len(combined)
-	combined = append(combined, prefRows...)
 	selected := themeSelectedRow
-	if m.settingsSection == 1 && prefSelectedRow >= 0 {
-		selected = prefOffset + prefSelectedRow
+	title := " Settings - Theme · Tab preferences · Esc close "
+	if m.layout.Mode != Wide {
+		title = " Settings - Theme & Preferences "
 	}
-	title := " Settings - Theme & Preferences "
-	if !m.ownsModal() && !m.help {
-		title = fmt.Sprintf(" [Focus]%s", title)
+	if m.settingsSection == 1 {
+		selected = prefSelectedRow
+		if m.layout.Mode == Wide {
+			title = " Settings - Preferences · Tab themes · Esc close "
+		}
 	}
-	return m.box(c, title, combined, selected, !m.ownsModal() && !m.help, true)
+	focused := !m.ownsModal() && !m.help
+	if focused {
+		title = " [Focus]" + title
+	}
+	r := m.layout.Dialog(76, 22)
+	box := m.box(r, title, rows, selected, focused, true)
+	return m.overlayBox(lines, r, box)
 }
