@@ -69,7 +69,7 @@ func TestThemeNamesPresetsAndPaletteRoundtrip(t *testing.T) {
 	if got := FormatHexColor(nil); got != "#000000" {
 		t.Fatalf("expected #000000 for nil color, got %q", got)
 	}
-	if got := SerializePalette(ui.Palette{}); !strings.Contains(got, "background = \"#161a20\"") {
+	if got := SerializePalette(ui.Palette{}); !strings.Contains(got, "background = \"#0c1017\"") {
 		t.Fatalf("SerializePalette nil fallback failed:\n%s", got)
 	}
 }

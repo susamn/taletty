@@ -7,12 +7,17 @@ import (
 	"github.com/charmbracelet/x/ansi"
 )
 
-// cleanLine removes untrusted terminal sequences and flattens control characters.
-// These helpers accept raw metadata, not trusted renderer-owned ANSI styles.
+// cleanLine removes untrusted terminal sequences, flattens control characters,
+// and strips Indic combining vowel/virama marks (U+0900..U+0DFF Mn/Mc) so that
+// terminal emulators using wcwidth vs HarfBuzz complex-script shaping agree on
+// exact column widths and never shift or overflow right-hand pane borders.
 func cleanLine(text string) string {
 	return strings.Map(func(character rune) rune {
 		if unicode.IsControl(character) {
 			return ' '
+		}
+		if character >= 0x0900 && character <= 0x0DFF && (unicode.Is(unicode.Mn, character) || unicode.Is(unicode.Mc, character)) {
+			return -1
 		}
 		return character
 	}, ansi.Strip(text))

@@ -263,7 +263,7 @@ func TestJ07J08PlaybackChapterInspectionAndCrossBookSwitch(t *testing.T) {
 
 	// Browse to Book Beta and inspect its chapters without replacing Alpha audio.
 	sendUIKey(t, r, "j")
-	sendUIKey(t, r, "4")
+	sendUIKey(t, r, "3")
 	view := r.Model.View().Content
 	if !strings.Contains(view, "Chapters - Book Beta") || !strings.Contains(view, "Beta Ch 2") || !strings.Contains(view, "Book Alpha | Alpha Ch 1") {
 		t.Fatalf("inspecting Beta chapters altered audio or missed chapters:\n%s", view)
@@ -320,7 +320,7 @@ func TestJ07J08PlaybackChapterInspectionAndCrossBookSwitch(t *testing.T) {
 	// Same-book chapter jump on Alpha preserves paused state without confirmation.
 	sendUIKey(t, r, "2")
 	sendUIKey(t, r, "k")
-	sendUIKey(t, r, "4")
+	sendUIKey(t, r, "3")
 	sendUIKey(t, r, "j")
 	sendUIKey(t, r, "enter")
 	if err := r.Drain(); err != nil {
@@ -333,7 +333,7 @@ func TestJ07J08PlaybackChapterInspectionAndCrossBookSwitch(t *testing.T) {
 	// Cross-book chapter jump on Beta opens B3 confirmation; default Stay keeps Alpha.
 	sendUIKey(t, r, "2")
 	sendUIKey(t, r, "j")
-	sendUIKey(t, r, "4")
+	sendUIKey(t, r, "3")
 	sendUIKey(t, r, "j")
 	sendUIKey(t, r, "enter")
 	if err := r.Drain(); err != nil {

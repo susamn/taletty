@@ -10,7 +10,34 @@ import (
 	"github.com/charmbracelet/x/ansi"
 )
 
-var paneNames = [...]string{"Library", "Books", "Details", "Chapters", "Player"}
+var paneNames = [...]string{"Library", "Books", "Chapters", "Details", "Player"}
+
+func (m Model) paneIcon(pane Pane) string {
+	if m.appearance.Glyphs == Plain {
+		return ""
+	}
+	switch pane {
+	case Library:
+		return "◉ "
+	case Books, Details:
+		return "♪ "
+	case Chapters:
+		return "○ "
+	case PlayerPane:
+		switch m.data.Player.State {
+		case Playing:
+			return "▶ "
+		case Paused:
+			return "Ⅱ "
+		case PlaybackFailed:
+			return "! "
+		default:
+			return "■ "
+		}
+	default:
+		return ""
+	}
+}
 
 func (m Model) tail() string {
 	if m.appearance.Glyphs == Plain {
@@ -46,9 +73,9 @@ func (m Model) selectionBackground() color.Color {
 	if sel := m.appearance.Palette.Selection; sel != nil {
 		accent := color.NRGBAModel.Convert(sel).(color.NRGBA)
 		return color.RGBA{
-			R: uint8((int(base.R)*4 + int(accent.R) + 50) / 5),
-			G: uint8((int(base.G)*4 + int(accent.G) + 60) / 5),
-			B: uint8((int(base.B)*4 + int(accent.B) + 75) / 5),
+			R: uint8((int(base.R)*3 + int(accent.R)*2) / 5),
+			G: uint8((int(base.G)*3 + int(accent.G)*2) / 5),
+			B: uint8((int(base.B)*3 + int(accent.B)*2) / 5),
 			A: 0xff,
 		}
 	}
@@ -180,7 +207,12 @@ func (m Model) paneRows(pane Pane, width int) (string, []string, int) {
 		if len(book.Chapters) == 0 {
 			return name, []string{"No chapters available"}, -1
 		}
-		return name, m.formatChapterRows(book, width), m.clampedChapterCursor(book)
+		rows := m.formatChapterRows(book, width)
+		sel := m.clampedChapterCursor(book)
+		if m.layout.Mode == Wide && width >= 20 && sel >= 0 {
+			sel++
+		}
+		return name, rows, sel
 	}
 	rows := []string{title(book.Title)}
 	if book.Favorite {
@@ -220,26 +252,47 @@ func (m Model) frame(pane Pane, size Rect, name string, rows []string, selected 
 	if m.bookmarksOpen {
 		focused = pane == PlayerPane && m.bookmarkFocus == bmFocusPlayer && !m.help && !m.ownsModal() && !m.accountOpen && !m.sortOpen && !m.bmMenuOpen && !m.bmFilterEditing
 	}
+	titlePrefix := m.paneIcon(pane)
 	if focused {
 		name = "[Focus] " + name
 	}
-	return m.box(size, fmt.Sprintf(" %d %s ", pane+1, name), rows, selected, focused, pane == Library || pane == Books || (pane == Chapters && selected >= 0))
+	return m.boxTagged(size, " "+titlePrefix+name+" ", fmt.Sprintf("[%d]", pane+1), rows, selected, focused, pane == Library || pane == Books || (pane == Chapters && selected >= 0))
 }
 
 // box is shared by root panes and the dedicated Help view. Fitting precedes style.
 func (m Model) box(size Rect, name string, rows []string, selected int, focused, list bool) []string {
+	return m.boxTagged(size, name, "", rows, selected, focused, list)
+}
+
+func (m Model) boxTagged(size Rect, name, tag string, rows []string, selected int, focused, list bool) []string {
 	tint := m.appearance.Palette.Border
 	if focused {
 		tint = m.appearance.Palette.Focus
 	}
 	topLeft, topRight, bottomLeft, bottomRight, vertical, horizontal := "+", "+", "+", "+", "|", "-"
+	prefix := " "
 	if m.appearance.Glyphs != Plain {
-		topLeft, topRight, bottomLeft, bottomRight, vertical, horizontal = "┌", "┐", "└", "┘", "│", "─"
+		topLeft, topRight, bottomLeft, bottomRight, vertical, horizontal = "╭", "╮", "╰", "╯", "│", "─"
+		prefix = "──"
 	}
 	border := func(text string) string { return m.paint(text, tint) }
 	lines := make([]string, size.Height)
-	label := ClipLine(name, size.Width-2, m.tail())
-	lines[0] = border(topLeft + label + strings.Repeat(horizontal, size.Width-2-ansi.StringWidth(label)) + topRight)
+	innerWidth := max(0, size.Width-2)
+	rightFurniture := ""
+	if tag != "" && innerWidth >= 12 {
+		rightFurniture = tag + horizontal
+	}
+	availTitle := max(0, innerWidth-ansi.StringWidth(prefix)-ansi.StringWidth(rightFurniture))
+	trimmedName := strings.TrimSpace(name)
+	label := ClipLine(trimmedName, availTitle, m.tail())
+	if label != "" {
+		label += " "
+		if ansi.StringWidth(label) > availTitle {
+			label = ClipLine(trimmedName, availTitle, m.tail())
+		}
+	}
+	fillLen := max(0, innerWidth-ansi.StringWidth(prefix)-ansi.StringWidth(label)-ansi.StringWidth(rightFurniture))
+	lines[0] = border(topLeft + prefix + label + strings.Repeat(horizontal, fillLen) + rightFurniture + topRight)
 	first := max(0, selected-(size.Height-2)+1)
 	for y := 1; y < size.Height-1; y++ {
 		index, text, gutter := first+y-1, "", ""
@@ -256,6 +309,9 @@ func (m Model) box(size Rect, name string, rows []string, selected int, focused,
 		}
 		if index == selected {
 			gutter, textTint, rowBg = "> ", m.appearance.Palette.Selection, m.selectionBackground()
+			if rowBg != nil && m.appearance.Palette.Text != nil {
+				textTint = m.appearance.Palette.Text
+			}
 		}
 		fitted := PadLine(text, size.Width-4-len(gutter), m.tail())
 		body := m.paintBg(" "+gutter+fitted+" ", textTint, rowBg)
@@ -270,7 +326,7 @@ func (m Model) box(size Rect, name string, rows []string, selected int, focused,
 		}
 		lines[y] = border(vertical) + body + border(vertical)
 	}
-	lines[len(lines)-1] = border(bottomLeft + strings.Repeat(horizontal, size.Width-2) + bottomRight)
+	lines[len(lines)-1] = border(bottomLeft + strings.Repeat(horizontal, innerWidth) + bottomRight)
 	return lines
 }
 
@@ -303,9 +359,14 @@ func (m Model) bookProgressLabel(book Book) string {
 }
 
 func (m Model) formatChapterRows(book Book, width int) []string {
-	out := make([]string, len(book.Chapters))
+	rows := make([]string, 0, len(book.Chapters)+1)
+	if m.layout.Mode == Wide && width >= 20 {
+		const durCol = 6
+		titleCol := max(4, width-4-durCol-2)
+		rows = append(rows, "    "+PadLine("Chapter", titleCol, m.tail())+"  "+PadLine("Length", durCol, m.tail()))
+	}
 	for i, ch := range book.Chapters {
-		prefix := fmt.Sprintf("%02d  ", i+1)
+		prefix := fmt.Sprintf("%02d. ", i+1)
 		durLabel := ""
 		if i < len(book.ChapterStarts) {
 			start := max(0, book.ChapterStarts[i])
@@ -317,23 +378,24 @@ func (m Model) formatChapterRows(book Book, width int) []string {
 			}
 			if end > start {
 				mins := max(1, int((end-start+30*time.Second)/time.Minute))
-				durLabel = fmt.Sprintf("%dm", mins)
+				durLabel = fmt.Sprintf("%4dm", mins)
 			}
 		}
 		if durLabel != "" && width >= 20 {
 			titleWidth := max(4, width-len(prefix)-len(durLabel)-2)
-			out[i] = prefix + PadLine(ch, titleWidth, m.tail()) + "  " + durLabel
+			rows = append(rows, prefix+PadLine(ch, titleWidth, m.tail())+"  "+durLabel)
 		} else {
-			out[i] = prefix + ch
+			rows = append(rows, prefix+ch)
 		}
 	}
-	return out
+	return rows
 }
 
 func isMutedHeaderRow(text string) bool {
 	trimmed := strings.TrimSpace(text)
 	return trimmed == "LIBRARY VIEWS" || trimmed == "VIEWS / OVERLAYS" ||
 		strings.HasPrefix(trimmed, "TITLE / AUTHOR") ||
+		strings.HasPrefix(trimmed, "Chapter ") ||
 		strings.HasPrefix(trimmed, "BOOK ") ||
 		strings.HasPrefix(trimmed, "TIME ") ||
 		trimmed == "Palette candidates:" || trimmed == "Playback / display preferences:"
