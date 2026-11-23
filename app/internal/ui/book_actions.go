@@ -46,6 +46,11 @@ func (m *Model) openBookMenu() {
 		}
 		opts = append(opts, bookActionOption{label: delLabel, action: DownloadDeleteAudio, confirm: "delete"})
 	}
+	favLabel := "Add to Favorites (f / m)"
+	if book.Favorite {
+		favLabel = "Remove from Favorites (f / m)"
+	}
+	opts = append(opts, bookActionOption{label: favLabel, action: ToggleFavorite})
 	m.bookMenu = &bookActionMenu{
 		bookKey:      book.Key,
 		title:        title(book.Title),

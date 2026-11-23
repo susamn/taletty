@@ -225,10 +225,11 @@ func (m Model) paneRows(pane Pane, width int) (string, []string, int) {
 		rows := make([]string, 0, len(visible)+1)
 		selectedIdx := m.visibleBookIndex(visible)
 		if len(visible) > 0 && m.layout.Mode == Wide && width >= 48 {
-			const stateCol = 16
+			const stateCol = 15
 			const progCol = 8
-			titleCol := max(10, width-stateCol-progCol-6)
-			header := PadLine("  TITLE / AUTHOR", titleCol, m.tail()) + " | " + PadLine("PROGRESS", progCol, m.tail()) + " | " + PadLine("LOCAL STATE", stateCol, m.tail())
+			const favCol = 5
+			titleCol := max(10, width-favCol-progCol-stateCol-9)
+			header := PadLine("  TITLE / AUTHOR", titleCol, m.tail()) + " | " + PadLine("FAV", favCol, m.tail()) + " | " + PadLine("PROGRESS", progCol, m.tail()) + " | " + PadLine("LOCAL STATE", stateCol, m.tail())
 			rows = append(rows, header)
 			if selectedIdx >= 0 {
 				selectedIdx++
@@ -236,10 +237,16 @@ func (m Model) paneRows(pane Pane, width int) (string, []string, int) {
 			for _, book := range visible {
 				marker := m.bookRowMarker(book)
 				favorite := ""
+				favCell := "-"
+				if m.appearance.Glyphs != Plain {
+					favCell = "·"
+				}
 				if book.Favorite {
 					favorite = "[Fav] "
+					favCell = "[Fav]"
 					if m.appearance.Glyphs != Plain {
 						favorite = "★ "
+						favCell = "★"
 					}
 				}
 				playing := ""
@@ -254,7 +261,7 @@ func (m Model) paneRows(pane Pane, width int) (string, []string, int) {
 				status := m.availability(book.Availability)
 				prog := m.bookProgressLabel(book)
 				metadata := PadLine(marker+favorite+title(book.Title)+playing+" | "+book.Author, titleCol, m.tail())
-				rows = append(rows, metadata+" | "+PadLine(prog, progCol, m.tail())+" | "+PadLine(status, stateCol, m.tail()))
+				rows = append(rows, metadata+" | "+PadLine(favCell, favCol, m.tail())+" | "+PadLine(prog, progCol, m.tail())+" | "+PadLine(status, stateCol, m.tail()))
 			}
 		} else {
 			for _, book := range visible {
@@ -601,13 +608,16 @@ func (m Model) View() tea.View {
 	hints := "? Help | q quit | Tab/1-5 panes | "
 	switch m.focus {
 	case Library:
-		hints += "j/k views | Enter open | / filter | s sort"
+		hints += "j/k views | Enter open | f/m fav | / filter | s sort"
 	case Books:
 		hints += "j/k browse | Enter play"
+		if g.Hints.Width >= 100 {
+			hints += " | f/m favorite | d download | B bookmarks | x actions"
+		}
 	case Details:
-		hints += "Enter request play highlighted book"
+		hints += "Enter request play highlighted book | f/m fav"
 	case Chapters:
-		hints += "j/k chapters | Enter jump/switch"
+		hints += "j/k chapters | Enter jump/switch | f/m fav"
 	case PlayerPane:
 		hints += "Left/Right controls | Enter activate"
 	}
