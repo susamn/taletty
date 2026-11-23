@@ -115,8 +115,8 @@ func TestDownloadsViewProgressStagesAndKeyOwnership(t *testing.T) {
 		t.Fatalf("Esc did not restore origin: open=%v focus=%v", r.Model.(ui.Model).DownloadsOpen(), r.Model.(ui.Model).Focus())
 	}
 
-	// Numeric focus 3 from Downloads closes Downloads and focuses Details.
-	send(t, r, key("D"), key("3"))
+	// Numeric focus 4 from Downloads closes Downloads and focuses Details.
+	send(t, r, key("D"), key("4"))
 	if r.Model.(ui.Model).DownloadsOpen() || r.Model.(ui.Model).Focus() != ui.Details {
 		t.Fatalf("numeric focus from Downloads failed: open=%v focus=%v", r.Model.(ui.Model).DownloadsOpen(), r.Model.(ui.Model).Focus())
 	}

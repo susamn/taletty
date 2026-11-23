@@ -125,7 +125,7 @@ func TestShellBrowseAndCommandCompletionNeverConfuseCurrentAudio(t *testing.T) {
 	if !strings.Contains(r.Model.View().Content, "Player - Paused") || r.Model.(ui.Model).Selection() != "B" {
 		t.Fatal("snapshot stole browsing target or did not repaint")
 	}
-	send(t, r, key("enter"), key("3"), key("enter"))
+	send(t, r, key("enter"), key("4"), key("enter"))
 	for _, action := range actions[1:] {
 		if action != (ui.Action{Kind: ui.PlayBook, Key: "B"}) {
 			t.Fatalf("explicit play targeted wrong book: %+v", action)
@@ -139,7 +139,7 @@ func TestShellBrowseAndCommandCompletionNeverConfuseCurrentAudio(t *testing.T) {
 func TestShellFocusResizeAndAppearanceJourney(t *testing.T) {
 	r := start(t, fixture(), nil)
 	screen(t, r, 144, 42)
-	for _, want := range []ui.Pane{ui.Details, ui.Chapters, ui.PlayerPane, ui.Library, ui.Books} {
+	for _, want := range []ui.Pane{ui.Chapters, ui.Details, ui.PlayerPane, ui.Library, ui.Books} {
 		send(t, r, key("tab"))
 		if r.Model.(ui.Model).Focus() != want {
 			t.Fatalf("tab focus: want %v", want)
@@ -149,7 +149,7 @@ func TestShellFocusResizeAndAppearanceJourney(t *testing.T) {
 	if r.Model.(ui.Model).Focus() != ui.Library {
 		t.Fatal("reverse tab did not wrap")
 	}
-	for number, want := range []ui.Pane{ui.Library, ui.Books, ui.Details, ui.Chapters, ui.PlayerPane} {
+	for number, want := range []ui.Pane{ui.Library, ui.Books, ui.Chapters, ui.Details, ui.PlayerPane} {
 		send(t, r, key(string(rune('1'+number))))
 		if r.Model.(ui.Model).Focus() != want {
 			t.Fatal("numeric focus failed")
@@ -169,7 +169,7 @@ func TestShellFocusResizeAndAppearanceJourney(t *testing.T) {
 		}
 	}
 	view := screen(t, r, 80, 20)
-	if !strings.Contains(view, "Chapters - River") || strings.Count(view, "Player - Playing") != 1 {
+	if !strings.Contains(view, "Details - River") || strings.Count(view, "Player - Playing") != 1 {
 		t.Fatal("compact Player focus lost last content pane or duplicated player")
 	}
 	send(t, r, ui.AppearanceMsg{Glyphs: ui.Plain, Palette: ui.Palette{Background: color.Black, Focus: color.RGBA{R: 255, A: 255}, Border: color.White, Text: color.White, Selection: color.White, Muted: color.White, Error: color.White}})
@@ -269,7 +269,7 @@ func TestShellEmptyMetadataAndStateRenderingRemainTruthful(t *testing.T) {
 			t.Fatalf("missing empty state %q", want)
 		}
 	}
-	send(t, r, key("up"), key("enter"), key(" "), key("q"), key("3"))
+	send(t, r, key("up"), key("enter"), key(" "), key("q"), key("4"))
 	if !strings.Contains(r.Model.View().Content, "No book highlighted") {
 		t.Fatal("empty details fabricated a target")
 	}

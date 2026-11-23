@@ -128,7 +128,7 @@ func TestJ03ContributorFilterOwnershipAndEscSemantics(t *testing.T) {
 	screen(t, r, 144, 42)
 
 	// Filter unavailable in Details and PlayerPane.
-	for _, paneKey := range []string{"3", "5"} {
+	for _, paneKey := range []string{"4", "5"} {
 		send(t, r, key(paneKey), key("/"))
 		if r.Model.(ui.Model).FilterEditing() || !strings.Contains(r.Model.View().Content, "Filter unavailable") {
 			t.Fatalf("filter should be unavailable in pane %s", paneKey)

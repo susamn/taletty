@@ -301,7 +301,7 @@ func TestJ01FirstLaunchOnboardingLoginSyncAndJ02OfflineRestore(t *testing.T) {
 
 	// Browse to second book and focus Details; verify no autoplay.
 	runKey(t, r, "j")
-	runKey(t, r, "3")
+	runKey(t, r, "4")
 	model := r.Model.(ui.Model)
 	wantKey, _ := app.EncodeBookKey(sampleBooks()[1].Key)
 	if model.Selection() != wantKey || model.Focus() != ui.Details {

@@ -13,8 +13,8 @@ type Pane int
 const (
 	Library Pane = iota
 	Books
-	Details
 	Chapters
+	Details
 	PlayerPane
 )
 
